@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Use one connected classic-style D-pad for PSP, Sega and Arcade native players."""
+"""Use one connected classic-style D-pad for PSP and Sega native players."""
 from pathlib import Path
 
 path = Path(__file__).resolve().parents[1] / "modules/moudie-emulator/android/src/main/java/expo/modules/moudieemulator/UniversalLibretroPlayerActivity.kt"
@@ -39,4 +39,4 @@ if old not in text and new not in text:
     raise SystemExit("Universal controller anchor not found")
 if old in text: text = text.replace(old, new, 1)
 path.write_text(text, encoding="utf-8")
-print("Connected D-pad installed for PSP, Sega and Arcade.")
+print("Connected D-pad installed for PSP and Sega.")
