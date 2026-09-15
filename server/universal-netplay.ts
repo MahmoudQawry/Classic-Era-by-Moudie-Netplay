@@ -5,6 +5,7 @@ import * as db from "./db";
 import { hashAccessToken } from "./rooms";
 import { roomCapacityFor } from "../shared/room-capacity";
 import { socketCors } from "./_core/cors";
+import { RoomLifecycleRegistry } from "./room-lifecycle";
 
 type System = "psp" | "sega";
 type Role = "host" | "player" | "spectator";
@@ -27,10 +28,12 @@ export function registerUniversalNetplayServer(server: HttpServer) {
     cors: socketCors,
     transports: ["websocket", "polling"], 
     maxHttpBufferSize: 5e6, 
-    pingInterval: 2_000, 
-    pingTimeout: 8_000,
+    // Mobile-friendly keepalive (see netplay.ts): a 2s ping dropped phones
+    // during the ROM-boot CPU spike and looked like a sync failure.
+    pingInterval: 10_000, 
+    pingTimeout: 20_000,
     connectionStateRecovery: {
-      maxDisconnectionDuration: 30_000,
+      maxDisconnectionDuration: 60_000,
       skipMiddlewares: false,
     },
   });
@@ -43,19 +46,98 @@ export function registerUniversalNetplayServer(server: HttpServer) {
   const roomInputDelays = new Map<number, number>();
   const memberInputRate = new Map<string, { count: number; windowStart: number }>();
 
-  // Cleanup old histories
-  setInterval(() => {
+  /** Authoritative snapshots (up to ~4.5 MB) must not outlive their session. */
+  const SNAPSHOT_TTL_MS = 120_000;
+  const SNAPSHOT_BUDGET_BYTES = 48 * 1024 * 1024;
+
+  const registry = new RoomLifecycleRegistry({
+    emptyRoomTtlMs: 90_000,
+    snapshotTtlMs: SNAPSHOT_TTL_MS,
+    snapshotBudgetBytes: SNAPSHOT_BUDGET_BYTES,
+    intervalMs: 15_000,
+  });
+
+  /** Cached player list per room. The previous code issued a database query for
+   * EVERY input packet (~240 queries/second for a full room), which is the main
+   * reason PSP/SEGA sessions became unusable right after they started. */
+  const playerCache = new Map<number, { members: { id: number; role: Role }[]; fetchedAt: number }>();
+  const PLAYER_CACHE_MS = 10_000;
+  async function getCachedPlayers(roomId: number, force = false) {
+    const cached = playerCache.get(roomId);
     const now = Date.now();
+    if (!force && cached && now - cached.fetchedAt < PLAYER_CACHE_MS) return cached.members;
+    const members = await getPlayers(roomId);
+    playerCache.set(roomId, { members, fetchedAt: now });
+    return members;
+  }
+
+  /** Releases every piece of per-room state; registered once per room. */
+  function destroyRoomState(roomId: number) {
+    const roomPrefix = `${roomId}:`;
+    readyByRoom.delete(roomId);
+    roomFrameTrackers.delete(roomId);
+    roomInputDelays.delete(roomId);
+    playerCache.delete(roomId);
+    roomDisposers.delete(roomId);
+    for (const key of [...snapshotByRoom.keys()]) if (key.startsWith(roomPrefix)) snapshotByRoom.delete(key);
+    for (const key of [...inputHistoryByRoom.keys()]) if (key.startsWith(roomPrefix)) inputHistoryByRoom.delete(key);
+    for (const key of [...memberInputRate.keys()]) if (key.startsWith(roomPrefix)) memberInputRate.delete(key);
+    for (const key of [...activeSockets.keys()]) if (key.startsWith(roomPrefix)) activeSockets.delete(key);
+  }
+
+  // One stable disposer reference per room (see netplay.ts for the rationale).
+  const roomDisposers = new Map<number, () => void>();
+  function registerRoomCleanup(roomId: number) {
+    let disposer = roomDisposers.get(roomId);
+    if (!disposer) {
+      disposer = () => destroyRoomState(roomId);
+      roomDisposers.set(roomId, disposer);
+    }
+    registry.onDestroy(roomId, disposer);
+  }
+
+  function sweepSnapshots(now: number) {
+    let dropped = 0;
+    for (const [key, snap] of [...snapshotByRoom]) {
+      const roomId = Number(key.split(":")[0]);
+      if (now - snap.updatedAt > SNAPSHOT_TTL_MS || !Number.isFinite(roomId) || registry.socketCount(roomId) === 0) {
+        snapshotByRoom.delete(key);
+        registry.dropSnapshotNote(roomId, `u:${key}`);
+        dropped += 1;
+      }
+    }
+    let total = 0;
+    for (const snap of snapshotByRoom.values()) total += snap.snapshot.length;
+    if (total > SNAPSHOT_BUDGET_BYTES) {
+      const entries = [...snapshotByRoom.entries()].sort((left, right) => left[1].updatedAt - right[1].updatedAt);
+      for (const [key, snap] of entries) {
+        if (total <= SNAPSHOT_BUDGET_BYTES) break;
+        snapshotByRoom.delete(key);
+        registry.dropSnapshotNote(Number(key.split(":")[0]), `u:${key}`);
+        total -= snap.snapshot.length;
+        dropped += 1;
+      }
+    }
+    return dropped;
+  }
+
+  const sweepTimer = setInterval(() => {
+    const now = Date.now();
+    const droppedSnapshots = sweepSnapshots(now);
     for (const [key, history] of inputHistoryByRoom) {
       for (const frame of history.keys()) {
         const firstEntry = history.get(frame)?.values().next().value as Input | undefined;
-        if (firstEntry && now - (firstEntry as any).receivedAt > 60_000) {
-          history.delete(frame);
-        }
+        if (firstEntry && now - firstEntry.receivedAt > 60_000) history.delete(frame);
       }
       if (history.size === 0) inputHistoryByRoom.delete(key);
     }
-  }, 60_000);
+    for (const [key, record] of memberInputRate) if (now - record.windowStart > 5_000) memberInputRate.delete(key);
+    const report = registry.sweep(now);
+    if (droppedSnapshots > 0 || report.destroyedRooms > 0) {
+      console.log(`[universal-netplay] sweep: rooms=${report.liveRooms} sockets=${report.liveSockets} destroyed=${report.destroyedRooms} snapshotsDropped=${droppedSnapshots} snapshotBytes=${report.snapshotBytes}`);
+    }
+  }, 15_000);
+  (sweepTimer as unknown as { unref?: () => void }).unref?.();
 
   function getFrameTracker(roomId: number): Map<number, number> {
     let tracker = roomFrameTrackers.get(roomId);
@@ -102,7 +184,10 @@ export function registerUniversalNetplayServer(server: HttpServer) {
     const previous = activeSockets.get(connectionKey);
     if (previous && previous !== socket.id) io.sockets.sockets.get(previous)?.disconnect(true);
     activeSockets.set(connectionKey, socket.id); socket.join(channel);
-    const players = await getPlayers(session.roomId);
+    registry.attachSocket(session.roomId, socket.id);
+    registerRoomCleanup(session.roomId);
+    await getCachedPlayers(session.roomId, true);
+    const players = await getCachedPlayers(session.roomId);
     socket.emit("universal:joined", { 
       memberId: session.memberId, 
       assignedPlayer: session.role === "spectator" ? null : Math.max(0, players.findIndex((m) => m.id === session.memberId)), 
@@ -143,13 +228,14 @@ export function registerUniversalNetplayServer(server: HttpServer) {
       if (session.role === "spectator" || !validSystem(p?.system) || !validFingerprint(p?.fingerprint) || !validCoreVersion(p?.coreVersion)) return;
       const ready = { memberId: session.memberId, system: p.system, fingerprint: p.fingerprint.toLowerCase(), coreVersion: p.coreVersion.trim() } satisfies Ready;
       const roomReady = readyByRoom.get(session.roomId) ?? new Map<number, Ready>(); roomReady.set(session.memberId, ready); readyByRoom.set(session.roomId, roomReady);
-      const active = await getPlayers(session.roomId), ids = active.map((m) => m.id);
+      const active = await getCachedPlayers(session.roomId, true), ids = active.map((m) => m.id);
       const capacity = roomCapacityFor(p.system);
       if (ids.length < capacity.minPlayers || ids.length > capacity.maxPlayers) return;
       if (!ids.every((id) => roomReady.has(id))) return void socket.emit("universal:waiting", { readyCount: ids.filter((id) => roomReady.has(id)).length, playerCount: ids.length });
       const peers = ids.map((id) => roomReady.get(id)!); const first = peers[0];
       if (!peers.every((peer) => peer.system === first.system && peer.fingerprint === first.fingerprint && peer.coreVersion === first.coreVersion)) return void io.to(channel).emit("universal:session-refused", { message: "كل اللاعبين يجب أن يختاروا نفس ملف اللعبة ونفس إصدار المحرك." });
       const key = roomKey(session.roomId, first.system); snapshotByRoom.delete(key); inputHistoryByRoom.delete(key);
+      registry.dropSnapshotNote(session.roomId, `u:${key}`);
       roomFrameTrackers.delete(session.roomId);
       roomInputDelays.set(session.roomId, 3);
       io.to(channel).emit("universal:bootstrap", { system: first.system, fingerprint: first.fingerprint, coreVersion: first.coreVersion, hostMemberId: first.memberId, playerMemberIds: ids, inputDelay: 3 });
@@ -171,7 +257,7 @@ export function registerUniversalNetplayServer(server: HttpServer) {
       if (frame < lastFrame - 10) return; // Old frame, ignore
       tracker.set(session.memberId, Math.max(lastFrame, frame));
 
-      const playersNow = await getPlayers(session.roomId); if (!playersNow.some((m) => m.id === session.memberId)) return;
+      const playersNow = await getCachedPlayers(session.roomId); if (!playersNow.some((m) => m.id === session.memberId)) return;
       const ready = readyByRoom.get(session.roomId)?.get(session.memberId); if (!ready) return;
       const key = roomKey(session.roomId, ready.system), history = inputHistoryByRoom.get(key) ?? new Map<number, Map<number, Input>>();
       const frameInputs = history.get(frame) ?? new Map<number, Input>(); 
@@ -188,7 +274,7 @@ export function registerUniversalNetplayServer(server: HttpServer) {
       const encoding = p.encoding === "base64" || p.encoding === "gzip-base64" ? p.encoding : null;
       const ready = readyByRoom.get(session.roomId)?.get(session.memberId); if (syncId < 0 || !encoding || !ready) return;
       const key = roomKey(session.roomId, ready.system), previousSnapshot = snapshotByRoom.get(key); if (previousSnapshot && syncId <= previousSnapshot.syncId) return;
-      const snapshot: Snapshot = { snapshot: p.snapshot, syncId, fingerprint: ready.fingerprint, system: ready.system, encoding, updatedAt: Date.now() }; snapshotByRoom.set(key, snapshot); socket.to(channel).emit("universal:state", snapshot);
+      const snapshot: Snapshot = { snapshot: p.snapshot, syncId, fingerprint: ready.fingerprint, system: ready.system, encoding, updatedAt: Date.now() }; snapshotByRoom.set(key, snapshot); registry.noteSnapshot(session.roomId, `u:${key}`, snapshot.snapshot.length); registry.registerSnapshotDisposer(session.roomId, `u:${key}`, () => { snapshotByRoom.delete(key); }); socket.to(channel).emit("universal:state", snapshot);
     });
 
     socket.on("universal:state-request", (p: { minimumSyncId?: unknown }) => {
@@ -200,13 +286,15 @@ export function registerUniversalNetplayServer(server: HttpServer) {
 
     socket.on("universal:state-ack", async (p: { syncId?: unknown }) => {
       if (p?.syncId !== 0) return; const ready = readyByRoom.get(session.roomId)?.get(session.memberId); if (!ready) return;
-      const activeIds = (await getPlayers(session.roomId)).map((m) => m.id), acks = new Set<number>((socket.data.initialStateAcks as number[] | undefined) ?? []); acks.add(session.memberId); socket.data.initialStateAcks = [...acks];
+      const activeIds = (await getCachedPlayers(session.roomId)).map((m) => m.id), acks = new Set<number>((socket.data.initialStateAcks as number[] | undefined) ?? []); acks.add(session.memberId); socket.data.initialStateAcks = [...acks];
       const hostMemberId = activeIds[0], allAcked = activeIds.filter((id) => id !== hostMemberId).every((id) => [...(io.sockets.adapter.rooms.get(channel) ?? [])].some((sid) => { const peer = io.sockets.sockets.get(sid); return (peer?.data.session as Session | undefined)?.memberId === id && ((peer?.data.initialStateAcks as number[] | undefined) ?? []).includes(0); }));
       if (allAcked) io.to(channel).emit("universal:session-go", { system: ready.system, fingerprint: ready.fingerprint, hostMemberId, playerMemberIds: activeIds, startAt: Date.now() + 1500, inputDelay: roomInputDelays.get(session.roomId) ?? 3 });
     });
 
     socket.on("disconnect", () => { 
       if (activeSockets.get(connectionKey) === socket.id) activeSockets.delete(connectionKey); 
+      registry.detachSocket(session.roomId, socket.id);
+      playerCache.delete(session.roomId);
       const roomReady = readyByRoom.get(session.roomId); roomReady?.delete(session.memberId); 
       if (roomReady && roomReady.size === 0) readyByRoom.delete(session.roomId); 
       socket.to(channel).emit("universal:presence", { memberId: session.memberId, online: false }); 

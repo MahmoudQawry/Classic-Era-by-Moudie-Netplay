@@ -171,17 +171,32 @@ function LiveKitVoiceControls({ members, localMemberId, socket }: { members?: Vo
 
   useEffect(() => { socketRef.current = socket as SocketLike | undefined; }, [socket]);
 
-  useEffect(() => { 
-    AudioSession.startAudioSession().catch(() => undefined); 
-    InCallManager.start({ media: "audio" }); 
-    InCallManager.setForceSpeakerphoneOn(true); 
-    InCallManager.setKeepScreenOn(true);
-    localParticipant.setMicrophoneEnabled(false).catch(() => undefined); 
-    return () => { 
-      InCallManager.stop(); 
-      AudioSession.stopAudioSession().catch(() => undefined); 
-    }; 
-  }, [localParticipant]);
+  /** The audio session is started lazily: connecting to a room must not grab the
+   * microphone or tear down the emulator's audio at the moment the session
+   * starts (that spike is what users reported as "unbearable slowness"). */
+  const ensureAudioSession = () => {
+    AudioSession.startAudioSession().catch(() => undefined);
+    InCallManager.start({ media: "audio" });
+    InCallManager.setForceSpeakerphoneOn(true);
+  };
+
+  useEffect(() => {
+    try { InCallManager.setKeepScreenOn(true); } catch { /* screen-on is best effort */ }
+    return () => {
+      InCallManager.stop();
+      AudioSession.stopAudioSession().catch(() => undefined);
+    };
+  }, []);
+
+  // Live speaking indicator: while the microphone is enabled, refresh the voice
+  // status a couple of times per second so every member sees who is talking.
+  useEffect(() => {
+    if (!isMicrophoneEnabled) return;
+    const emitSpeaking = () => socketRef.current?.emit?.("netplay:voice-status", { microphoneEnabled: true, speakerEnabled: speaker, voiceMode, voiceChannel, isSpeaking: true });
+    emitSpeaking();
+    const timer = setInterval(emitSpeaking, 2_000);
+    return () => clearInterval(timer);
+  }, [isMicrophoneEnabled, speaker, voiceMode, voiceChannel]);
 
   // Listen for voice status to show speaking indicators
   useEffect(() => {
@@ -225,6 +240,7 @@ function LiveKitVoiceControls({ members, localMemberId, socket }: { members?: Vo
 
   const handlePttPress = () => {
     if (voiceMode === "ptt") {
+      ensureAudioSession();
       localParticipant.setMicrophoneEnabled(true).catch(() => undefined);
       socketRef.current?.emit?.("netplay:voice-status", { microphoneEnabled: true, speakerEnabled: speaker, voiceMode, voiceChannel, isSpeaking: true });
     }
@@ -246,10 +262,11 @@ function LiveKitVoiceControls({ members, localMemberId, socket }: { members?: Vo
       connectedCount={Math.max(0, participants.length - 1)} 
       status={connectionState === ConnectionState.Connected ? `LiveKit connected - ${voiceChannel} channel - ${voiceMode} mode` : `Voice ${String(connectionState).toLowerCase()}…`} 
       onMicChange={async (enabled) => { 
+        ensureAudioSession();
         await localParticipant.setMicrophoneEnabled(enabled);
         socketRef.current?.emit?.("netplay:voice-status", { microphoneEnabled: enabled, speakerEnabled: speaker, voiceMode, voiceChannel, isSpeaking: enabled });
       }} 
-      onSpeakerChange={(enabled) => { setSpeaker(enabled); InCallManager.setForceSpeakerphoneOn(enabled); }}
+      onSpeakerChange={(enabled) => { setSpeaker(enabled); ensureAudioSession(); InCallManager.setForceSpeakerphoneOn(enabled); }}
       onModeChange={handleModeChange}
       onChannelChange={handleChannelChange}
       onPttPress={handlePttPress}
@@ -307,7 +324,7 @@ export const RoomVoiceChat = forwardRef<RoomVoiceChatHandle, Props>(function Roo
         serverUrl={mediaToken.url} 
         token={mediaToken.token} 
         connect 
-        audio={true} 
+        audio={false} 
         video={false} 
         options={{ 
           adaptiveStream: true, 
