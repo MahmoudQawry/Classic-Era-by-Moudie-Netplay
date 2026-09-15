@@ -7,6 +7,7 @@ import { createSessionBarrier, type ReadySessionPeer } from "../lib/netplay-sess
 import { normalizeSyncId } from "../lib/netplay-sync";
 import { hashAccessToken } from "./rooms";
 import { socketCors } from "./_core/cors";
+import { RoomLifecycleRegistry, SlidingWindowLimiter } from "./room-lifecycle";
 import { roomCapacityFor } from "../shared/room-capacity";
 
 type NetplaySystem = "ps1" | "nes" | "psp" | "sega";
@@ -72,10 +73,13 @@ export function registerNetplayServer(server: HttpServer) {
     cors: socketCors,
     transports: ["websocket", "polling"],
     maxHttpBufferSize: 5e6,
-    pingInterval: 2000,
-    pingTimeout: 8000,
+    // Mobile-friendly keepalive: the previous 2s ping / 8s timeout dropped
+    // phones during the CPU spike that happens when a ROM boots, which showed
+    // up as a dropout followed by permanent sync loss.
+    pingInterval: 10_000,
+    pingTimeout: 20_000,
     connectionStateRecovery: {
-      maxDisconnectionDuration: 30_000,
+      maxDisconnectionDuration: 60_000,
       skipMiddlewares: false,
     },
   });
@@ -93,35 +97,132 @@ export function registerNetplayServer(server: HttpServer) {
   const roomInputDelays = new Map<number, number>();
   const memberInputRate = new Map<string, { count: number; windowStart: number }>();
 
-  // Cleanup old histories every 60s
-  setInterval(() => {
+  /** Authoritative snapshots are the largest objects on the server (up to ~4.5 MB
+   * each). They must never outlive the session that produced them. */
+  const SNAPSHOT_TTL_MS = 120_000;
+  const SNAPSHOT_BUDGET_BYTES = 48 * 1024 * 1024;
+
+  // Single authority for room lifetime. Empty rooms are destroyed together with
+  // all of their cached state, so a long-running process cannot accumulate room
+  // garbage (the previous sweeper never released snapshots or rate windows).
+  const registry = new RoomLifecycleRegistry({
+    emptyRoomTtlMs: 90_000,
+    snapshotTtlMs: SNAPSHOT_TTL_MS,
+    snapshotBudgetBytes: SNAPSHOT_BUDGET_BYTES,
+    intervalMs: 15_000,
+  });
+  const chatLimiter = new SlidingWindowLimiter(5, 5_000);
+  const signalLimiter = new SlidingWindowLimiter(60, 10_000);
+  const voiceStatusLimiter = new SlidingWindowLimiter(6, 1_000);
+
+  /** Frees every piece of per-room state; registered once per room as disposer. */
+  function destroyRoomState(roomId: number) {
+    const roomPrefix = `${roomId}:`;
+    for (const key of [...activeMemberSockets.keys()]) if (key.startsWith(roomPrefix)) activeMemberSockets.delete(key);
+    for (const key of [...memberInputRate.keys()]) if (key.startsWith(roomPrefix)) memberInputRate.delete(key);
+    for (const key of [...universalSnapshots.keys()]) if (key.startsWith(roomPrefix)) universalSnapshots.delete(key);
+    for (const key of [...universalInitialStateAcks.keys()]) if (key.startsWith(roomPrefix)) universalInitialStateAcks.delete(key);
+    for (const key of [...universalInputHistory.keys()]) if (key.startsWith(roomPrefix)) universalInputHistory.delete(key);
+    ps1Snapshots.delete(roomId);
+    ps1InitialStateAcks.delete(roomId);
+    famicomSnapshots.delete(roomId);
+    pendingSessions.delete(roomId);
+    roomFrameTrackers.delete(roomId);
+    ps1InputHistory.delete(roomId);
+    roomInputDelays.delete(roomId);
+    roomDisposers.delete(roomId);
+  }
+
+  // One stable disposer reference per room so the registry Set never grows with
+  // the number of connections (a fresh arrow function per socket would leak).
+  const roomDisposers = new Map<number, () => void>();
+  function registerRoomCleanup(roomId: number) {
+    let disposer = roomDisposers.get(roomId);
+    if (!disposer) {
+      disposer = () => destroyRoomState(roomId);
+      roomDisposers.set(roomId, disposer);
+    }
+    registry.onDestroy(roomId, disposer);
+  }
+
+  /** Enforces the snapshot TTL and the global byte budget on the payload maps:
+   * this is what actually releases the multi-megabyte buffers. */
+  function sweepSnapshots(now: number) {
+    let dropped = 0;
+    for (const [roomId, snap] of [...ps1Snapshots]) {
+      if (now - snap.updatedAt > SNAPSHOT_TTL_MS || registry.socketCount(roomId) === 0) {
+        ps1Snapshots.delete(roomId);
+        registry.dropSnapshotNote(roomId, "ps1");
+        dropped += 1;
+      }
+    }
+    for (const [roomId, snap] of [...famicomSnapshots]) {
+      if (now - snap.updatedAt > SNAPSHOT_TTL_MS || registry.socketCount(roomId) === 0) {
+        famicomSnapshots.delete(roomId);
+        registry.dropSnapshotNote(roomId, "nes");
+        dropped += 1;
+      }
+    }
+    for (const [key, snap] of [...universalSnapshots]) {
+      const roomId = Number(key.split(":")[0]);
+      if (now - snap.updatedAt > SNAPSHOT_TTL_MS || !Number.isFinite(roomId) || registry.socketCount(roomId) === 0) {
+        universalSnapshots.delete(key);
+        registry.dropSnapshotNote(roomId, `u:${key}`);
+        dropped += 1;
+      }
+    }
+    let total = 0;
+    const entries: { key: string; kind: "ps1" | "nes" | "u"; updatedAt: number; bytes: number }[] = [];
+    for (const [roomId, snap] of ps1Snapshots) { total += snap.snapshot.length; entries.push({ key: String(roomId), kind: "ps1", updatedAt: snap.updatedAt, bytes: snap.snapshot.length }); }
+    for (const [roomId, snap] of famicomSnapshots) { total += snap.snapshot.length; entries.push({ key: String(roomId), kind: "nes", updatedAt: snap.updatedAt, bytes: snap.snapshot.length }); }
+    for (const [key, snap] of universalSnapshots) { total += snap.snapshot.length; entries.push({ key, kind: "u", updatedAt: snap.updatedAt, bytes: snap.snapshot.length }); }
+    if (total > SNAPSHOT_BUDGET_BYTES) {
+      entries.sort((left, right) => left.updatedAt - right.updatedAt);
+      for (const entry of entries) {
+        if (total <= SNAPSHOT_BUDGET_BYTES) break;
+        if (entry.kind === "ps1") ps1Snapshots.delete(Number(entry.key));
+        else if (entry.kind === "nes") famicomSnapshots.delete(Number(entry.key));
+        else universalSnapshots.delete(entry.key);
+        const noteRoomId = Number(entry.kind === "u" ? entry.key.split(":")[0] : entry.key);
+        registry.dropSnapshotNote(noteRoomId, entry.kind === "u" ? `u:${entry.key}` : entry.kind);
+        total -= entry.bytes;
+        dropped += 1;
+      }
+    }
+    return dropped;
+  }
+
+  // One periodic pass: snapshot TTL/budget, history ageing, rate windows, then
+  // room destruction through the registry (which invokes destroyRoomState).
+  const sweepTimer = setInterval(() => {
     const now = Date.now();
+    const droppedSnapshots = sweepSnapshots(now);
     for (const [roomId, history] of ps1InputHistory) {
       for (const frame of history.keys()) {
         if (frame < 0) continue;
         const firstEntry = history.get(frame)?.values().next().value as FrameInputRecord | undefined;
-        if (firstEntry && now - firstEntry.receivedAt > 60_000) {
-          history.delete(frame);
-        }
+        if (firstEntry && now - firstEntry.receivedAt > 60_000) history.delete(frame);
       }
       if (history.size === 0) ps1InputHistory.delete(roomId);
     }
     for (const [key, history] of universalInputHistory) {
       for (const frame of history.keys()) {
         const firstEntry = history.get(frame)?.values().next().value as FrameInputRecord | undefined;
-        if (firstEntry && now - firstEntry.receivedAt > 60_000) {
-          history.delete(frame);
-        }
+        if (firstEntry && now - firstEntry.receivedAt > 60_000) history.delete(frame);
       }
       if (history.size === 0) universalInputHistory.delete(key);
     }
-    // Cleanup old pending sessions (stuck > 5min)
-    for (const [roomId, pending] of pendingSessions) {
-      if (now - pending.createdAt > 5 * 60_000) {
-        pendingSessions.delete(roomId);
-      }
+    for (const [roomId, pending] of pendingSessions) if (now - pending.createdAt > 5 * 60_000) pendingSessions.delete(roomId);
+    for (const [key, record] of memberInputRate) if (now - record.windowStart > 5_000) memberInputRate.delete(key);
+    chatLimiter.prune(now);
+    signalLimiter.prune(now);
+    voiceStatusLimiter.prune(now);
+    const report = registry.sweep(now);
+    if (droppedSnapshots > 0 || report.destroyedRooms > 0) {
+      console.log(`[netplay] sweep: rooms=${report.liveRooms} sockets=${report.liveSockets} destroyed=${report.destroyedRooms} snapshotsDropped=${droppedSnapshots} snapshotBytes=${report.snapshotBytes}`);
     }
-  }, 60_000);
+  }, 15_000);
+  (sweepTimer as unknown as { unref?: () => void }).unref?.();
 
   function getFrameTracker(roomId: number): RoomFrameTracker {
     let tracker = roomFrameTrackers.get(roomId);
@@ -216,6 +317,10 @@ export function registerNetplayServer(server: HttpServer) {
       .map((socketId) => (io.sockets.sockets.get(socketId)?.data.session as NetplaySession | undefined)?.memberId)
       .filter((memberId): memberId is number => typeof memberId === "number");
     socket.join(channel);
+    // Room lifetime: attach this socket and make sure the room's cached state is
+    // released exactly once when the room goes idle/empty.
+    registry.attachSocket(session.roomId, socket.id);
+    registerRoomCleanup(session.roomId);
 
     const snapshot = await db.getRoomSnapshot(session.roomId).catch(() => undefined);
     const activeSeats = (snapshot?.members ?? [])
@@ -301,6 +406,7 @@ export function registerNetplayServer(server: HttpServer) {
     });
 
     socket.on("netplay:chat", (payload: ChatPayload) => {
+      if (!chatLimiter.allow(`${session.roomId}:${session.memberId}`)) return;
       const text = typeof payload?.text === "string" ? payload.text.trim().slice(0, 400) : "";
       if (!text) return;
       io.to(channel).emit("netplay:chat", {
@@ -368,6 +474,8 @@ export function registerNetplayServer(server: HttpServer) {
       const previous = famicomSnapshots.get(session.roomId);
       if (previous && syncId <= previous.syncId) return;
       famicomSnapshots.set(session.roomId, authoritative);
+      registry.noteSnapshot(session.roomId, "nes", authoritative.snapshot.length);
+      registry.registerSnapshotDisposer(session.roomId, "nes", () => { famicomSnapshots.delete(session.roomId); });
       socket.to(channel).emit("netplay:state", authoritative);
     });
 
@@ -379,6 +487,7 @@ export function registerNetplayServer(server: HttpServer) {
     });
 
     socket.on("netplay:signal", (payload: SignalPayload) => {
+      if (!signalLimiter.allow(`${session.roomId}:${session.memberId}`)) return;
       if (!payload || typeof payload.signal !== "object" || payload.signal === null) return;
       const signal = payload.signal as Record<string, unknown>;
       if (typeof signal.kind !== "string" || !VOICE_SIGNAL_KINDS.has(signal.kind)) return;
@@ -399,6 +508,9 @@ export function registerNetplayServer(server: HttpServer) {
 
     // adaptive voice with team/room filtering
     socket.on("netplay:voice-status", (payload: VoiceStatusPayload) => {
+      // Speaking heartbeats arrive a few times per second; coalesce them so one
+      // talkative member cannot flood every room peer.
+      if (!voiceStatusLimiter.allow(`${session.roomId}:${session.memberId}`)) return;
       const voiceMode = typeof payload?.voiceMode === "string" && VOICE_MODES.has(payload.voiceMode) ? payload.voiceMode : undefined;
       const voiceChannel = typeof payload?.voiceChannel === "string" && VOICE_CHANNELS.has(payload.voiceChannel) ? payload.voiceChannel : undefined;
       const isSpeaking = Boolean(payload?.isSpeaking);
@@ -503,6 +615,8 @@ export function registerNetplayServer(server: HttpServer) {
       if (previous && syncId <= previous.syncId) return;
       const authoritative = { fingerprint: socket.data.ps1Fingerprint, snapshot, syncId, encoding, updatedAt: Date.now() } satisfies Ps1Snapshot;
       ps1Snapshots.set(session.roomId, authoritative);
+      registry.noteSnapshot(session.roomId, "ps1", authoritative.snapshot.length);
+      registry.registerSnapshotDisposer(session.roomId, "ps1", () => { ps1Snapshots.delete(session.roomId); });
       socket.to(channel).emit("netplay:ps1-state", authoritative);
     });
 
@@ -618,6 +732,8 @@ export function registerNetplayServer(server: HttpServer) {
       if (previous && syncId <= previous.syncId) return;
       const authoritative = { system, fingerprint, snapshot, syncId, encoding, updatedAt: Date.now() } satisfies UniversalSnapshot;
       universalSnapshots.set(key, authoritative);
+      registry.noteSnapshot(session.roomId, `u:${key}`, authoritative.snapshot.length);
+      registry.registerSnapshotDisposer(session.roomId, `u:${key}`, () => { universalSnapshots.delete(key); });
       socket.to(channel).emit("netplay:universal-state", authoritative);
     });
 
@@ -665,6 +781,7 @@ export function registerNetplayServer(server: HttpServer) {
 
     socket.on("disconnect", () => {
       if (activeMemberSockets.get(key) === socket.id) activeMemberSockets.delete(key);
+      registry.detachSocket(session.roomId, socket.id);
       const hasSiblingConnection = Array.from(activeMemberSockets.keys()).some((activeKey) => activeKey.startsWith(`${session.roomId}:${session.memberId}:`));
       if (!hasSiblingConnection) socket.to(channel).emit("netplay:presence", { memberId: session.memberId, displayName: session.displayName, online: false });
       if (session.clientKind === "room-ui") socket.to(channel).emit("netplay:session-presence", { memberId: session.memberId, ready: false });

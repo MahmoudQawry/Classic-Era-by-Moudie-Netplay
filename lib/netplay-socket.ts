@@ -35,17 +35,17 @@ export function createNetplaySocket(credentials: NetplayCredentials): Socket {
   if (!baseUrl) throw new Error("Could not determine the room server. Check the app's internet connection.");
   return io(baseUrl, {
     path: "/api/netplay",
-    // adaptive: aggressive reconnection for seamless experience
     transports: ["websocket"],
     upgrade: false,
     auth: credentials,
     timeout: 20_000,
     reconnection: true,
-    reconnectionAttempts: 30, // Increased from 12 for adaptive persistence
-    reconnectionDelay: 300, // Faster initial retry (was 1000)
-    reconnectionDelayMax: 3_000, // Lower max for quicker recovery (was 8000)
-    randomizationFactor: 0.3, // Less randomization for more predictable retries
-    // Additional adaptive optimizations
+    // Backoff tuned for mobile: a 300ms retry storm used to pile extra sockets
+    // on top of the CPU spike of starting a game. Start at 1s, cap at 8s.
+    reconnectionAttempts: 50,
+    reconnectionDelay: 1_000,
+    reconnectionDelayMax: 8_000,
+    randomizationFactor: 0.5,
     forceNew: false,
     autoConnect: true,
   });
@@ -62,10 +62,10 @@ export function createUniversalNetplaySocket(credentials: NetplayCredentials): S
     auth: credentials,
     timeout: 20_000,
     reconnection: true,
-    reconnectionAttempts: 30,
-    reconnectionDelay: 300,
-    reconnectionDelayMax: 3_000,
-    randomizationFactor: 0.3,
+    reconnectionAttempts: 50,
+    reconnectionDelay: 1_000,
+    reconnectionDelayMax: 8_000,
+    randomizationFactor: 0.5,
     forceNew: false,
     autoConnect: true,
   });

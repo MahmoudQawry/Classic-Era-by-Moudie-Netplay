@@ -48,13 +48,18 @@ function calculateGrade(rtt: number | null, jitter: number | null, loss: number 
 }
 
 /** 
- * adaptive improved quality monitor
- * - Faster probing (500ms instead of 1000ms) for quicker adaptation
- * - Adaptive delay recommendation
- * - Packet loss streak tracking
- * - Jitter buffer calculation
+ * Network quality monitor
+ * - Probes a SINGLE channel (the one this socket actually serves). The previous
+ *   version emitted both netplay and universal probes on every tick; the unused
+ *   probe was never answered, aged out of the pending map, and was recorded as
+ *   packet loss, pushing the grade to UNSTABLE and escalating the input delay.
+ * - 1200ms cadence and a 3s expiry keep traffic and false loss low.
  */
-export function startNetplayQualityMonitor(socket: Socket, onQuality: (quality: NetplayQuality) => void) {
+export type QualityProbeChannel = "netplay" | "universal";
+
+export function startNetplayQualityMonitor(socket: Socket, onQuality: (quality: NetplayQuality) => void, channel: QualityProbeChannel = "netplay") {
+  const probeEvent = channel === "universal" ? "universal:quality-probe" : "netplay:quality-probe";
+  const pongEvent = channel === "universal" ? "universal:quality-pong" : "netplay:quality-pong";
   let sequence = 0;
   let previousRtt: number | null = null;
   let smoothedRtt: number | null = null;
@@ -101,7 +106,7 @@ export function startNetplayQualityMonitor(socket: Socket, onQuality: (quality: 
   const prune = (now: number) => {
     let expiredCount = 0;
     for (const [id, sentAt] of pending) {
-      if (now - sentAt < 2_000) continue; // Reduced timeout for faster detection
+      if (now - sentAt < 3_000) continue;
       pending.delete(id);
       recordOutcome(false);
       expiredCount++;
@@ -134,23 +139,21 @@ export function startNetplayQualityMonitor(socket: Socket, onQuality: (quality: 
     if (socket.connected) {
       const id = sequence++;
       pending.set(id, now);
-      socket.emit("netplay:quality-probe", { sequence: id });
-      socket.emit("universal:quality-probe", { sequence: id }); // Also probe universal channel
+      socket.emit(probeEvent, { sequence: id });
     }
     publish();
   };
 
-  socket.on("netplay:quality-pong", onPong);
-  socket.on("universal:quality-pong", onPong); // Listen to both
+  socket.on(pongEvent, onPong);
   
-  // adaptive: probe faster (500ms) for quicker adaptation
+  // Probe at a calm cadence: fast enough to detect real trouble, light enough
+  // to leave bandwidth and CPU for the emulator and the voice channel.
   tick();
-  const timer = setInterval(tick, 600); // 600ms for balance between accuracy and bandwidth
+  const timer = setInterval(tick, 1_200);
   
   return () => {
     clearInterval(timer);
-    socket.off("netplay:quality-pong", onPong);
-    socket.off("universal:quality-pong", onPong);
+    socket.off(pongEvent, onPong);
   };
 }
 

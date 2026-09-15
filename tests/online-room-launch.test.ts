@@ -88,12 +88,12 @@ describe("online room launch safeguards", () => {
     expect(famicomRoom).toContain('nativePlayerRef.current?.requestState("netplay")');
     expect(oauth).toContain("const NATIVE_API_FALLBACK_URL = NATIVE_NETPLAY_SERVICE_URL");
     expect(ps1).toContain('RENDERMODE_CONTINUOUSLY');
-    // adaptive improved reconnection (20 attempts, faster retry)
-    expect(ps1Client).toMatch(/reconnectionAttempts = (12|20|30)/);
-    expect(ps1Client).toMatch(/reconnectionDelayMax = (2_000|3_000|4_000)/);
+    // Reconnection tuned for mobile: many attempts with a 1s->8s backoff.
+    expect(ps1Client).toMatch(/reconnectionAttempts = (12|20|30|50)/);
+    expect(ps1Client).toMatch(/reconnectionDelayMax = (2_000|3_000|4_000|8_000)/);
     expect(ps1Client).toContain('NetplayQualityMonitor');
-    expect(universalClient).toMatch(/reconnectionAttempts = (12|20|30)/);
-    expect(universalClient).toMatch(/reconnectionDelayMax = (2_000|3_000|4_000)/);
+    expect(universalClient).toMatch(/reconnectionAttempts = (12|20|30|50)/);
+    expect(universalClient).toMatch(/reconnectionDelayMax = (2_000|3_000|4_000|8_000)/);
     expect(universalClient).toContain('NetplayQualityMonitor');
     expect(universalClient).toContain('path = "/api/netplay"');
     expect(universalClient).toContain('"clientKind" to "universal-player"');

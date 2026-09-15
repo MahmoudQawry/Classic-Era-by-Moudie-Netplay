@@ -1,4 +1,4 @@
-package expo.modules.moudieemulator
+﻿package expo.modules.moudieemulator
 
 import io.socket.client.IO
 import io.socket.client.Socket
@@ -43,8 +43,8 @@ class UniversalNetplayClient(
       reconnection = true
       timeout = 5_000
       reconnectionAttempts = 20
-      reconnectionDelay = 300
-      reconnectionDelayMax = 2_000
+      reconnectionDelay = 1000
+      reconnectionDelayMax = 8_000
       randomizationFactor = 0.3
       auth = hashMapOf(
         "roomId" to config.roomId.toString(),

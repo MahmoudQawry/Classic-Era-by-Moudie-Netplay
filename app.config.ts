@@ -27,7 +27,7 @@ const env = {
 const config: ExpoConfig = {
   name: env.appName,
   slug: env.appSlug,
-  version: "1.8.0",
+  version: "1.10.0",
   orientation: "default",
   icon: "./assets/images/classic-era-new-icon.png",
   scheme: env.scheme,
@@ -39,7 +39,7 @@ const config: ExpoConfig = {
     infoPlist: { ITSAppUsesNonExemptEncryption: false },
   },
   android: {
-    versionCode: 47,
+    versionCode: 48,
     adaptiveIcon: {
       backgroundColor: "#101827",
       foregroundImage: "./assets/images/classic-era-new-icon.png",
