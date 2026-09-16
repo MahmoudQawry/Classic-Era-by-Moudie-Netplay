@@ -124,7 +124,13 @@ export default function RoomScreen() {
 
         {Platform.OS !== "web" && <>
           <RoomChat socket={roomConnected ? socketRef.current : null} title={`${SYSTEM_LABEL[snapshot.room.system]} · ${t("roomChat")}`} />
-          <RoomVoiceChat mediaToken={mediaToken} memberRole={roomMember?.role} />
+          <RoomVoiceChat
+            mediaToken={mediaToken}
+            socket={roomConnected ? socketRef.current : null}
+            memberId={roomMember?.id ?? credential.memberId}
+            members={snapshot.members.map((member) => ({ id: member.id, displayName: member.displayName, role: member.role }))}
+            memberRole={roomMember?.role}
+          />
         </>}
 
         {snapshot.room.system === "nes" ? (
