@@ -12,8 +12,8 @@ async function loadModule() {
 afterEach(() => {
   if (ORIGINAL === undefined) delete process.env.ALLOWED_ORIGINS;
   else process.env.ALLOWED_ORIGINS = ORIGINAL;
-  if (ORIGINAL_NODE_ENV === undefined) delete process.env.NODE_ENV;
-  else process.env.NODE_ENV = ORIGINAL_NODE_ENV;
+  if (ORIGINAL_NODE_ENV === undefined) vi.unstubAllEnvs();
+  else vi.stubEnv("NODE_ENV", ORIGINAL_NODE_ENV);
 });
 
 describe("isAllowedOrigin", () => {
@@ -46,14 +46,14 @@ describe("isAllowedOrigin", () => {
   });
 
   it("supports an explicit wildcard outside production", async () => {
-    process.env.NODE_ENV = "development";
+    vi.stubEnv("NODE_ENV", "development");
     process.env.ALLOWED_ORIGINS = "*";
     const { isAllowedOrigin } = await loadModule();
     expect(isAllowedOrigin("https://anything.example.com")).toBe(true);
   });
 
   it("rejects a wildcard in production", async () => {
-    process.env.NODE_ENV = "production";
+    vi.stubEnv("NODE_ENV", "production");
     process.env.ALLOWED_ORIGINS = "*";
     const { isAllowedOrigin } = await loadModule();
     expect(isAllowedOrigin("https://anything.example.com")).toBe(false);
