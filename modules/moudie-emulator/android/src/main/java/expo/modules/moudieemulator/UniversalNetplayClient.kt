@@ -39,13 +39,14 @@ class UniversalNetplayClient(
   fun connect() {
     val options = IO.Options().apply {
       path = "/api/netplay"
-      transports = arrayOf("websocket")
+      transports = arrayOf("websocket", "polling")
+      upgrade = true
       reconnection = true
-      timeout = 5_000
-      reconnectionAttempts = 20
-      reconnectionDelay = 1000
+      timeout = 20_000
+      reconnectionAttempts = Integer.MAX_VALUE
+      reconnectionDelay = 1_000
       reconnectionDelayMax = 8_000
-      randomizationFactor = 0.3
+      randomizationFactor = 0.35
       auth = hashMapOf(
         "roomId" to config.roomId.toString(),
         "memberId" to config.memberId.toString(),
@@ -96,7 +97,7 @@ class UniversalNetplayClient(
       on("netplay:delay-update") { args ->
         val payload = args.firstOrNull() as? JSONObject ?: return@on
         val delay = payload.optLong("delay", -1L)
-        if (delay in 2..8) {
+        if (delay in 2..20) {
           onDelayUpdate?.invoke(delay)
           onStatus("Network adapting: buffer ${delay} frames")
         }
@@ -139,7 +140,6 @@ class UniversalNetplayClient(
 
   fun sendInputFrame(frame: Long, mask: Int) {
     if (frame < 0L || mask !in 0..0xffff || socket?.connected() != true) return
-    // Inputs are ephemeral. The connected check prevents stale reconnect queues.
     socket?.emit("netplay:universal-input", JSONObject().put("frame", frame).put("mask", mask))
   }
 
@@ -162,7 +162,7 @@ class UniversalNetplayClient(
   }
 
   fun requestDelayIncrease(delay: Long, reason: String) {
-    if (delay in 2..8) {
+    if (delay in 2..20) {
       socket?.emit("netplay:delay-request", JSONObject().put("delay", delay).put("reason", reason))
     }
   }
