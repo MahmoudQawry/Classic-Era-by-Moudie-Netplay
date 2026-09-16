@@ -1,8 +1,6 @@
 import * as Linking from "expo-linking";
 import * as ReactNative from "react-native";
 
-// Extract scheme from bundle ID (last segment timestamp, prefixed with "manus")
-// e.g., "space.manus.my.app.t20240115103045" -> "manus20240115103045"
 const bundleId = "com.app.moudienetplay";
 const timestamp = bundleId.split(".").pop()?.replace(/^t/, "") ?? "";
 const schemeFromBundleId = `manus${timestamp}`;
@@ -14,12 +12,16 @@ const env = {
   ownerId: process.env.EXPO_PUBLIC_OWNER_OPEN_ID ?? "",
   ownerName: process.env.EXPO_PUBLIC_OWNER_NAME ?? "",
   apiBaseUrl: process.env.EXPO_PUBLIC_API_BASE_URL ?? "",
+  netplayServiceUrl: process.env.EXPO_PUBLIC_NETPLAY_SERVICE_URL ?? "",
   deepLinkScheme: schemeFromBundleId,
 };
 
-// Native APKs do not have a browser origin from which to derive the backend URL.
-// Keep this deployed project URL as a safe fallback while allowing build-time override.
-const NATIVE_NETPLAY_SERVICE_URL = "https://moudienet-7h7tawvf.manus.space";
+// Backward-compatible fallback for the currently published project. Production
+// builds should set EXPO_PUBLIC_NETPLAY_SERVICE_URL to the dedicated low-latency
+// realtime host so the APK never needs a source-code change when the relay moves.
+const NATIVE_NETPLAY_SERVICE_FALLBACK_URL = "https://moudienet-7h7tawvf.manus.space";
+const NATIVE_NETPLAY_SERVICE_URL = (env.netplayServiceUrl || NATIVE_NETPLAY_SERVICE_FALLBACK_URL).replace(/\/$/, "");
+
 // REST room credentials and Socket.IO must target the same published service.
 // A split backend makes native players connect with credentials unknown to the relay.
 const NATIVE_API_FALLBACK_URL = NATIVE_NETPLAY_SERVICE_URL;
@@ -34,32 +36,24 @@ export const API_BASE_URL = env.apiBaseUrl;
 /**
  * Get the API base URL, deriving from current hostname if not set.
  * Metro runs on 8081, API server runs on 3000.
- * URL pattern: https://PORT-sandboxid.region.domain
  */
 export function getApiBaseUrl(): string {
-  // Android APKs must always target the deployed gateway. A build-time API_BASE_URL
-  // can point to a temporary sandbox hostname which returns HTML or expires, causing
-  // tRPC to report "Unable to transform response from server" during room creation.
   if (ReactNative.Platform.OS !== "web") {
     return NATIVE_API_FALLBACK_URL;
   }
 
-  // If API_BASE_URL is set, use it
   if (API_BASE_URL) {
     return API_BASE_URL.replace(/\/$/, "");
   }
 
-  // On web, derive from current hostname by replacing port 8081 with 3000
-  if (ReactNative.Platform.OS === "web" && typeof window !== "undefined" && window.location) {
+  if (typeof window !== "undefined" && window.location) {
     const { protocol, hostname } = window.location;
-    // Pattern: 8081-sandboxid.region.domain -> 3000-sandboxid.region.domain
     const apiHostname = hostname.replace(/^8081-/, "3000-");
     if (apiHostname !== hostname) {
       return `${protocol}//${apiHostname}`;
     }
   }
 
-  // React Native cannot make a reliable relative API request. Use the deployed backend.
   return NATIVE_API_FALLBACK_URL;
 }
 
@@ -82,59 +76,35 @@ const encodeState = (value: string) => {
   return value;
 };
 
-/**
- * Get the redirect URI for OAuth callback.
- * - Web: uses API server callback endpoint
- * - Native: uses deep link scheme
- */
 export const getRedirectUri = () => {
   if (ReactNative.Platform.OS === "web") {
     return `${getApiBaseUrl()}/api/oauth/callback`;
-  } else {
-    return Linking.createURL("/oauth/callback", {
-      scheme: env.deepLinkScheme,
-    });
   }
+  return Linking.createURL("/oauth/callback", { scheme: env.deepLinkScheme });
 };
 
 export const getLoginUrl = () => {
   const redirectUri = getRedirectUri();
   const state = encodeState(redirectUri);
-
   const url = new URL(`${OAUTH_PORTAL_URL}/app-auth`);
   url.searchParams.set("appId", APP_ID);
   url.searchParams.set("redirectUri", redirectUri);
   url.searchParams.set("state", state);
   url.searchParams.set("type", "signIn");
-
   return url.toString();
 };
 
-/**
- * Start OAuth login flow.
- *
- * On native platforms (iOS/Android), open the system browser directly so
- * the OAuth callback returns via deep link to the app.
- *
- * On web, this simply redirects to the login URL.
- *
- * @returns Always null, the callback is handled via deep link.
- */
 export async function startOAuthLogin(): Promise<string | null> {
   const loginUrl = getLoginUrl();
 
   if (ReactNative.Platform.OS === "web") {
-    // On web, just redirect
-    if (typeof window !== "undefined") {
-      window.location.href = loginUrl;
-    }
+    if (typeof window !== "undefined") window.location.href = loginUrl;
     return null;
   }
 
   const supported = await Linking.canOpenURL(loginUrl);
   if (!supported) {
     console.warn("[OAuth] Cannot open login URL: URL scheme not supported");
-    // 可考虑抛出错误或返回错误状态，让调用方处理
     return null;
   }
 
@@ -142,9 +112,7 @@ export async function startOAuthLogin(): Promise<string | null> {
     await Linking.openURL(loginUrl);
   } catch (error) {
     console.error("[OAuth] Failed to open login URL:", error);
-    // 可考虑抛出错误让调用方处理
   }
 
-  // The OAuth callback will reopen the app via deep link.
   return null;
 }
