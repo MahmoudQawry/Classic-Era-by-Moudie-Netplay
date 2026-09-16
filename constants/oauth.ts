@@ -41,12 +41,17 @@ export const OWNER_NAME = env.ownerName;
 export const API_BASE_URL = env.apiBaseUrl;
 
 /**
- * Get the API base URL, deriving from current hostname if not set.
- * Metro runs on 8081, API server runs on 3000.
+ * Get the API base URL.
+ *
+ * Native production builds may use a dedicated API origin. The previous
+ * implementation ignored EXPO_PUBLIC_API_BASE_URL on native and always sent
+ * room snapshots/media-token requests to the realtime relay fallback. Keeping
+ * an explicit native override makes the API and Socket.IO origins independently
+ * configurable while preserving the old fallback when no override is set.
  */
 export function getApiBaseUrl(): string {
   if (ReactNative.Platform.OS !== "web") {
-    return NATIVE_API_FALLBACK_URL;
+    return (API_BASE_URL || NATIVE_API_FALLBACK_URL).replace(/\/$/, "");
   }
 
   if (API_BASE_URL) {
