@@ -1,5 +1,4 @@
-# Copy this file with the project to a persistent Linux host. Supply all secrets via
-# the host environment; never place production credentials in Git.
+# Persistent low-latency realtime host. Supply secrets through the host environment.
 port: 7880
 bind_addresses:
   - 0.0.0.0
@@ -9,6 +8,11 @@ rtc:
   port_range_start: 50000
   port_range_end: 50100
   use_external_ip: true
+  # Mobile networks and restrictive Wi-Fi can block UDP. Keep a TCP/TLS-capable
+  # fallback so audio can recover instead of silently losing the media path.
+  allow_tcp_fallback: true
+  tcp_fallback_rtt_threshold: 250
+  allow_udp_unstable_fallback: true
 
 redis:
   address: 127.0.0.1:6379
@@ -17,7 +21,5 @@ redis:
 logging:
   level: info
 
-# Room sessions are created on demand when the first authorized Moudie member joins,
-# so every game room can bring up its voice channel without a separate provisioning step.
 room:
   auto_create: true
