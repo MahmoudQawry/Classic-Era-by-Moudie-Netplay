@@ -199,7 +199,19 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
       onRemoteState = { encoded, syncId, encoding -> restoreNetplayState(encoded, syncId, encoding) },
       onChat = { displayName, text -> runOnUiThread { showToast("$displayName: $text") } },
       onStatus = { message -> runOnUiThread { showToast(message) } },
-      onQuality = { quality -> runOnUiThread { netplayQuality = quality; if (!lockstepActive.get()) netplayInputDelayFrames = quality.recommendedInputDelayFrames(); updateMetric(null) } },
+      onQuality = { quality -> runOnUiThread {
+        netplayQuality = quality
+        val recommended = quality.recommendedInputDelayFrames()
+        if (lockstepActive.get()) {
+          if (recommended != netplayInputDelayFrames) {
+            val reason = if (recommended > netplayInputDelayFrames) "quality" else "stable"
+            netplayClient?.requestDelayIncrease(recommended, reason)
+          }
+        } else {
+          netplayInputDelayFrames = recommended
+        }
+        updateMetric(null)
+      } },
     ).also { it.connect() }
     addRoomOverlayButtons()
   }

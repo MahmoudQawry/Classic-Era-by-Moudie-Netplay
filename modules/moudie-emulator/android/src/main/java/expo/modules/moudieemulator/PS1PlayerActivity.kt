@@ -306,7 +306,15 @@ class PS1PlayerActivity : ComponentActivity() {
       onStatus = { message -> runOnUiThread { showToast(message) } },
       onQuality = { quality -> runOnUiThread {
         netplayQuality = quality
-        if (!lockstepActive.get()) netplayInputDelayFrames = quality.recommendedInputDelayFrames()
+        val recommended = quality.recommendedInputDelayFrames()
+        if (lockstepActive.get()) {
+          if (recommended != netplayInputDelayFrames) {
+            val reason = if (recommended > netplayInputDelayFrames) "quality" else "stable"
+            netplayClient?.requestDelayIncrease(recommended, reason)
+          }
+        } else {
+          netplayInputDelayFrames = recommended
+        }
         updateMetricPill(null)
       } },
     ).also { it.connect() }

@@ -1,4 +1,4 @@
-﻿package expo.modules.moudieemulator
+package expo.modules.moudieemulator
 
 import io.socket.client.IO
 import io.socket.client.Socket
@@ -97,7 +97,7 @@ class Ps1NetplayClient(
       on("netplay:delay-update") { args ->
         val payload = args.firstOrNull() as? JSONObject ?: return@on
         val delay = payload.optLong("delay", -1L)
-        if (delay in 2..20) {
+        if (delay in 2..45) {
           onDelayUpdate?.invoke(delay)
           onStatus("Network adapting: input buffer ${delay} frames")
         }
@@ -168,7 +168,7 @@ class Ps1NetplayClient(
   }
 
   fun requestDelayIncrease(delay: Long, reason: String) {
-    if (delay in 2..20) {
+    if (delay in 2..45) {
       socket?.emit("netplay:delay-request", JSONObject().put("delay", delay).put("reason", reason))
     }
   }

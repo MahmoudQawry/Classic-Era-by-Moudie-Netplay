@@ -3,7 +3,7 @@
  * input relay, chat, voice-signalling and voice-status exchange. */
 const { io } = require("socket.io-client");
 
-const base = "https://moudienet-7h7tawv.manus.space";
+const base = (process.env.NETPLAY_E2E_BASE_URL || "https://moudienet-7h7tawv.manus.space").replace(/\/$/, "");
 const FINGERPRINT = "b".repeat(64);
 const CORE = "pcsx-rearmed-e2e-test";
 

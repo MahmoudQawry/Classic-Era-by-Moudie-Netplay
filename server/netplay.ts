@@ -360,7 +360,7 @@ export function registerNetplayServer(server: HttpServer) {
     socket.on("netplay:delay-request", (payload: DelayUpdatePayload) => {
       if (session.role === "spectator") return;
       const delay = Number(payload?.delay);
-      if (!Number.isInteger(delay) || delay < 2 || delay > 8) return;
+      if (!Number.isInteger(delay) || delay < 2 || delay > 45) return;
       const currentDelay = roomInputDelays.get(session.roomId) ?? 3;
       // Only allow increasing delay, or decreasing if all agree it's stable
       if (delay > currentDelay || (delay < currentDelay && payload?.reason === "stable")) {
@@ -602,7 +602,7 @@ export function registerNetplayServer(server: HttpServer) {
         if (oldFrame < frame - 60) history.delete(oldFrame);
       }
 
-      socket.to(channel).volatile.emit("netplay:ps1-input", { memberId: session.memberId, frame, mask, serverTime: Date.now() });
+      socket.to(channel).emit("netplay:ps1-input", { memberId: session.memberId, frame, mask, serverTime: Date.now() });
     });
 
     socket.on("netplay:ps1-state", (payload: Ps1StatePayload) => {
@@ -716,7 +716,7 @@ export function registerNetplayServer(server: HttpServer) {
         if (oldFrame < frame - 60) history.delete(oldFrame);
       }
 
-      socket.to(channel).volatile.emit("netplay:universal-input", { memberId: session.memberId, frame, mask, serverTime: Date.now() });
+      socket.to(channel).emit("netplay:universal-input", { memberId: session.memberId, frame, mask, serverTime: Date.now() });
     });
 
     socket.on("netplay:universal-state", (payload: Ps1StatePayload) => {
