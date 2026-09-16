@@ -2,7 +2,8 @@
  *
  * - Requests without an Origin header (native mobile apps, curl) are always allowed.
  * - Origins listed in ALLOWED_ORIGINS (comma-separated) are always allowed.
- * - Setting ALLOWED_ORIGINS="*" opens every origin (not recommended).
+ * - Setting ALLOWED_ORIGINS="*" opens every origin outside production.
+ * - In production, a wildcard is rejected even if ALLOWED_ORIGINS="*" is set.
  * - When ALLOWED_ORIGINS is unset, localhost/127.0.0.1 on any port is allowed
  *   so local web development keeps working; production deployments must set
  *   an explicit list.
@@ -25,7 +26,7 @@ const isLocalOrigin = (origin: string) => {
 
 export const isAllowedOrigin = (origin: string | undefined) => {
   if (!origin) return true;
-  if (allowAllOrigins) return true;
+  if (allowAllOrigins && process.env.NODE_ENV !== "production") return true;
   if (configuredOrigins.includes(origin)) return true;
   if (configuredOrigins.length === 0 && isLocalOrigin(origin)) return true;
   return false;
