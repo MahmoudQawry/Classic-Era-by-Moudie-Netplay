@@ -1,6 +1,6 @@
 import { io, type Socket } from "socket.io-client";
 
-import { getNetplayServiceUrl } from "@/constants/oauth";
+import { getNetplayServiceUrl, getNetplayServiceUrls } from "@/constants/oauth";
 
 export type NetplayCredentials = {
   roomId: number;
@@ -30,13 +30,22 @@ export type VoiceStatus = {
   speakerEnabled: boolean;
 };
 
+function stableRelayIndex(roomId: number, count: number) {
+  if (count <= 1) return 0;
+  const normalized = Math.abs(Math.trunc(roomId));
+  return normalized % count;
+}
+
+export function getRoomRelayUrl(roomId: number): string {
+  const urls = getNetplayServiceUrls();
+  return urls[stableRelayIndex(roomId, urls.length)] ?? getNetplayServiceUrl();
+}
+
 function socketOptions(credentials: NetplayCredentials) {
   return {
     path: "/api/netplay",
-    // Keep WebSocket as the preferred path but allow Socket.IO to fall back to
-    // HTTP polling during mobile Wi-Fi/cellular transitions. The old websocket-
-    // only setup could leave the room signaling channel dead after a transient
-    // network change even though the device still had working internet.
+    // WebSocket is preferred for lowest overhead. Polling remains available as
+    // a recovery transport during mobile Wi-Fi/cellular transitions.
     transports: ["websocket", "polling"] as ("websocket" | "polling")[],
     upgrade: true,
     auth: credentials,
@@ -52,14 +61,14 @@ function socketOptions(credentials: NetplayCredentials) {
 }
 
 export function createNetplaySocket(credentials: NetplayCredentials): Socket {
-  const baseUrl = getNetplayServiceUrl();
+  const baseUrl = getRoomRelayUrl(credentials.roomId);
   if (!baseUrl) throw new Error("Could not determine the room server. Check the app's internet connection.");
   return io(baseUrl, socketOptions(credentials));
 }
 
 // Universal player socket uses the same mobile-safe transport/reconnection policy.
 export function createUniversalNetplaySocket(credentials: NetplayCredentials): Socket {
-  const baseUrl = getNetplayServiceUrl();
+  const baseUrl = getRoomRelayUrl(credentials.roomId);
   if (!baseUrl) throw new Error("Could not determine the room server.");
   return io(baseUrl, {
     ...socketOptions(credentials),
