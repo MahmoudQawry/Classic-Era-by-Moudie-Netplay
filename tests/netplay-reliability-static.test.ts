@@ -23,14 +23,22 @@ describe("NetPlay and voice reliability safeguards", () => {
     expect((server.match(/getFrameTracker\(session\.roomId\)\.delete\(session\.memberId\)/g) ?? []).length).toBe(2);
   });
 
-  it("restricts signaling and uses the managed LiveKit audio path", () => {
+  it("restricts signaling and guarantees a voice path (LiveKit or built-in mesh)", () => {
     const server = read("server/netplay.ts");
     const voice = read("components/room-voice-chat.native.tsx");
     expect(server).toContain("VOICE_SIGNAL_KINDS");
     expect(server).toContain("JSON.stringify(signal).length > 32_000");
+    // LiveKit is used when the room service issues a media token...
     expect(voice).toContain("LiveKitRoom");
     expect(voice).toContain("serverUrl={mediaToken.url}");
-    expect(voice).not.toContain("RTCPeerConnection");
-    expect(voice).not.toContain("BuiltInWebRtcVoice");
+    // ...but voice must ALWAYS exist: the production gateway answers 404 for
+    // rooms.mediaToken, so the built-in peer-to-peer mesh is the guaranteed
+    // path (removing it left users with no voice UI at all).
+    expect(voice).toContain("BuiltInVoiceControls");
+    expect(voice).toContain("RTCPeerConnection");
+    expect(voice).toContain("netplay:signal");
+    expect(voice).toContain("netplay:voice-status");
+    // The microphone must never be captured at room entry.
+    expect(voice).not.toContain("audio={true}");
   });
 });
