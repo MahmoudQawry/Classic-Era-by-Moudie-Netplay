@@ -8,6 +8,11 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      # Optional GitHub repository variables. If empty, the app keeps the
+      # backward-compatible Manus endpoint until the dedicated relay is ready.
+      EXPO_PUBLIC_NETPLAY_SERVICE_URL: ${{ vars.NETPLAY_SERVICE_URL }}
+      EXPO_PUBLIC_API_BASE_URL: ${{ vars.API_BASE_URL }}
     steps:
       - name: 📥 جلب الكود
         uses: actions/checkout@v4
