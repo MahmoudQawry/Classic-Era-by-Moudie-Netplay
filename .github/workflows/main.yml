@@ -5,6 +5,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -17,6 +20,9 @@ jobs:
     steps:
       - name: 📥 جلب الكود
         uses: actions/checkout@v4
+
+      - name: 🔄 تطبيق إصلاحات مزامنة NetPlay قبل الفحص والبناء
+        run: python3 scripts/apply-netplay-sync-hardening.py
 
       - name: ⚙️ تثبيت Node.js
         uses: actions/setup-node@v4
@@ -83,3 +89,22 @@ jobs:
           name: classic-era-moudie-apk
           path: android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
+
+      - name: 💾 حفظ إصلاحات المزامنة في المستودع بعد نجاح البناء
+        if: success()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            server/netplay.ts \
+            modules/moudie-emulator/android/src/main/java/expo/modules/moudieemulator/UniversalNetplayClient.kt \
+            modules/moudie-emulator/android/src/main/java/expo/modules/moudieemulator/Ps1NetplayClient.kt \
+            modules/moudie-emulator/android/src/main/java/expo/modules/moudieemulator/UniversalLibretroPlayerActivity.kt \
+            modules/moudie-emulator/android/src/main/java/expo/modules/moudieemulator/PS1PlayerActivity.kt \
+            scripts/e2e/relay-e2e.cjs
+          if git diff --cached --quiet; then
+            echo "No generated NetPlay synchronization changes to commit."
+          else
+            git commit -m "fix: harden netplay synchronization and voice signaling [skip ci]"
+            git push
+          fi
