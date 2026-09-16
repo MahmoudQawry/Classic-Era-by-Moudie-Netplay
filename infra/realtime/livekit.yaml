@@ -18,7 +18,7 @@ rtc:
 redis:
   # Use a managed/persistent Redis endpoint in production. For a distributed
   # LiveKit cluster this is the shared data store and message bus.
-  address: ${REDIS_ADDRESS:-127.0.0.1:6379}
+  address: ${REDIS_ADDRESS}
   password: ${REDIS_PASSWORD}
 
 # LiveKit uses the region-aware selector to keep a room close to the signaling
