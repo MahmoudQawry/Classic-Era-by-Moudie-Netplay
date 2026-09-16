@@ -15,6 +15,7 @@
 - 👥 حتى 8 أعضاء لكل غرفة (4 لاعبين + 4 مشاهدين — والمنس 2 + 6)
 - 🔒 رموز دعوة مخزّنة SHA-256، تحقق Zod، تحديد معدل الطلبات، ومقاعد يحسبها الخادم ضد الانتحال
 - 🔁 مزامنة save-states موثوقة عبر Socket.IO مع حاجز جلسة يمنع البدء قبل تطابق اللعبة والمحرك وجاهزية الجميع
+- 🧭 **شعار الواجهات:** MN اختصاراً لـ **Moudie NetPlay**، مع الحفاظ على اسم التطبيق الرسمي **Classic Era by Moudie**.
 
 ## 🏗️ البنية التقنية
 
@@ -32,18 +33,18 @@
 
 ```bash
 pnpm install
-cp infra/realtime/.env.example .env   # ثم عدّل DATABASE_URL وغيره
-pnpm db:push                          # إنشاء ترحيلات قاعدة البيانات
-pnpm dev                              # خادم + Metro معاً
+cp infra/realtime/.env.example .env
+pnpm db:push
+pnpm dev
 ```
 
 أوامر مفيدة:
 
 ```bash
-pnpm check    # فحص TypeScript
-pnpm test     # اختبارات Vitest
-pnpm lint     # ESLint
-pnpm android  # بناء أندرويد
+pnpm check
+pnpm test
+pnpm lint
+pnpm android
 ```
 
 **نوى Libretro** تُجلب أثناء تجهيز أندرويد عبر `scripts/sync-libretro-cores.sh` — لا تُخزّن في المستودع.
@@ -55,8 +56,12 @@ pnpm android  # بناء أندرويد
 | المتغير | الوصف |
 |---|---|
 | `DATABASE_URL` | رابط MySQL لخدمة الغرف |
-| `ALLOWED_ORIGINS` | قائمة أصول ويب مسموحة مفصولة بفواصل (CORS)؛ اتركها فارغة في التطوير المحلي (localhost مسموح تلقائياً) |
+| `ALLOWED_ORIGINS` | قائمة أصول ويب مسموحة مفصولة بفواصل (CORS). في الإنتاج يجب تحديد قائمة صريحة؛ wildcard غير مسموح به في وضع production. |
 | `LIVEKIT_URL` / مفاتيح LiveKit | لتفعيل صوت LiveKit؛ بدونه تُستخدم القناة المدمجة |
+
+## 📦 مخرجات البناء
+
+ملفات APK الكبيرة ليست جزءاً من المصدر الأساسي للمشروع. يتم إنتاج نسخة Android Release عبر GitHub Actions كـartifact بعد اجتياز فحص TypeScript والاختبارات وبناء Gradle.
 
 ## 📄 الترخيص
 
