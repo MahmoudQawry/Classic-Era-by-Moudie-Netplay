@@ -1,4 +1,4 @@
-import { getNetplayServiceUrl } from "@/constants/oauth";
+import { getNetplayServiceUrl, getNetplayServiceUrls } from "@/constants/oauth";
 
 export type RealtimeSystem = "ps1" | "psp" | "nes" | "sega";
 export type RealtimeRole = "host" | "player" | "spectator";
@@ -7,16 +7,98 @@ export type RealtimeSnapshot = { room: { id: number; joinCode: string; name: str
 export type RealtimeCredential = { roomId: number; memberId: number; memberToken: string; role: RealtimeRole };
 export type RealtimePublicRoom = { id: number; name: string; system: RealtimeSystem; maxPlayers: number; maxSpectators: number; status: "waiting" | "active" | "closed"; activePlayers: number; spectators: number; readyPlayers: number; updatedAt: string };
 
-type TrpcEnvelope<T> = { result?: { data?: { json?: T } }; error?: { json?: { message?: string } } };
+type TrpcEnvelope<T> = {
+  result?: { data?: { json?: T; meta?: unknown } | T };
+  error?: { json?: { message?: string }; message?: string };
+};
+
+const REQUEST_TIMEOUT_MS = 12_000;
+
+function relayUrls(): string[] {
+  const urls = getNetplayServiceUrls().map((url) => url.replace(/\/$/, "")).filter(Boolean);
+  return Array.from(new Set(urls.length ? urls : [getNetplayServiceUrl().replace(/\/$/, "")].filter(Boolean)));
+}
+
+function buildUrl(baseUrl: string, procedure: string, input: unknown, method: "GET" | "POST") {
+  const root = `${baseUrl}/api/trpc/${procedure}`;
+  return method === "GET" ? `${root}?input=${encodeURIComponent(JSON.stringify({ json: input }))}` : root;
+}
+
+async function readTrpcResponse<T>(response: Response, baseUrl: string): Promise<T> {
+  const text = await response.text();
+  const trimmed = text.trim();
+
+  if (!trimmed) {
+    throw new Error(`خادم الغرف أعاد استجابة فارغة (HTTP ${response.status}) من ${baseUrl}.`);
+  }
+
+  let body: TrpcEnvelope<T>;
+  try {
+    body = JSON.parse(trimmed) as TrpcEnvelope<T>;
+  } catch {
+    const contentType = response.headers.get("content-type") || "unknown";
+    throw new Error(`خادم الغرف أعاد JSON غير صالح (HTTP ${response.status}, ${contentType}).`);
+  }
+
+  const errorMessage = body.error?.json?.message || body.error?.message;
+  if (!response.ok || body.error) {
+    throw new Error(errorMessage || `فشل طلب خدمة الغرف (HTTP ${response.status}).`);
+  }
+
+  const data = body.result?.data;
+  if (data !== undefined) {
+    if (typeof data === "object" && data !== null && "json" in data) {
+      const jsonValue = (data as { json?: T }).json;
+      if (jsonValue !== undefined) return jsonValue;
+    } else {
+      return data as T;
+    }
+  }
+
+  throw new Error("خدمة الغرف أعادت استجابة غير مكتملة.");
+}
 
 async function request<T>(procedure: string, input: unknown, method: "GET" | "POST"): Promise<T> {
-  const baseUrl = getNetplayServiceUrl().replace(/\/$/, "");
-  const url = method === "GET" ? `${baseUrl}/api/trpc/${procedure}?input=${encodeURIComponent(JSON.stringify({ json: input }))}` : `${baseUrl}/api/trpc/${procedure}`;
-  const response = await fetch(url, method === "POST" ? { method, headers: { "content-type": "application/json" }, body: JSON.stringify({ json: input }) } : { method });
-  const body = await response.json() as TrpcEnvelope<T>;
-  if (!response.ok || body.error) throw new Error(body.error?.json?.message || "The room service could not complete this request.");
-  if (body.result?.data?.json === undefined) throw new Error("The room service returned an invalid response.");
-  return body.result.data.json;
+  const urls = relayUrls();
+  let lastError: unknown = null;
+
+  // Queries are safe to fail over because they are read-only. Mutations are
+  // deliberately not replayed: retrying a create/join after a lost response
+  // can duplicate a room or consume a second seat.
+  const candidates = method === "GET" ? urls : [urls[0]].filter(Boolean);
+
+  for (const baseUrl of candidates) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    try {
+      const url = buildUrl(baseUrl, procedure, input, method);
+      const response = await fetch(url, method === "POST" ? {
+        method,
+        headers: { "content-type": "application/json", accept: "application/json" },
+        body: JSON.stringify({ json: input }),
+        signal: controller.signal,
+      } : {
+        method,
+        headers: { accept: "application/json" },
+        signal: controller.signal,
+      });
+
+      if (method === "GET" && (response.status >= 500 || response.status === 408 || response.status === 429)) {
+        lastError = new Error(`relay ${baseUrl} returned HTTP ${response.status}`);
+        continue;
+      }
+
+      return await readTrpcResponse<T>(response, baseUrl);
+    } catch (error) {
+      lastError = error;
+      if (method === "POST") break;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  if (lastError instanceof Error) throw lastError;
+  throw new Error("لم يتم العثور على خادم غرف متاح حالياً.");
 }
 
 export function createRealtimeRoom(input: { name: string; system: RealtimeSystem; hostName: string; visibility?: "public" | "private" }) {
