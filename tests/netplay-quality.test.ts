@@ -19,10 +19,11 @@ describe("NetPlay quality monitor", () => {
     const socket = new SocketStub();
     const updates: ReturnType<typeof vi.fn> = vi.fn();
     const stop = startNetplayQualityMonitor(socket as never, updates);
-    const initialProbe = socket.emitted[0]?.payload as { sequence: number };
+    const initialProbe = socket.emitted.find((entry) => entry.event === "netplay:quality-probe")?.payload as { sequence: number };
     vi.advanceTimersByTime(42);
     socket.receive("netplay:quality-pong", { sequence: initialProbe.sequence });
     expect(updates.mock.lastCall?.[0]).toMatchObject({ rttMs: 42, grade: "STABLE" });
+    expect(socket.emitted.some((entry) => entry.event === "netplay:delay-request" && (entry.payload as { delay: number }).delay === 2)).toBe(true);
     stop();
     vi.useRealTimers();
   });
