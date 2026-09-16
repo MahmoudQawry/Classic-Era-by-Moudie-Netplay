@@ -13,17 +13,24 @@ const env = {
   ownerName: process.env.EXPO_PUBLIC_OWNER_NAME ?? "",
   apiBaseUrl: process.env.EXPO_PUBLIC_API_BASE_URL ?? "",
   netplayServiceUrl: process.env.EXPO_PUBLIC_NETPLAY_SERVICE_URL ?? "",
+  netplayServiceUrls: process.env.EXPO_PUBLIC_NETPLAY_SERVICE_URLS ?? "",
   deepLinkScheme: schemeFromBundleId,
 };
 
 // Backward-compatible fallback for the currently published project. Production
-// builds should set EXPO_PUBLIC_NETPLAY_SERVICE_URL to the dedicated low-latency
-// realtime host so the APK never needs a source-code change when the relay moves.
-const NATIVE_NETPLAY_SERVICE_FALLBACK_URL = "https://moudienet-7h7tawvf.manus.space";
-const NATIVE_NETPLAY_SERVICE_URL = (env.netplayServiceUrl || NATIVE_NETPLAY_SERVICE_FALLBACK_URL).replace(/\/$/, "");
+// builds should set EXPO_PUBLIC_NETPLAY_SERVICE_URL to the global realtime
+// hostname. Regional URLs may be supplied as a comma-separated pool through
+// EXPO_PUBLIC_NETPLAY_SERVICE_URLS; the same room is deterministically pinned
+// to one relay so room state never gets split across regions.
+const NATIVE_NETPLAY_SERVICE_FALLBACK_URL = "https://moudienet-7h7tawv.manus.space";
+const configuredRelayUrls = env.netplayServiceUrls
+  .split(",")
+  .map((url) => url.trim().replace(/\/$/, ""))
+  .filter(Boolean);
+const NATIVE_NETPLAY_SERVICE_URL = (env.netplayServiceUrl || configuredRelayUrls[0] || NATIVE_NETPLAY_SERVICE_FALLBACK_URL).replace(/\/$/, "");
+const NATIVE_NETPLAY_SERVICE_URLS = Array.from(new Set([NATIVE_NETPLAY_SERVICE_URL, ...configuredRelayUrls]));
 
 // REST room credentials and Socket.IO must target the same published service.
-// A split backend makes native players connect with credentials unknown to the relay.
 const NATIVE_API_FALLBACK_URL = NATIVE_NETPLAY_SERVICE_URL;
 
 export const OAUTH_PORTAL_URL = env.portal;
@@ -57,9 +64,14 @@ export function getApiBaseUrl(): string {
   return NATIVE_API_FALLBACK_URL;
 }
 
-/** Production room relay. Kept separate from the app's OAuth/API gateway. */
+/** Primary/global realtime relay. */
 export function getNetplayServiceUrl(): string {
   return NATIVE_NETPLAY_SERVICE_URL;
+}
+
+/** Regional relay pool used for deterministic room affinity and future failover. */
+export function getNetplayServiceUrls(): string[] {
+  return NATIVE_NETPLAY_SERVICE_URLS;
 }
 
 export const SESSION_TOKEN_KEY = "app_session_token";
