@@ -30,43 +30,39 @@ export type VoiceStatus = {
   speakerEnabled: boolean;
 };
 
-export function createNetplaySocket(credentials: NetplayCredentials): Socket {
-  const baseUrl = getNetplayServiceUrl();
-  if (!baseUrl) throw new Error("Could not determine the room server. Check the app's internet connection.");
-  return io(baseUrl, {
+function socketOptions(credentials: NetplayCredentials) {
+  return {
     path: "/api/netplay",
-    transports: ["websocket"],
-    upgrade: false,
+    // Keep WebSocket as the preferred path but allow Socket.IO to fall back to
+    // HTTP polling during mobile Wi-Fi/cellular transitions. The old websocket-
+    // only setup could leave the room signaling channel dead after a transient
+    // network change even though the device still had working internet.
+    transports: ["websocket", "polling"] as ("websocket" | "polling")[],
+    upgrade: true,
     auth: credentials,
     timeout: 20_000,
     reconnection: true,
-    // Backoff tuned for mobile: a 300ms retry storm used to pile extra sockets
-    // on top of the CPU spike of starting a game. Start at 1s, cap at 8s.
-    reconnectionAttempts: 50,
+    reconnectionAttempts: Infinity,
     reconnectionDelay: 1_000,
     reconnectionDelayMax: 8_000,
-    randomizationFactor: 0.5,
+    randomizationFactor: 0.35,
     forceNew: false,
     autoConnect: true,
-  });
+  };
 }
 
-// adaptive: create universal socket with same improvements
+export function createNetplaySocket(credentials: NetplayCredentials): Socket {
+  const baseUrl = getNetplayServiceUrl();
+  if (!baseUrl) throw new Error("Could not determine the room server. Check the app's internet connection.");
+  return io(baseUrl, socketOptions(credentials));
+}
+
+// Universal player socket uses the same mobile-safe transport/reconnection policy.
 export function createUniversalNetplaySocket(credentials: NetplayCredentials): Socket {
   const baseUrl = getNetplayServiceUrl();
   if (!baseUrl) throw new Error("Could not determine the room server.");
   return io(baseUrl, {
+    ...socketOptions(credentials),
     path: "/api/universal-netplay",
-    transports: ["websocket"],
-    upgrade: false,
-    auth: credentials,
-    timeout: 20_000,
-    reconnection: true,
-    reconnectionAttempts: 50,
-    reconnectionDelay: 1_000,
-    reconnectionDelayMax: 8_000,
-    randomizationFactor: 0.5,
-    forceNew: false,
-    autoConnect: true,
   });
 }
