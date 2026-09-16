@@ -1,6 +1,6 @@
 services:
   livekit:
-    image: livekit/livekit:latest
+    image: livekit/livekit:v1.13.7
     command: --config /etc/livekit.yaml
     restart: unless-stopped
     network_mode: host
@@ -19,7 +19,7 @@ services:
       - redis-data:/data
 
   coturn:
-    image: coturn/coturn:latest
+    image: coturn/coturn:4.17.2-r0
     restart: unless-stopped
     network_mode: host
     volumes:
