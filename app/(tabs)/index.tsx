@@ -35,11 +35,14 @@ export default function LobbyScreen() {
         <NeonCircuitBackground />
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           <View style={styles.header}>
+            <Pressable onPress={() => { haptic.light(); router.push("/(tabs)/settings"); }} style={({ pressed }) => [styles.settingsButton, pressed && styles.pressed]} accessibilityLabel={t("settings")}>
+              <MaterialCommunityIcons name="cog-outline" size={23} color="#8FE8FF" />
+            </Pressable>
             <View style={styles.brandRow}>
               <Image source={require("@/assets/images/classic-era-new-icon.png")} style={styles.brandIcon} resizeMode="cover" />
-              <View><Text style={styles.brand}>{t("brandName")}</Text><Text style={styles.brandSub}>{t("homeBrandSub")}</Text><Text style={styles.slogan}>{t("slogan")}</Text></View>
+              <View><Text style={styles.brand}>{t("brandName")}</Text><Text style={styles.brandSub}>{t("homeBrandSub")}</Text></View>
             </View>
-            <Pressable onPress={() => router.push("/(tabs)/settings")} style={({ pressed }) => [styles.profile, pressed && styles.pressed]} accessibilityLabel={t("homeOpenSettings")}>
+            <Pressable onPress={() => { haptic.light(); router.push("/(tabs)/settings"); }} style={({ pressed }) => [styles.profile, pressed && styles.pressed]} accessibilityLabel={t("profile")}>
               <MaterialCommunityIcons name="account-circle-outline" size={22} color="#B978FF" />
               <Text style={styles.profileName}>{profileName || copy.player}</Text>
             </Pressable>
@@ -52,7 +55,6 @@ export default function LobbyScreen() {
               <Text style={styles.heroEyebrow}>{copy.retro}</Text>
               <Text style={styles.heroTitle}>{copy.title}</Text>
               <Text style={styles.heroText}>{copy.intro}</Text>
-              <Text style={styles.heroSlogan}>{t("slogan")}</Text>
             </View>
           </View>
 
@@ -91,8 +93,9 @@ export default function LobbyScreen() {
 
 const styles = StyleSheet.create({
   content: { paddingTop: 8, paddingBottom: 34 },
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 18 },
-  brandRow: { flexDirection: "row", alignItems: "center", gap: 9 },
+  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 18, gap: 8 },
+  settingsButton: { width: 40, height: 40, borderRadius: 13, alignItems: "center", justifyContent: "center", backgroundColor: "#141B2E", borderWidth: 1, borderColor: "#2C4A66" },
+  brandRow: { flexDirection: "row", alignItems: "center", gap: 9, flexShrink: 1 },
   brandIcon: { width: 42, height: 42, borderRadius: 13, borderWidth: 1, borderColor: "#7A54D6" },
   brand: { color: "#F5F2FF", fontSize: 17, lineHeight: 19, letterSpacing: 1.3, fontWeight: "900" },
   brandSub: { color: "#6AE8FF", fontSize: 8, letterSpacing: 1.2, fontWeight: "900" },

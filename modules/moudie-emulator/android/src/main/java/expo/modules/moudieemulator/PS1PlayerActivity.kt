@@ -137,6 +137,9 @@ class PS1PlayerActivity : ComponentActivity() {
   private var micOverlayButton: TextView? = null
   private var speakerOverlayEnabled = false
   private var speakerOverlayButton: TextView? = null
+  private var analogStick: AnalogStickView? = null
+  private var analogHudButton: DraggableHudButton? = null
+  private var analogEnabled = false
   @Volatile
   private var stateActionInProgress = false
 
@@ -159,6 +162,7 @@ class PS1PlayerActivity : ComponentActivity() {
       )
 
     controlPreferences = getSharedPreferences("moudie-ps1-controls", Context.MODE_PRIVATE)
+    analogEnabled = controlPreferences.getBoolean("analogEnabled", false)
     settingsMode = intent.getBooleanExtra(EXTRA_PLAYER_SETTINGS_MODE, false)
     controlEditMode = settingsMode
     aspectMode = intent.getStringExtra(EXTRA_PLAYER_ASPECT_RATIO)
@@ -254,6 +258,7 @@ class PS1PlayerActivity : ComponentActivity() {
 
   override fun onPause() {
     Choreographer.getInstance().removeFrameCallback(frameMeter)
+    releaseAnalogAxis()
     if (::retroView.isInitialized && !isChangingConfigurations) saveState(silent = true, slot = 1)
     super.onPause()
   }
@@ -798,6 +803,7 @@ class PS1PlayerActivity : ComponentActivity() {
       Triple("CHAT", "chat") { showChatDialog() },
       Triple(if (micOverlayMuted) "MIC×" else "MIC", "microphone") { toggleOverlayMicrophone() },
       Triple(if (speakerOverlayEnabled) "SPK" else "SPK×", "speaker") { toggleOverlaySpeaker() },
+      Triple(if (analogEnabled) "ANLG" else "ANLG×", "analog") { toggleAnalogStick() },
       Triple("OPTIONS", "options") { showGameplayOptions() },
     )
     actions.forEachIndexed { index, (label, id, action) ->
@@ -808,9 +814,46 @@ class PS1PlayerActivity : ComponentActivity() {
       }).also { it.restore() }
       if (id == "microphone") micOverlayButton = button
       if (id == "speaker") speakerOverlayButton = button
+      if (id == "analog") analogHudButton = button
       root.addView(button, button.layoutParams(Gravity.RIGHT or Gravity.TOP, right = 12 + index * 58, top = 12))
       gameplayHud += button
     }
+    if (analogEnabled) attachAnalogStick()
+  }
+
+  /** ANALOG button: shows/hides the on-screen analog stick (PS1 DualShock axes). */
+  private fun toggleAnalogStick() {
+    analogEnabled = !analogEnabled
+    controlPreferences.edit().putBoolean("analogEnabled", analogEnabled).apply()
+    analogHudButton?.text = if (analogEnabled) "ANLG" else "ANLG×"
+    if (analogEnabled) {
+      attachAnalogStick()
+      showToast("Analog stick enabled.")
+    } else {
+      analogStick?.let { root.removeView(it); it.releaseAxis() }
+      analogStick = null
+      showToast("Analog stick hidden.")
+    }
+  }
+
+  private fun attachAnalogStick() {
+    if (analogStick != null || !::root.isInitialized || !::retroView.isInitialized) return
+    val stick = AnalogStickView(
+      this,
+      onMove = { x, y -> retroView.sendMotionEvent(GLRetroView.MOTION_SOURCE_ANALOG_LEFT, x, y, localPlayerIndex) },
+      onRelease = { retroView.sendMotionEvent(GLRetroView.MOTION_SOURCE_ANALOG_LEFT, 0f, 0f, localPlayerIndex) },
+    )
+    val size = dp(126)
+    stick.isFocusable = false
+    root.addView(stick, FrameLayout.LayoutParams(size, size, Gravity.LEFT or Gravity.BOTTOM).apply {
+      leftMargin = dp(16)
+      bottomMargin = dp(210)
+    })
+    analogStick = stick
+  }
+
+  private fun releaseAnalogAxis() {
+    analogStick?.releaseAxis()
   }
 
   private fun toggleOverlayMicrophone() {

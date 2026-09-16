@@ -106,6 +106,9 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
   @Volatile private var lastNetplaySyncId = -1L
   private var microphoneMuted = true
   private var speakerEnabled = true
+  private var analogStick: AnalogStickView? = null
+  private var analogHudButton: TextView? = null
+  private var analogEnabled = false
 
   private val frameMeter = object : Choreographer.FrameCallback {
     override fun doFrame(t: Long) {
@@ -137,6 +140,7 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
     if (!core.isFile || core.length() == 0L) { showError("Could not load ${definition.coreName}. Reinstall the complete APK."); return }
 
     preferences = getSharedPreferences("moudie-controller-layouts", Context.MODE_PRIVATE)
+    analogEnabled = preferences.getBoolean("analog-enabled", false)
     editMode = intent.getBooleanExtra(EXTRA_PLAYER_SETTINGS_MODE, false)
     aspectMode = intent.getStringExtra(EXTRA_PLAYER_ASPECT_RATIO)?.takeIf { it in setOf("fit", "4:3", "16:9") } ?: preferences.getString("${definition.system}.aspect", "fit") ?: "fit"
     val saves = File(filesDir, "moudie-${definition.system}/saves").apply { mkdirs() }
@@ -163,7 +167,7 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
   }
 
   override fun onResume() { super.onResume(); Choreographer.getInstance().postFrameCallback(frameMeter) }
-  override fun onPause() { Choreographer.getInstance().removeFrameCallback(frameMeter); releaseAll(); super.onPause() }
+  override fun onPause() { Choreographer.getInstance().removeFrameCallback(frameMeter); releaseAll(); analogStick?.releaseAxis(); super.onPause() }
   override fun onDestroy() { stopLockstep(); netplayClient?.close(); onOverlayAction = null; super.onDestroy() }
   override fun onKeyDown(k: Int, e: KeyEvent): Boolean { sendLocalKey(KeyEvent.ACTION_DOWN, k); return super.onKeyDown(k, e) }
   override fun onKeyUp(k: Int, e: KeyEvent): Boolean { sendLocalKey(KeyEvent.ACTION_UP, k); return super.onKeyUp(k, e) }
@@ -452,9 +456,43 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
       showToast(if (speakerEnabled) "Phone speaker enabled." else "Automatic audio output enabled.")
     }
     addUtilityButton("chat", "CHAT", dp(122)) { showChatInput() }
+    val analogButton = addUtilityButton("analog", if (analogEnabled) "ANLG" else "ANLG×", dp(176)) { toggleAnalogStick() }
+    analogHudButton = analogButton
+    if (analogEnabled) attachAnalogStick()
   }
 
-  private fun addUtilityButton(id: String, label: String, leftMargin: Int, onClick: () -> Unit) {
+  /** ANALOG button: shows/hides the on-screen analog stick (PSP nub / left axis). */
+  private fun toggleAnalogStick() {
+    analogEnabled = !analogEnabled
+    preferences.edit().putBoolean("analog-enabled", analogEnabled).apply()
+    analogHudButton?.text = if (analogEnabled) "ANLG" else "ANLG×"
+    if (analogEnabled) {
+      attachAnalogStick()
+      showToast("Analog stick enabled.")
+    } else {
+      analogStick?.let { root.removeView(it); it.releaseAxis() }
+      analogStick = null
+      showToast("Analog stick hidden.")
+    }
+  }
+
+  private fun attachAnalogStick() {
+    if (analogStick != null) return
+    val stick = AnalogStickView(
+      this,
+      onMove = { x, y -> retroView.sendMotionEvent(GLRetroView.MOTION_SOURCE_ANALOG_LEFT, x, y, localPlayerIndex) },
+      onRelease = { retroView.sendMotionEvent(GLRetroView.MOTION_SOURCE_ANALOG_LEFT, 0f, 0f, localPlayerIndex) },
+    )
+    val size = dp(126)
+    stick.isFocusable = false
+    root.addView(stick, FrameLayout.LayoutParams(size, size, Gravity.LEFT or Gravity.BOTTOM).apply {
+      leftMargin = dp(16)
+      bottomMargin = dp(210)
+    })
+    analogStick = stick
+  }
+
+  private fun addUtilityButton(id: String, label: String, leftMargin: Int, onClick: () -> Unit): TextView {
     val button = TextView(this).apply { text = label; textSize = 10f; gravity = Gravity.CENTER; setTextColor(Color.WHITE); background = bg(Color.argb(190, 5, 18, 35), Color.argb(190, 99, 229, 255), 13); isClickable = true }
     var dx = 0f; var dy = 0f; var originX = 0f; var originY = 0f
     val scaler = ScaleGestureDetector(this, object : ScaleGestureDetector.SimpleOnScaleGestureListener() { override fun onScale(detector: ScaleGestureDetector): Boolean { if (!editMode) return false; val size = max(.35f, button.scaleX * detector.scaleFactor); button.scaleX = size; button.scaleY = size; return true } })
@@ -468,6 +506,7 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
     }
     root.addView(button, FrameLayout.LayoutParams(if (id == "chat") dp(58) else dp(48), dp(38), Gravity.LEFT or Gravity.TOP).apply { topMargin = dp(14); this.leftMargin = leftMargin })
     controls += button to "hud-$id"
+    return button
   }
 
   private fun showChatInput() {

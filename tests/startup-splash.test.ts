@@ -79,7 +79,8 @@ describe("Android startup splash safeguards", () => {
     expect(settings).not.toContain("🇬🇧");
     const language = readProjectFile("lib/language.tsx");
     expect(language).toContain('AppLanguage = "ar" | "en" | "fr"');
-    expect(language).toContain("الرئيسية");
+    // Arabic wording reviewed with the owner: the lobby is now "الساحة".
+    expect(language).toContain("الساحة");
     expect(language).toContain("Bibliothèque");
   });
 });

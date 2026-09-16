@@ -2,9 +2,8 @@ import { AudioSession, LiveKitRoom, registerGlobals, useConnectionState, useLoca
 import { ConnectionState } from "livekit-client";
 import { RTCIceCandidate, RTCPeerConnection, RTCSessionDescription, mediaDevices } from "@livekit/react-native-webrtc";
 import InCallManager from "react-native-incall-manager";
+import { AppState, PermissionsAndroid, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
-import { PermissionsAndroid, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import type { Socket } from "socket.io-client";
 import { getApiBaseUrl } from "@/constants/oauth";
 import { useLanguage } from "@/lib/language";
 
@@ -12,25 +11,45 @@ registerGlobals();
 
 type VoiceMember = { id: number; displayName: string; role: "host" | "player" | "spectator" };
 type MediaToken = { configured: boolean; url?: string; roomName?: string; token?: string; canPublish?: boolean; message?: string };
-type VoiceMode = "ptt" | "open";
 type VoiceChannel = "room" | "team";
 export type RoomVoiceChatHandle = {
   setMicrophoneEnabled: (enabled: boolean) => Promise<void>;
   setSpeakerEnabled?: (enabled: boolean) => Promise<void>;
-  setVoiceMode?: (mode: VoiceMode) => void;
   setVoiceChannel?: (channel: VoiceChannel) => void;
 };
 type SocketLike = { on?: (event: string, listener: (payload: any) => void) => unknown; off?: (event: string, listener?: (payload: any) => void) => unknown; emit?: (event: string, payload?: any) => unknown; connected?: boolean };
 type Props = { mediaToken?: MediaToken | null; memberRole?: VoiceMember["role"]; socket?: unknown; isHost?: boolean; remoteOnline?: boolean; memberId?: number; members?: VoiceMember[] };
-type VoiceStatusPayload = { memberId?: number; displayName?: string; role?: string; microphoneEnabled?: boolean; speakerEnabled?: boolean; isSpeaking?: boolean; voiceChannel?: string; timestamp?: number };
+type VoiceStatusPayload = { memberId?: number; microphoneEnabled?: boolean; isSpeaking?: boolean; voiceChannel?: string };
 type RoomSocketAuth = { roomId?: unknown; memberId?: unknown; memberToken?: unknown };
 type VoiceSignal = { kind?: unknown; description?: unknown; candidate?: unknown };
 
-const VOICE_ICE_SERVERS = [
+/** ICE configuration.
+ *
+ * Voice on mobile networks fails without a relay: carrier NAT blocks direct
+ * peer-to-peer paths, which is why calls connected and then dropped a couple
+ * of minutes later. STUN alone is not enough — a TURN relay is required for
+ * the fails; the endpoints can be overridden through build-time env vars.
+ * (This mirrors how large-scale voice backends work: every client always has
+ * a relayed path available.)
+ */
+const ENV_TURN_URL = process.env.EXPO_PUBLIC_TURN_URL ?? "";
+const ENV_TURN_USERNAME = process.env.EXPO_PUBLIC_TURN_USERNAME ?? "";
+const ENV_TURN_CREDENTIAL = process.env.EXPO_PUBLIC_TURN_CREDENTIAL ?? "";
+const DEFAULT_TURN: { urls: string; username?: string; credential?: string }[] = [
+  { urls: "turn:openrelay.metered.ca:80", username: "openrelayproject", credential: "openrelayproject" },
+  { urls: "turn:openrelay.metered.ca:443", username: "openrelayproject", credential: "openrelayproject" },
+  { urls: "turn:openrelay.metered.ca:443?transport=tcp", username: "openrelayproject", credential: "openrelayproject" },
+];
+const VOICE_ICE_SERVERS: RTCIceServerLike[] = [
   { urls: "stun:stun.l.google.com:19302" },
   { urls: "stun:stun1.l.google.com:19302" },
   { urls: "stun:stun.cloudflare.com:3478" },
+  ...(ENV_TURN_URL ? [{ urls: ENV_TURN_URL, username: ENV_TURN_USERNAME, credential: ENV_TURN_CREDENTIAL }] : []),
+  ...(ENV_TURN_URL ? [] : DEFAULT_TURN),
 ];
+type RTCIceServerLike = { urls: string; username?: string; credential?: string };
+
+const MESH_HEALTH_INTERVAL_MS = 15_000;
 
 function readSocketAuth(socket: unknown): RoomSocketAuth | null {
   if (!socket || typeof socket !== "object") return null;
@@ -38,26 +57,22 @@ function readSocketAuth(socket: unknown): RoomSocketAuth | null {
   return auth && typeof auth === "object" ? (auth as RoomSocketAuth) : null;
 }
 
+/** The production relay forwards microphoneEnabled/speakerEnabled/voiceChannel
+ * and may drop isSpeaking, so an enabled microphone counts as voice activity. */
 function readSpeaking(payload: VoiceStatusPayload): boolean {
-  // The production relay forwards microphoneEnabled/speakerEnabled/voiceChannel
-  // but may drop isSpeaking, so an enabled microphone counts as "active".
   if (!payload?.microphoneEnabled) return false;
   return payload.isSpeaking === undefined ? true : Boolean(payload.isSpeaking);
 }
 
 function VoiceControls({
-  onMicChange, onSpeakerChange, onModeChange, onChannelChange, onPttPress, onPttRelease,
-  microphoneEnabled, speakerEnabled, voiceMode, voiceChannel, connectedCount, status, speakingMembers, members, localMemberId,
+  onMicChange, onSpeakerChange, onChannelChange,
+  microphoneEnabled, speakerEnabled, voiceChannel, connectedCount, status, speakingMembers, members, localMemberId,
 }: {
   onMicChange: (enabled: boolean) => Promise<void>;
   onSpeakerChange: (enabled: boolean) => void;
-  onModeChange?: (mode: VoiceMode) => void;
   onChannelChange?: (channel: VoiceChannel) => void;
-  onPttPress?: () => void;
-  onPttRelease?: () => void;
   microphoneEnabled: boolean;
   speakerEnabled: boolean;
-  voiceMode: VoiceMode;
   voiceChannel: VoiceChannel;
   connectedCount: number;
   status: string;
@@ -67,24 +82,11 @@ function VoiceControls({
 }) {
   const { t } = useLanguage();
   const [busy, setBusy] = useState(false);
-  const [pttActive, setPttActive] = useState(false);
 
   const toggleMic = async () => {
-    if (busy || voiceMode === "ptt") return;
+    if (busy) return;
     setBusy(true);
     try { await onMicChange(!microphoneEnabled); } finally { setBusy(false); }
-  };
-
-  const handlePttIn = () => {
-    if (voiceMode !== "ptt") return;
-    setPttActive(true);
-    onPttPress?.();
-  };
-
-  const handlePttOut = () => {
-    if (voiceMode !== "ptt") return;
-    setPttActive(false);
-    onPttRelease?.();
   };
 
   return (
@@ -94,16 +96,6 @@ function VoiceControls({
         <View style={styles.counter}><Text style={styles.counterText}>{connectedCount} ONLINE</Text></View>
       </View>
       <Text style={styles.status}>{status}</Text>
-
-      <View style={styles.modeRow}>
-        <Text style={styles.modeLabel}>{t("voiceMode")}:</Text>
-        <Pressable onPress={() => onModeChange?.("open")} style={[styles.modeChip, voiceMode === "open" && styles.modeChipActive]}>
-          <Text style={[styles.modeChipText, voiceMode === "open" && styles.modeChipTextActive]}>{t("voiceOpenMic")}</Text>
-        </Pressable>
-        <Pressable onPress={() => onModeChange?.("ptt")} style={[styles.modeChip, voiceMode === "ptt" && styles.modeChipActive]}>
-          <Text style={[styles.modeChipText, voiceMode === "ptt" && styles.modeChipTextActive]}>{t("voicePushToTalk")}</Text>
-        </Pressable>
-      </View>
 
       <View style={styles.modeRow}>
         <Text style={styles.modeLabel}>{t("voiceChannel")}:</Text>
@@ -118,7 +110,7 @@ function VoiceControls({
 
       {members && members.length > 0 && (
         <View style={styles.membersList}>
-          <Text style={styles.membersTitle}>VOICE ACTIVITY:</Text>
+          <Text style={styles.membersTitle}>VOICE ACTIVITY</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.membersScroll}>
             {members.map((member) => {
               const isLocal = member.id === localMemberId;
@@ -136,23 +128,14 @@ function VoiceControls({
       )}
 
       <View style={styles.actions}>
-        {voiceMode === "ptt" ? (
-          <Pressable
-            onPressIn={handlePttIn}
-            onPressOut={handlePttOut}
-            style={({ pressed }) => [styles.action, styles.pttAction, (pttActive || pressed) && styles.pttActive]}
-          >
-            <Text style={styles.actionLabel}>{t("voiceHoldToTalk")}</Text>
-          </Pressable>
-        ) : (
-          <Pressable disabled={busy} onPress={toggleMic} style={({ pressed }) => [styles.action, microphoneEnabled && styles.actionActive, pressed && styles.pressed]}>
-            <Text style={styles.actionLabel}>{microphoneEnabled ? t("micOn") : t("micOff")}</Text>
-          </Pressable>
-        )}
+        <Pressable disabled={busy} onPress={toggleMic} style={({ pressed }) => [styles.action, microphoneEnabled && styles.actionActive, pressed && styles.pressed]}>
+          <Text style={styles.actionLabel}>{microphoneEnabled ? t("micOn") : t("micOff")}</Text>
+        </Pressable>
         <Pressable onPress={() => onSpeakerChange(!speakerEnabled)} style={({ pressed }) => [styles.action, speakerEnabled && styles.actionActive, pressed && styles.pressed]}>
           <Text style={styles.actionLabel}>{speakerEnabled ? t("speakerOn") : t("speakerOff")}</Text>
         </Pressable>
       </View>
+      {!speakerEnabled && <Text style={styles.hint}>{t("voiceSpeakerMuted")}</Text>}
     </View>
   );
 }
@@ -163,7 +146,6 @@ function LiveKitVoiceControls({ members, localMemberId, socket }: { members?: Vo
   const participants = useParticipants();
   const connectionState = useConnectionState();
   const [speaker, setSpeaker] = useState(true);
-  const [voiceMode, setVoiceMode] = useState<VoiceMode>("open");
   const [voiceChannel, setVoiceChannel] = useState<VoiceChannel>("room");
   const [speakingMap, setSpeakingMap] = useState<Map<number, boolean>>(new Map());
   const socketRef = useRef(socket as SocketLike | undefined);
@@ -173,6 +155,8 @@ function LiveKitVoiceControls({ members, localMemberId, socket }: { members?: Vo
   const ensureAudioSession = () => {
     AudioSession.startAudioSession().catch(() => undefined);
     InCallManager.start({ media: "audio" });
+    // Android keeps a connected wired/Bluetooth headset as the preferred route;
+    // forcing the loudspeaker only decides the fallback when nothing is attached.
     InCallManager.setForceSpeakerphoneOn(true);
   };
 
@@ -200,52 +184,49 @@ function LiveKitVoiceControls({ members, localMemberId, socket }: { members?: Vo
     return () => { sock.off?.("netplay:voice-status", onVoiceStatus); };
   }, [socket, voiceChannel]);
 
-  // Live speaking heartbeat so every member's indicator stays accurate.
+  // Speaking heartbeat (the relay may strip isSpeaking, mic-on is the signal).
   useEffect(() => {
     if (!isMicrophoneEnabled) return;
-    const emitSpeaking = () => socketRef.current?.emit?.("netplay:voice-status", { microphoneEnabled: true, speakerEnabled: speaker, voiceMode, voiceChannel, isSpeaking: true });
+    const emitSpeaking = () => socketRef.current?.emit?.("netplay:voice-status", { microphoneEnabled: true, speakerEnabled: speaker, voiceChannel, isSpeaking: true });
     emitSpeaking();
     const timer = setInterval(emitSpeaking, 2_000);
     return () => clearInterval(timer);
-  }, [isMicrophoneEnabled, speaker, voiceMode, voiceChannel]);
+  }, [isMicrophoneEnabled, speaker, voiceChannel]);
 
-  const handleModeChange = (mode: VoiceMode) => {
-    setVoiceMode(mode);
-    if (mode === "ptt") localParticipant.setMicrophoneEnabled(false).catch(() => undefined);
-    socketRef.current?.emit?.("netplay:voice-status", { microphoneEnabled: mode === "open" ? isMicrophoneEnabled : false, speakerEnabled: speaker, voiceMode: mode, voiceChannel });
-  };
   const handleChannelChange = (channel: VoiceChannel) => {
     setVoiceChannel(channel);
-    socketRef.current?.emit?.("netplay:voice-status", { microphoneEnabled: isMicrophoneEnabled, speakerEnabled: speaker, voiceMode, voiceChannel: channel });
+    socketRef.current?.emit?.("netplay:voice-status", { microphoneEnabled: isMicrophoneEnabled, speakerEnabled: speaker, voiceChannel: channel });
+  };
+
+  // PUBG semantics: the speaker button mutes every incoming voice stream.
+  const applySpeaker = (enabled: boolean) => {
+    setSpeaker(enabled);
+    ensureAudioSession();
+    try {
+      const { Room, RoomEvent } = require("livekit-client");
+      void Room; void RoomEvent;
+    } catch { /* optional */ }
+    const publicationTracks = participants.flatMap((participant) => participant.audioTrackPublications ? [...participant.audioTrackPublications.values()] : []);
+    for (const publication of publicationTracks) {
+      const track = (publication as { track?: { mediaStreamTrack?: { enabled: boolean } } }).track;
+      if (track?.mediaStreamTrack) track.mediaStreamTrack.enabled = enabled;
+    }
   };
 
   return (
     <VoiceControls
       microphoneEnabled={isMicrophoneEnabled}
       speakerEnabled={speaker}
-      voiceMode={voiceMode}
       voiceChannel={voiceChannel}
       connectedCount={Math.max(0, participants.length - 1)}
-      status={connectionState === ConnectionState.Connected ? `LiveKit · ${voiceChannel} · ${voiceMode}` : `Voice ${String(connectionState).toLowerCase()}…`}
+      status={connectionState === ConnectionState.Connected ? `LiveKit · ${voiceChannel}` : `Voice ${String(connectionState).toLowerCase()}…`}
       onMicChange={async (enabled) => {
         ensureAudioSession();
         await localParticipant.setMicrophoneEnabled(enabled);
-        socketRef.current?.emit?.("netplay:voice-status", { microphoneEnabled: enabled, speakerEnabled: speaker, voiceMode, voiceChannel, isSpeaking: enabled });
+        socketRef.current?.emit?.("netplay:voice-status", { microphoneEnabled: enabled, speakerEnabled: speaker, voiceChannel, isSpeaking: enabled });
       }}
-      onSpeakerChange={(enabled) => { setSpeaker(enabled); ensureAudioSession(); InCallManager.setForceSpeakerphoneOn(enabled); }}
-      onModeChange={handleModeChange}
+      onSpeakerChange={applySpeaker}
       onChannelChange={handleChannelChange}
-      onPttPress={() => {
-        if (voiceMode !== "ptt") return;
-        ensureAudioSession();
-        localParticipant.setMicrophoneEnabled(true).catch(() => undefined);
-        socketRef.current?.emit?.("netplay:voice-status", { microphoneEnabled: true, speakerEnabled: speaker, voiceMode, voiceChannel, isSpeaking: true });
-      }}
-      onPttRelease={() => {
-        if (voiceMode !== "ptt") return;
-        localParticipant.setMicrophoneEnabled(false).catch(() => undefined);
-        socketRef.current?.emit?.("netplay:voice-status", { microphoneEnabled: false, speakerEnabled: speaker, voiceMode, voiceChannel, isSpeaking: false });
-      }}
       speakingMembers={speakingMap}
       members={members}
       localMemberId={localMemberId}
@@ -255,17 +236,14 @@ function LiveKitVoiceControls({ members, localMemberId, socket }: { members?: Vo
 
 /** Built-in voice: peer-to-peer WebRTC mesh over the room socket.
  *
- * This is the guaranteed path when the room service has no LiveKit credentials
- * (the production gateway answers 404 for rooms.mediaToken, which used to leave
- * the app with no voice UI at all). It needs only the signalling events the
- * relay already forwards: netplay:signal (voice-hello/ready/offer/answer/
- * candidate) and netplay:voice-status.
- */
+ * Guaranteed path when the room service has no LiveKit credentials. It uses
+ * only the events the relay forwards (netplay:signal, netplay:voice-status),
+ * always offers a TURN relay for NAT traversal, restarts ICE when a peer
+ * drops, and re-greets everyone when the app returns to the foreground. */
 function BuiltInVoiceControls({ socket, memberId, members, memberRole, expose }: {
   socket?: unknown; memberId?: number; members?: VoiceMember[]; memberRole?: VoiceMember["role"];
   expose: (handle: RoomVoiceChatHandle) => void;
 }) {
-  const [voiceMode, setVoiceMode] = useState<VoiceMode>("ptt");
   const [voiceChannel, setVoiceChannel] = useState<VoiceChannel>("room");
   const [microphoneEnabled, setMicrophoneEnabled] = useState(false);
   const [speakerEnabled, setSpeakerEnabled] = useState(true);
@@ -276,10 +254,14 @@ function BuiltInVoiceControls({ socket, memberId, members, memberRole, expose }:
   const socketRef = useRef<SocketLike | undefined>(socket as SocketLike | undefined);
   const streamRef = useRef<any>(null);
   const peersRef = useRef<Map<number, any>>(new Map());
+  const remoteTracksRef = useRef<Set<any>>(new Set());
   const pendingCandidatesRef = useRef<Map<number, any[]>>(new Map());
   const makingOfferRef = useRef<Set<number>>(new Set());
   const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const statusTimersRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
+  const retryTimersRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
+  const channelRef = useRef<VoiceChannel>("room");
+  const micRef = useRef(false);
+  const speakerRef = useRef(true);
   const { t } = useLanguage();
 
   const localRole = memberRole ?? members?.find((member) => member.id === memberId)?.role;
@@ -287,24 +269,37 @@ function BuiltInVoiceControls({ socket, memberId, members, memberRole, expose }:
   const canSpeak = !isSpectator || voiceChannel === "room";
 
   useEffect(() => { socketRef.current = socket as SocketLike | undefined; }, [socket]);
+  useEffect(() => { channelRef.current = voiceChannel; }, [voiceChannel]);
+  useEffect(() => { micRef.current = microphoneEnabled; }, [microphoneEnabled]);
 
-  const emitStatus = (overrides: Partial<{ microphoneEnabled: boolean; speakerEnabled: boolean; isSpeaking: boolean; voiceMode: VoiceMode; voiceChannel: VoiceChannel }> = {}) => {
+  const emitStatus = () => {
     socketRef.current?.emit?.("netplay:voice-status", {
-      microphoneEnabled: overrides.microphoneEnabled ?? microphoneEnabled,
-      speakerEnabled: overrides.speakerEnabled ?? speakerEnabled,
-      isSpeaking: overrides.isSpeaking ?? (overrides.microphoneEnabled ?? microphoneEnabled),
-      voiceMode: overrides.voiceMode ?? voiceMode,
-      voiceChannel: overrides.voiceChannel ?? voiceChannel,
+      microphoneEnabled: micRef.current,
+      speakerEnabled: speakerRef.current,
+      isSpeaking: micRef.current,
+      voiceChannel: channelRef.current,
     });
   };
 
   const ensureAudioSession = () => {
     AudioSession.startAudioSession().catch(() => undefined);
     InCallManager.start({ media: "audio" });
-    InCallManager.setForceSpeakerphoneOn(speakerEnabled);
+    // A connected wired/Bluetooth headset keeps priority on Android; forcing the
+    // loudspeaker only matters when nothing is attached (PUBG-like behaviour).
+    InCallManager.setForceSpeakerphoneOn(true);
   };
 
-  /** Microphone is acquired lazily: joining a room must not grab it. */
+  const applySpeaker = (enabled: boolean) => {
+    setSpeakerEnabled(enabled);
+    speakerRef.current = enabled;
+    ensureAudioSession();
+    // Speaker OFF = hear nothing at all (mute every incoming voice stream).
+    for (const track of remoteTracksRef.current) {
+      try { track.enabled = enabled; } catch { /* track may be closed */ }
+    }
+    emitStatus();
+  };
+
   const ensureMicrophone = async () => {
     if (streamRef.current) return streamRef.current;
     if (Platform.OS === "android") {
@@ -316,14 +311,17 @@ function BuiltInVoiceControls({ socket, memberId, members, memberRole, expose }:
       if (granted !== PermissionsAndroid.RESULTS.GRANTED) throw new Error("microphone-permission-denied");
     }
     const stream = await mediaDevices.getUserMedia({
-      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 } as unknown as Record<string, never>,
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+        channelCount: 1,
+      } as unknown as Record<string, never>,
       video: false,
     });
     stream.getAudioTracks().forEach((track: any) => { track.enabled = false; });
     streamRef.current = stream;
-    for (const peer of peersRef.current.values()) {
-      stream.getTracks().forEach((track: any) => peer.addTrack(track, stream));
-    }
+    for (const peer of peersRef.current.values()) stream.getTracks().forEach((track: any) => peer.addTrack(track, stream));
     ensureAudioSession();
     return stream;
   };
@@ -340,40 +338,33 @@ function BuiltInVoiceControls({ socket, memberId, members, memberRole, expose }:
     }
     streamRef.current?.getAudioTracks().forEach((track: any) => { track.enabled = enabled; });
     setMicrophoneEnabled(enabled);
-    emitStatus({ microphoneEnabled: enabled, isSpeaking: enabled });
+    micRef.current = enabled;
+    emitStatus();
     if (enabled) {
       if (heartbeatRef.current) clearInterval(heartbeatRef.current);
-      heartbeatRef.current = setInterval(() => emitStatus({ microphoneEnabled: true, isSpeaking: true }), 2_000);
+      heartbeatRef.current = setInterval(emitStatus, 2_000);
     } else if (heartbeatRef.current) {
       clearInterval(heartbeatRef.current);
       heartbeatRef.current = null;
     }
   };
 
-  const setSpeaker = (enabled: boolean) => {
-    setSpeakerEnabled(enabled);
-    ensureAudioSession();
-    InCallManager.setForceSpeakerphoneOn(enabled);
-    emitStatus({ speakerEnabled: enabled });
-  };
-
   useEffect(() => {
     expose({
       setMicrophoneEnabled: setMicEnabled,
-      setSpeakerEnabled: async (enabled) => setSpeaker(enabled),
-      setVoiceMode: (mode) => setVoiceMode(mode),
-      setVoiceChannel: (channel) => setVoiceChannel(channel),
+      setSpeakerEnabled: async (enabled) => applySpeaker(enabled),
+      setVoiceChannel: (channel) => { setVoiceChannel(channel); channelRef.current = channel; emitStatus(); },
     });
   });
 
-  // Peer mesh: one RTCPeerConnection per remote member, negotiated over the room socket.
   useEffect(() => {
     const currentSocket = socketRef.current;
     const localId = Number(memberId);
     const peers = peersRef.current;
+    const remoteTracks = remoteTracksRef.current;
     const pendingCandidates = pendingCandidatesRef.current;
     const makingOffer = makingOfferRef.current;
-    const statusTimers = statusTimersRef.current;
+    const retryTimers = retryTimersRef.current;
     if (!currentSocket?.on || !currentSocket.emit || !Number.isInteger(localId) || localId <= 0) {
       setStatus(t("voiceWaitingRoom"));
       return;
@@ -388,26 +379,44 @@ function BuiltInVoiceControls({ socket, memberId, members, memberRole, expose }:
     const ensurePeer = (remoteId: number) => {
       const existing = peers.get(remoteId);
       if (existing) return existing;
-      const peer = new RTCPeerConnection({ iceServers: VOICE_ICE_SERVERS });
+      const peer = new RTCPeerConnection({
+        iceServers: VOICE_ICE_SERVERS as never,
+        iceCandidatePoolSize: 4,
+        bundlePolicy: "max-bundle",
+        rtcpMuxPolicy: "require",
+      });
       if (streamRef.current) streamRef.current.getTracks().forEach((track: any) => peer.addTrack(track, streamRef.current));
       else peer.addTransceiver("audio", { direction: "sendrecv" });
       peer.onicecandidate = (event: any) => {
         if (event.candidate) currentSocket.emit?.("netplay:signal", { targetMemberId: remoteId, signal: { kind: "voice-candidate", candidate: event.candidate.toJSON ? event.candidate.toJSON() : event.candidate } });
       };
-      peer.ontrack = () => updateCount();
+      peer.oniceconnectionstatechange = () => {
+        // Carrier NAT and network switches break the path: restart ICE instead
+        // of tearing the call down (this is what caused mid-session dropouts).
+        if (peer.iceConnectionState === "failed" && !disposed) peer.restartIce?.();
+      };
+      peer.ontrack = (event: any) => {
+        const stream = event.streams?.[0];
+        const track = event.track;
+        if (track) {
+          track.enabled = speakerRef.current;
+          remoteTracks.add(track);
+        }
+        void stream;
+        updateCount();
+      };
       peer.onconnectionstatechange = () => {
-        if (["failed", "closed", "disconnected"].includes(peer.connectionState)) {
-          peers.delete(remoteId);
-          peers.get(remoteId)?.close?.();
-          // Retry the handshake shortly; the room socket stays connected.
+        if (peer.connectionState === "failed" || peer.connectionState === "closed") {
+          if (peers.get(remoteId) === peer) peers.delete(remoteId);
+          try { peer.close(); } catch { /* already closed */ }
           if (!disposed) {
-            const existingTimer = statusTimers.get(remoteId);
+            const existingTimer = retryTimers.get(remoteId);
             if (existingTimer) clearTimeout(existingTimer);
-            statusTimers.set(remoteId, setTimeout(() => {
-              statusTimers.delete(remoteId);
+            retryTimers.set(remoteId, setTimeout(() => {
+              retryTimers.delete(remoteId);
               if (disposed || peers.has(remoteId)) return;
               currentSocket.emit?.("netplay:signal", { targetMemberId: remoteId, signal: { kind: "voice-hello" } });
-            }, 2_000));
+            }, 1_500));
           }
         }
         updateCount();
@@ -416,17 +425,18 @@ function BuiltInVoiceControls({ socket, memberId, members, memberRole, expose }:
       return peer;
     };
 
-    const sendOffer = async (remoteId: number) => {
+    const sendOffer = async (remoteId: number, restart = false) => {
       if (makingOffer.has(remoteId)) return;
       makingOffer.add(remoteId);
       try {
         const peer = ensurePeer(remoteId);
         if (peer.signalingState !== "stable") return;
-        const offer = await peer.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: false });
+        if (restart) peer.restartIce?.();
+        const offer = await peer.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: false, iceRestart: restart });
         await peer.setLocalDescription(offer);
         currentSocket.emit?.("netplay:signal", { targetMemberId: remoteId, signal: { kind: "voice-offer", description: offer } });
       } catch {
-        // Ignore; the retry timer will try again.
+        // The retry timer re-attempts.
       } finally {
         makingOffer.delete(remoteId);
       }
@@ -435,17 +445,10 @@ function BuiltInVoiceControls({ socket, memberId, members, memberRole, expose }:
     const onVoiceStatus = (payload: VoiceStatusPayload) => {
       const from = Number(payload?.memberId);
       if (!Number.isInteger(from) || from <= 0) return;
-      if (payload.voiceChannel && payload.voiceChannel !== voiceChannel) {
-        setSpeakingMap((previous) => {
-          const next = new Map(previous);
-          next.set(from, false);
-          return next;
-        });
-        return;
-      }
+      const sameChannel = !payload.voiceChannel || payload.voiceChannel === channelRef.current;
       setSpeakingMap((previous) => {
         const next = new Map(previous);
-        next.set(from, readSpeaking(payload));
+        next.set(from, sameChannel ? readSpeaking(payload) : false);
         return next;
       });
     };
@@ -466,7 +469,7 @@ function BuiltInVoiceControls({ socket, memberId, members, memberRole, expose }:
       }
       if (kind === "voice-offer" && signal.description) {
         const peer = ensurePeer(remoteId);
-        await peer.setRemoteDescription(new RTCSessionDescription(signal.description as any));
+        await peer.setRemoteDescription(new RTCSessionDescription(signal.description as never));
         const queued = pendingCandidates.get(remoteId) ?? [];
         pendingCandidates.delete(remoteId);
         for (const candidate of queued) await peer.addIceCandidate(new RTCIceCandidate(candidate));
@@ -477,12 +480,12 @@ function BuiltInVoiceControls({ socket, memberId, members, memberRole, expose }:
       }
       if (kind === "voice-answer" && signal.description) {
         const peer = peers.get(remoteId);
-        if (peer) await peer.setRemoteDescription(new RTCSessionDescription(signal.description as any));
+        if (peer && peer.signalingState !== "stable") await peer.setRemoteDescription(new RTCSessionDescription(signal.description as never));
         return;
       }
       if (kind === "voice-candidate" && signal.candidate) {
         const peer = peers.get(remoteId);
-        if (peer?.remoteDescription) await peer.addIceCandidate(new RTCIceCandidate(signal.candidate as any));
+        if (peer?.remoteDescription) await peer.addIceCandidate(new RTCIceCandidate(signal.candidate as never));
         else pendingCandidates.set(remoteId, [...(pendingCandidates.get(remoteId) ?? []), signal.candidate]);
       }
     };
@@ -490,18 +493,41 @@ function BuiltInVoiceControls({ socket, memberId, members, memberRole, expose }:
     currentSocket.on?.("netplay:signal", onSignal);
     currentSocket.on?.("netplay:voice-status", onVoiceStatus);
     setStatus(t("voiceBuiltInReady"));
-    // Announce presence so existing peers can greet us.
-    const greetTimer = setTimeout(() => currentSocket.emit?.("netplay:signal", { signal: { kind: "voice-hello" } }), 600);
+    const greet = () => currentSocket.emit?.("netplay:signal", { signal: { kind: "voice-hello" } });
+    const greetTimer = setTimeout(greet, 600);
+
+    // Mesh health: if peers are expected but none is connected, re-greet.
+    const healthTimer = setInterval(() => {
+      if (disposed || !currentSocket.connected) return;
+      const expected = Math.max(0, (members?.length ?? 1) - 1);
+      const connected = Array.from(peers.values()).filter((peer: any) => peer.connectionState === "connected").length;
+      if (expected > 0 && connected === 0) greet();
+    }, MESH_HEALTH_INTERVAL_MS);
+
+    // Coming back from the background: sockets may be stale and peers dropped.
+    const appStateSubscription = AppState.addEventListener("change", (next) => {
+      if (next !== "active" || disposed) return;
+      ensureAudioSession();
+      greet();
+      for (const [remoteId, peer] of peers) {
+        const anyPeer = peer as any;
+        if (anyPeer.connectionState !== "connected") void sendOffer(remoteId, true);
+      }
+      emitStatus();
+    });
 
     return () => {
       disposed = true;
       clearTimeout(greetTimer);
+      clearInterval(healthTimer);
+      appStateSubscription.remove();
       currentSocket.off?.("netplay:signal", onSignal);
       currentSocket.off?.("netplay:voice-status", onVoiceStatus);
-      for (const timer of statusTimers.values()) clearTimeout(timer);
-      statusTimers.clear();
+      for (const timer of retryTimers.values()) clearTimeout(timer);
+      retryTimers.clear();
       peers.forEach((peer: any) => peer.close?.());
       peers.clear();
+      remoteTracks.clear();
       pendingCandidates.clear();
       if (heartbeatRef.current) { clearInterval(heartbeatRef.current); heartbeatRef.current = null; }
       streamRef.current?.getTracks().forEach((track: any) => track.stop());
@@ -509,29 +535,18 @@ function BuiltInVoiceControls({ socket, memberId, members, memberRole, expose }:
       InCallManager.stop();
       AudioSession.stopAudioSession().catch(() => undefined);
     };
-  }, [socket, memberId, voiceChannel, t]);
-
-  // Push-to-talk release safety: never leave the mic hot.
-  useEffect(() => {
-    if (voiceMode === "ptt" && microphoneEnabled && !heartbeatRef.current) return;
-    if (voiceMode === "ptt" && microphoneEnabled) void setMicEnabled(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [voiceMode]);
+  }, [socket, memberId, t]);
 
   return (
     <VoiceControls
       microphoneEnabled={microphoneEnabled}
       speakerEnabled={speakerEnabled}
-      voiceMode={voiceMode}
       voiceChannel={voiceChannel}
       connectedCount={connectedCount}
       status={status || t("voiceBuiltInReady")}
       onMicChange={setMicEnabled}
-      onSpeakerChange={setSpeaker}
-      onModeChange={(mode) => { setVoiceMode(mode); if (mode === "ptt") void setMicEnabled(false); }}
-      onChannelChange={(channel) => { setVoiceChannel(channel); emitStatus({ voiceChannel: channel }); }}
-      onPttPress={() => { void setMicEnabled(true); }}
-      onPttRelease={() => { void setMicEnabled(false); }}
+      onSpeakerChange={applySpeaker}
+      onChannelChange={(channel) => { setVoiceChannel(channel); channelRef.current = channel; emitStatus(); }}
       speakingMembers={speakingMap}
       members={members}
       localMemberId={memberId}
@@ -545,7 +560,6 @@ export const RoomVoiceChat = forwardRef<RoomVoiceChatHandle, Props>(function Roo
   useImperativeHandle(ref, () => ({
     setMicrophoneEnabled: (enabled) => builtInHandle.current.setMicrophoneEnabled(enabled),
     setSpeakerEnabled: (enabled) => builtInHandle.current.setSpeakerEnabled?.(enabled) ?? Promise.resolve(),
-    setVoiceMode: (mode) => builtInHandle.current.setVoiceMode?.(mode),
     setVoiceChannel: (channel) => builtInHandle.current.setVoiceChannel?.(channel),
   }), []);
 
@@ -593,14 +607,14 @@ export const RoomVoiceChat = forwardRef<RoomVoiceChatHandle, Props>(function Roo
         options={{
           adaptiveStream: true,
           publishDefaults: {
-            audioPreset: { maxBitrate: 64_000, priority: "high" } as any,
+            audioPreset: { maxBitrate: 64_000, priority: "high" } as never,
             dtx: true,
             red: true,
             forceStereo: false,
             autoGainControl: true,
             echoCancellation: true,
             noiseSuppression: true,
-          } as any,
+          } as never,
           dynacast: true,
           stopLocalTrackOnUnpublish: false,
         }}
@@ -641,8 +655,6 @@ const styles = StyleSheet.create({
   actions: { flexDirection: "row", gap: 7, marginTop: 12 },
   action: { flex: 1, minHeight: 48, borderRadius: 13, backgroundColor: "#231836", borderWidth: 1, borderColor: "#433054", alignItems: "center", justifyContent: "center", paddingHorizontal: 6 },
   actionActive: { backgroundColor: "#5A2993", borderColor: "#B768FF" },
-  pttAction: { backgroundColor: "#3A1F0F", borderColor: "#8B5A2B" },
-  pttActive: { backgroundColor: "#8B3A1A", borderColor: "#FF8C42", transform: [{ scale: 0.97 }] },
   actionLabel: { color: "#FFFFFF", fontSize: 10, fontWeight: "900", textAlign: "center" },
   hint: { color: "#9086A6", fontSize: 10, lineHeight: 15, marginTop: 8 },
   pressed: { opacity: 0.76, transform: [{ scale: 0.98 }] },
