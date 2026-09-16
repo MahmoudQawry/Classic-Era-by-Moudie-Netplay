@@ -62,8 +62,28 @@ async function startServer() {
   registerNetplayServer(server);
   registerUniversalNetplayServer(server);
 
+  const relayRegion = process.env.REALTIME_REGION || "unknown";
+  const relayRelease = process.env.REALTIME_RELEASE || "dev";
+  const migrationTarget = (process.env.REALTIME_MIGRATION_TARGET || "").replace(/\/$/, "");
+
   app.get("/api/health", (_req, res) => {
-    res.json({ ok: true, timestamp: Date.now() });
+    res.json({ ok: true, timestamp: Date.now(), region: relayRegion, release: relayRelease });
+  });
+
+  // Health-check and migration metadata for the global realtime load balancer.
+  // The migration target is intentionally opt-in; an empty value never causes
+  // clients to jump to an untrusted endpoint.
+  app.get("/api/realtime/health", (_req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    res.json({
+      ok: true,
+      service: "moudie-netplay-relay",
+      region: relayRegion,
+      release: relayRelease,
+      timestamp: Date.now(),
+      migrationAvailable: Boolean(migrationTarget),
+      migrationTarget: migrationTarget || undefined,
+    });
   });
 
   app.use(
@@ -78,7 +98,7 @@ async function startServer() {
   const port = await findAvailablePort(preferredPort);
 
   if (port !== preferredPort) console.log(`Port ${preferredPort} is busy, using port ${port} instead`);
-  server.listen(port, () => console.log(`[api] server listening on port ${port}`));
+  server.listen(port, () => console.log(`[api] server listening on port ${port} region=${relayRegion} release=${relayRelease}`));
 }
 
 startServer().catch(console.error);
