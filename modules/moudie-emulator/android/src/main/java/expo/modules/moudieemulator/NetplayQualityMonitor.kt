@@ -9,6 +9,7 @@ import org.json.JSONObject
 import java.util.ArrayDeque
 import java.util.LinkedHashMap
 import kotlin.math.abs
+import kotlin.math.ceil
 
 data class NetplayQuality(
   val rttMs: Long? = null,
@@ -22,19 +23,33 @@ data class NetplayQuality(
     return rttMs?.let { "PING ${it}ms · $grade$delayInfo" } ?: "PING — · $grade"
   }
 
-  /** adaptive adaptive delay calculation */
-  fun recommendedInputDelayFrames(): Long = when {
-    grade == "STABLE" && (rttMs ?: 100L) <= 50L && (jitterMs ?: 0L) <= 10L -> 2L
-    grade == "STABLE" -> 3L
-    grade == "FAIR" && (rttMs ?: 150L) <= 100L -> 3L
-    grade == "FAIR" -> 4L
-    grade == "UNSTABLE" && (rttMs ?: 250L) <= 180L -> 5L
-    grade == "UNSTABLE" -> 6L
-    else -> 3L
+  /**
+   * The input relay is a two-leg path: player -> relay -> peer. A delay chosen
+   * from fixed 2-8 frame buckets is therefore unsafe on a high-latency relay.
+   * Size the lockstep window from measured RTT plus jitter, then cap it at a
+   * bounded value so the game never falls into an endless prediction/resync loop.
+   *
+   * At 60 FPS, a 300 ms relay RTT needs roughly 18 frames before jitter/safety
+   * margin. The old implementation selected 6-7 frames for that same RTT,
+   * which guaranteed repeated prediction and state recovery.
+   */
+  fun recommendedInputDelayFrames(): Long {
+    val rtt = rttMs ?: return 3L
+    val jitter = jitterMs ?: 0L
+    val loss = probeLossPercent ?: 0
+    val safetyMs = when {
+      loss >= 8 -> 40L
+      loss >= 3 -> 28L
+      jitter >= 50L -> 24L
+      else -> 16L
+    }
+    val effectiveTransitMs = rtt + (jitter * 1.5).toLong() + safetyMs
+    val frames = ceil(effectiveTransitMs / 16.667).toLong() + 1L
+    return frames.coerceIn(2L, MAX_INPUT_DELAY_FRAMES)
   }
 }
 
-/** adaptive improved quality monitor with faster probing and adaptive delay */
+/** Quality monitor for the Socket.IO control relay. */
 class NetplayQualityMonitor(
   private val socket: Socket,
   private val onQuality: (NetplayQuality) -> Unit,
@@ -69,7 +84,6 @@ class NetplayQualityMonitor(
       val sequence = nextSequence++
       pending[sequence] = now
       socket.emit(probeEvent, JSONObject().put("sequence", sequence))
-      // adaptive: faster probing 600ms
       handler.postDelayed(this, PROBE_INTERVAL_MS)
     }
   }
@@ -114,7 +128,6 @@ class NetplayQualityMonitor(
     val rtt = (SystemClock.elapsedRealtime() - sentAt).coerceAtLeast(0L)
     val delta = previousRtt?.let { abs(rtt - it) } ?: 0L
     previousRtt = rtt
-    // adaptive: adapt faster when jitter high
     val rttAlpha = if (delta > 30) 0.5 else 0.3
     smoothedRtt = smoothedRtt?.let { (it * (1 - rttAlpha)) + (rtt * rttAlpha) } ?: rtt.toDouble()
     smoothedJitter = smoothedJitter?.let { (it * 0.65) + (delta * 0.35) } ?: delta.toDouble()
@@ -145,7 +158,6 @@ class NetplayQualityMonitor(
     val loss = outcomes.takeIf { it.isNotEmpty() }?.let { samples ->
       ((samples.count { !it } * 100.0) / samples.size).toInt()
     }
-    // adaptive grading with more granular thresholds
     val grade = when {
       rtt == null -> "CONNECTING"
       rtt <= 60L && (jitter ?: 0L) <= 12L && (loss ?: 0) < 1 -> "STABLE"
@@ -154,21 +166,14 @@ class NetplayQualityMonitor(
       rtt <= 220L && (jitter ?: 0L) <= 50L && (loss ?: 0) <= 7 -> "FAIR"
       else -> "UNSTABLE"
     }
-    val recommendedDelay = when {
-      rtt == null -> 3L
-      rtt <= 50L && (jitter ?: 0L) <= 10L && (loss ?: 0) < 1 -> 2L
-      rtt <= 80L && (jitter ?: 0L) <= 20L && (loss ?: 0) < 2 -> 3L
-      rtt <= 120L && (jitter ?: 0L) <= 30L && (loss ?: 0) <= 3 -> 4L
-      rtt <= 180L && (jitter ?: 0L) <= 45L && (loss ?: 0) <= 5 -> 5L
-      rtt <= 250L -> 6L
-      else -> 7L
-    }
-    onQuality(NetplayQuality(rtt, jitter, loss, grade, recommendedDelay))
+    val quality = NetplayQuality(rtt, jitter, loss, grade)
+    onQuality(quality.copy(recommendedDelay = quality.recommendedInputDelayFrames()))
   }
 
   private companion object {
-    const val PROBE_INTERVAL_MS = 600L // adaptive faster probing
-    const val PROBE_TIMEOUT_MS = 2000L // Reduced timeout
-    const val OUTCOME_WINDOW = 30 // Larger window for stability
+    const val PROBE_INTERVAL_MS = 600L
+    const val PROBE_TIMEOUT_MS = 2000L
+    const val OUTCOME_WINDOW = 30
+    const val MAX_INPUT_DELAY_FRAMES = 20L
   }
 }
