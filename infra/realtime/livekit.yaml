@@ -1,4 +1,7 @@
-# Persistent low-latency realtime host. Supply secrets through the host environment.
+# Production LiveKit configuration for a region-aware multi-node deployment.
+# Each regional node should set LIVEKIT_REGION to its region name and share the
+# same Redis message bus. Put a latency/geo-aware load balancer in front of the
+# regional signal endpoints.
 port: 7880
 bind_addresses:
   - 0.0.0.0
@@ -6,20 +9,50 @@ bind_addresses:
 rtc:
   tcp_port: 7881
   port_range_start: 50000
-  port_range_end: 50100
+  port_range_end: 60000
   use_external_ip: true
-  # Mobile networks and restrictive Wi-Fi can block UDP. Keep a TCP/TLS-capable
-  # fallback so audio can recover instead of silently losing the media path.
   allow_tcp_fallback: true
   tcp_fallback_rtt_threshold: 250
   allow_udp_unstable_fallback: true
 
 redis:
-  address: 127.0.0.1:6379
+  # Use a managed/persistent Redis endpoint in production. For a distributed
+  # LiveKit cluster this is the shared data store and message bus.
+  address: ${REDIS_ADDRESS:-127.0.0.1:6379}
   password: ${REDIS_PASSWORD}
+
+# LiveKit uses the region-aware selector to keep a room close to the signaling
+# region while still allowing load-aware failover inside the global cluster.
+node_selector:
+  kind: regionaware
+  sysload_limit: 0.65
+  regions:
+    - name: me-central
+      lat: 25.2048
+      lon: 55.2708
+    - name: eu-west
+      lat: 50.1109
+      lon: 8.6821
+    - name: ap-south
+      lat: 19.0760
+      lon: 72.8777
+    - name: us-east
+      lat: 40.7128
+      lon: -74.0060
+    - name: us-west
+      lat: 37.7749
+      lon: -122.4194
+
+# Optional embedded TURN/TLS. If using a dedicated Coturn deployment instead,
+# keep this disabled and advertise the regional TURN endpoints separately.
+turn:
+  enabled: false
 
 logging:
   level: info
 
 room:
   auto_create: true
+
+# Prometheus endpoint for latency, connection, CPU and room-capacity monitoring.
+prometheus_port: 6789
