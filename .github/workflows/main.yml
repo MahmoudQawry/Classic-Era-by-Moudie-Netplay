@@ -6,41 +6,18 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      # Optional GitHub repository variables. If empty, the app keeps the
-      # backward-compatible Manus endpoint until the dedicated relay is ready.
       EXPO_PUBLIC_NETPLAY_SERVICE_URL: ${{ vars.NETPLAY_SERVICE_URL }}
       EXPO_PUBLIC_NETPLAY_SERVICE_URLS: ${{ vars.NETPLAY_SERVICE_URLS }}
       EXPO_PUBLIC_API_BASE_URL: ${{ vars.API_BASE_URL }}
     steps:
       - name: 📥 جلب الكود
         uses: actions/checkout@v4
-
-      - name: 🔄 تطبيق إصلاحات مزامنة NetPlay قبل الفحص والبناء
-        run: python3 scripts/apply-netplay-sync-hardening.py
-
-      - name: 💾 تثبيت إصلاحات المزامنة في المستودع
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add \
-            server/netplay.ts \
-            modules/moudie-emulator/android/src/main/java/expo/modules/moudieemulator/UniversalNetplayClient.kt \
-            modules/moudie-emulator/android/src/main/java/expo/modules/moudieemulator/Ps1NetplayClient.kt \
-            modules/moudie-emulator/android/src/main/java/expo/modules/moudieemulator/UniversalLibretroPlayerActivity.kt \
-            modules/moudie-emulator/android/src/main/java/expo/modules/moudieemulator/PS1PlayerActivity.kt \
-            scripts/e2e/relay-e2e.cjs
-          if git diff --cached --quiet; then
-            echo "Synchronization hardening is already persisted."
-          else
-            git commit -m "fix: harden netplay synchronization and voice signaling [skip ci]"
-            git push
-          fi
 
       - name: ⚙️ تثبيت Node.js
         uses: actions/setup-node@v4
