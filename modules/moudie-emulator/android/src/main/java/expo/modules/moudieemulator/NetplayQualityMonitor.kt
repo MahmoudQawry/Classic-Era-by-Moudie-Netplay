@@ -11,7 +11,10 @@ import java.util.LinkedHashMap
 import kotlin.math.abs
 import kotlin.math.ceil
 
-private const val MAX_INPUT_DELAY_FRAMES = 20L
+// A very high-latency relay can require more than 20 frames just to cover one
+// measured round trip. This is a stability ceiling, not a target: normal RTTs
+// still produce a much smaller delay. At 60 FPS, 45 frames is ~750 ms.
+private const val MAX_INPUT_DELAY_FRAMES = 45L
 
 data class NetplayQuality(
   val rttMs: Long? = null,
@@ -31,8 +34,9 @@ data class NetplayQuality(
    * Size the lockstep window from measured RTT plus jitter, then cap it at a
    * bounded value so the game avoids repeated prediction/resync cycles.
    *
-   * At 60 FPS, a 300 ms relay RTT needs roughly 18 frames before jitter/safety
-   * margin. The old implementation selected 6-7 frames for that same RTT.
+   * This measures relay latency, not the strength of the user's internet link.
+   * A device can have excellent bandwidth while the selected realtime server is
+   * geographically far away and therefore has high RTT.
    */
   fun recommendedInputDelayFrames(): Long {
     val rtt = rttMs ?: return 3L
@@ -165,7 +169,7 @@ class NetplayQualityMonitor(
       rtt <= 100L && (jitter ?: 0L) <= 25L && (loss ?: 0) <= 2 -> "STABLE"
       rtt <= 150L && (jitter ?: 0L) <= 35L && (loss ?: 0) <= 4 -> "FAIR"
       rtt <= 220L && (jitter ?: 0L) <= 50L && (loss ?: 0) <= 7 -> "FAIR"
-      else -> "UNSTABLE"
+      else -> "HIGH-LATENCY"
     }
     val quality = NetplayQuality(rtt, jitter, loss, grade)
     onQuality(quality.copy(recommendedDelay = quality.recommendedInputDelayFrames()))
