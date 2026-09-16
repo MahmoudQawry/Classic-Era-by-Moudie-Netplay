@@ -11,6 +11,8 @@ import java.util.LinkedHashMap
 import kotlin.math.abs
 import kotlin.math.ceil
 
+private const val MAX_INPUT_DELAY_FRAMES = 20L
+
 data class NetplayQuality(
   val rttMs: Long? = null,
   val jitterMs: Long? = null,
@@ -25,13 +27,12 @@ data class NetplayQuality(
 
   /**
    * The input relay is a two-leg path: player -> relay -> peer. A delay chosen
-   * from fixed 2-8 frame buckets is therefore unsafe on a high-latency relay.
+   * from fixed 2-8 frame buckets is unsafe on a high-latency relay.
    * Size the lockstep window from measured RTT plus jitter, then cap it at a
-   * bounded value so the game never falls into an endless prediction/resync loop.
+   * bounded value so the game avoids repeated prediction/resync cycles.
    *
    * At 60 FPS, a 300 ms relay RTT needs roughly 18 frames before jitter/safety
-   * margin. The old implementation selected 6-7 frames for that same RTT,
-   * which guaranteed repeated prediction and state recovery.
+   * margin. The old implementation selected 6-7 frames for that same RTT.
    */
   fun recommendedInputDelayFrames(): Long {
     val rtt = rttMs ?: return 3L
@@ -174,6 +175,5 @@ class NetplayQualityMonitor(
     const val PROBE_INTERVAL_MS = 600L
     const val PROBE_TIMEOUT_MS = 2000L
     const val OUTCOME_WINDOW = 30
-    const val MAX_INPUT_DELAY_FRAMES = 20L
   }
 }
