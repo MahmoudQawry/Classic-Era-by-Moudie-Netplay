@@ -1,0 +1,32 @@
+{
+  "note": "Template only. Replace origin addresses and create through your Cloudflare account.",
+  "hostname": "realtime.moudie.net",
+  "health_monitor": {
+    "type": "https",
+    "path": "/api/realtime/health",
+    "method": "GET",
+    "expected_codes": [200],
+    "timeout_seconds": 5,
+    "interval_seconds": 15
+  },
+  "pools": [
+    {
+      "name": "me-central",
+      "origins": ["relay-me.moudie.net"]
+    },
+    {
+      "name": "eu-west",
+      "origins": ["relay-eu.moudie.net"]
+    },
+    {
+      "name": "us-east",
+      "origins": ["relay-us.moudie.net"]
+    }
+  ],
+  "steering": {
+    "preferred": "dynamic_latency",
+    "fallback": "failover",
+    "session_affinity": true
+  },
+  "websocket": true
+}
