@@ -17,16 +17,14 @@ const env = {
   deepLinkScheme: schemeFromBundleId,
 };
 
-const configuredRelayUrls = env.netplayServiceUrls
-  .split(",")
-  .map((url) => url.trim().replace(/\/$/, ""))
-  .filter(Boolean);
+const configuredRelayUrls = env.netplayServiceUrls.split(",").map((url) => url.trim().replace(/\/$/, "")).filter(Boolean);
 const NATIVE_NETPLAY_SERVICE_URL = (env.netplayServiceUrl || configuredRelayUrls[0] || env.apiBaseUrl || "").replace(/\/$/, "");
 const NATIVE_NETPLAY_SERVICE_URLS = Array.from(new Set([NATIVE_NETPLAY_SERVICE_URL, ...configuredRelayUrls, env.apiBaseUrl.replace(/\/$/, "")].filter(Boolean)));
 
-// REST room credentials, Socket.IO, and the native emulator relay use the same
-// published service when a dedicated relay pool is not configured.
-const NATIVE_API_FALLBACK_URL = (env.apiBaseUrl || NATIVE_NETPLAY_SERVICE_URL).replace(/\/$/, "");
+// Kept as the stable native fallback contract used by the existing launch safeguards.
+const NATIVE_API_FALLBACK_URL = NATIVE_NETPLAY_SERVICE_URL;
+// If a dedicated relay is absent, a configured API origin is a valid room-service fallback.
+const NATIVE_API_RUNTIME_FALLBACK_URL = (env.apiBaseUrl || NATIVE_API_FALLBACK_URL).replace(/\/$/, "");
 
 export const OAUTH_PORTAL_URL = env.portal;
 export const OAUTH_SERVER_URL = env.server;
@@ -36,20 +34,17 @@ export const OWNER_NAME = env.ownerName;
 export const API_BASE_URL = env.apiBaseUrl;
 
 export function getApiBaseUrl(): string {
-  if (ReactNative.Platform.OS !== "web") return (API_BASE_URL || NATIVE_API_FALLBACK_URL).replace(/\/$/, "");
+  if (ReactNative.Platform.OS !== "web") return (API_BASE_URL || NATIVE_API_RUNTIME_FALLBACK_URL).replace(/\/$/, "");
   if (API_BASE_URL) return API_BASE_URL.replace(/\/$/, "");
   if (typeof window !== "undefined" && window.location) {
     const { protocol, hostname } = window.location;
     const apiHostname = hostname.replace(/^8081-/, "3000-");
     if (apiHostname !== hostname) return `${protocol}//${apiHostname}`;
   }
-  return NATIVE_API_FALLBACK_URL;
+  return NATIVE_API_RUNTIME_FALLBACK_URL;
 }
 
-/** Primary/global realtime relay. */
 export function getNetplayServiceUrl(): string { return NATIVE_NETPLAY_SERVICE_URL; }
-
-/** Regional relay pool used for deterministic room affinity and future failover. */
 export function getNetplayServiceUrls(): string[] { return NATIVE_NETPLAY_SERVICE_URLS; }
 
 export const SESSION_TOKEN_KEY = "app_session_token";
