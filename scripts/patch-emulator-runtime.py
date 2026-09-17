@@ -25,8 +25,8 @@ replacements = [
         '      val now = System.currentTimeMillis()\n      val targetFrame = nextLockstepFrame + netplayInputDelayFrames\n'
     ),
     (
-        '  private fun addController() {\n',
-        '''  private fun addController() {\n    // Touch controls are intentionally bound to player 1. Additional local players\n    // use connected physical controllers, which are assigned to free ports above.\n'''
+        '    val face = arrayOf(74 to 168, 132 to 110, 16 to 110, 74 to 52)\n    p.actionButtons.forEachIndexed { i, c -> addControl(c, Gravity.RIGHT or Gravity.BOTTOM, face.getOrElse(i) { 74 to 52 }.first, face.getOrElse(i) { 74 to 52 }.second) }\n',
+        '''    val face = when (definition.system) {\n      "n64" -> arrayOf(74 to 168, 132 to 110, 74 to 52, 74 to 110, 16 to 110, 132 to 52, 16 to 52)\n      "sega" -> arrayOf(74 to 168, 132 to 110, 16 to 110, 74 to 52, 132 to 52, 16 to 52)\n      else -> arrayOf(74 to 168, 132 to 110, 16 to 110, 74 to 52)\n    }\n    p.actionButtons.forEachIndexed { i, c ->\n      val position = face.getOrElse(i) { face.last() }\n      addControl(c, Gravity.RIGHT or Gravity.BOTTOM, position.first, position.second)\n    }\n'''
     ),
 ]
 
@@ -36,4 +36,4 @@ for old, new in replacements:
     text = text.replace(old, new, 1)
 
 path.write_text(text, encoding="utf-8")
-print("Universal emulator runtime patched: local multi-controller ports + lockstep clock consistency + safe Android navigation")
+print("Universal emulator runtime patched: local multi-controller ports + lockstep clock consistency + safe Android navigation + six-button layouts")
