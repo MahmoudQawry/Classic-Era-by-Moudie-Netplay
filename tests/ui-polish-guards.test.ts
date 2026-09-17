@@ -31,6 +31,13 @@ describe("requested UI, wording and analog-control changes", () => {
     expect(lobby).toContain('name="cog-outline"');
   });
 
+  it("uses the canonical MN app icon for shared internal brand chrome", () => {
+    const brand = read("components/brand-logo.tsx");
+    expect(brand).toContain('@/assets/images/classic-era-new-icon.png');
+    expect(brand).toContain('<Image');
+    expect(brand).not.toContain('<Text');
+  });
+
   it("adds an ANALOG control to the PS1 and PSP players", () => {
     const ps1 = read("modules/moudie-emulator/android/src/main/java/expo/modules/moudieemulator/PS1PlayerActivity.kt");
     const psp = read("modules/moudie-emulator/android/src/main/java/expo/modules/moudieemulator/UniversalLibretroPlayerActivity.kt");
@@ -49,11 +56,9 @@ describe("requested UI, wording and analog-control changes", () => {
     expect(voice).not.toContain("voicePushToTalk");
     expect(voice).not.toContain("voiceHoldToTalk");
     expect(voice).not.toContain("PushToTalk");
-    // A TURN relay is required for voice to survive carrier NAT on mobile.
     expect(voice).toContain("turn:");
     expect(voice).toContain("restartIce");
     expect(voice).toContain("AppState");
-    // Speaker OFF must mute every incoming stream.
     expect(voice).toContain("remoteTracksRef");
   });
 });
