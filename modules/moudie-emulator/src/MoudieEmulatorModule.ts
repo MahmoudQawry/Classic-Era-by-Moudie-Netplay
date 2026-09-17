@@ -2,7 +2,7 @@ import { NativeModule, requireNativeModule } from "expo";
 import type { EmulatorCoreCapability, EmulatorRuntimeStatus, EmulatorSystem, MoudieEmulatorModuleEvents, PreparedLocalGame } from "./MoudieEmulator.types";
 
 export type PS1NetplayOptions = { serverUrl: string; roomId: number; memberId: number; memberToken: string; fingerprint: string; player: 1 | 2 | 3 | 4 };
-export type UniversalNetplayOptions = { serverUrl: string; roomId: number; memberId: number; memberToken: string; system: "psp" | "sega" | "n64" | "ps2"; fingerprint: string; coreVersion: string; player: 1 | 2 | 3 | 4 };
+export type UniversalNetplayOptions = { serverUrl: string; roomId: number; memberId: number; memberToken: string; system: EmulatorSystem; fingerprint: string; coreVersion: string; player: 1 | 2 | 3 | 4 };
 export type PlayerLaunchOptions = { orientation?: "portrait" | "landscape"; aspectRatio?: "fit" | "4:3" | "16:9"; settingsMode?: boolean };
 
 declare class MoudieEmulatorModule extends NativeModule<MoudieEmulatorModuleEvents> {
@@ -10,7 +10,7 @@ declare class MoudieEmulatorModule extends NativeModule<MoudieEmulatorModuleEven
   getBiosStatus(): Record<string, { required: boolean; available: boolean; files?: string[]; message: string }>;
   getPs1LaunchStatus(): { available: boolean; message: string };
   getCoreCatalog(): EmulatorCoreCapability[];
-  prepareLocalGame(system: EmulatorSystem, uri: string,): PreparedLocalGame;
+  prepareLocalGame(system: EmulatorSystem, uri: string): PreparedLocalGame;
   prepareNativeCore(system: EmulatorSystem): Promise<{ system: EmulatorSystem; coreName: string; available: boolean; message: string }>;
   prepareFastLaunch(system: EmulatorSystem, uri: string, fileName: string): Promise<{ system: EmulatorSystem; gamePath: string; message: string }>;
   launchPS1Game(uri: string, fileName: string, netplay?: PS1NetplayOptions, options?: PlayerLaunchOptions): Promise<void>;
