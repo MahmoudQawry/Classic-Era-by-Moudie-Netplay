@@ -3,7 +3,6 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useState } from "react";
 import { useLanguage } from "@/lib/language";
 import { ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-
 import { NeonCircuitBackground } from "@/components/neon-circuit-background";
 import { ScreenContainer } from "@/components/screen-container";
 import { haptic } from "@/lib/haptics";
@@ -11,127 +10,44 @@ import { getProfileName, saveProfileName, saveRoomCredential } from "@/lib/room-
 import { createRealtimeRoom } from "@/lib/realtime-room-service";
 import { roomCapacityFor } from "@/shared/room-capacity";
 
-type SystemId = "psp" | "nes" | "sega" | "ps1";
-
+type SystemId = "psp" | "nes" | "sega" | "ps1" | "n64" | "ps2";
 const SYSTEMS: { id: SystemId; label: string; detail: string; icon: keyof typeof MaterialCommunityIcons.glyphMap; accent: string }[] = [
   { id: "ps1", label: "PS1", detail: "PlayStation", icon: "gamepad-variant", accent: "#C05DFF" },
   { id: "psp", label: "PSP", detail: "Portable", icon: "gamepad-outline", accent: "#38D4FF" },
   { id: "nes", label: "NES", detail: "Famicom", icon: "controller-classic-outline", accent: "#FF727A" },
   { id: "sega", label: "SEGA", detail: "Genesis", icon: "gamepad-variant-outline", accent: "#70E59A" },
+  { id: "n64", label: "N64", detail: "Nintendo 64", icon: "controller-classic-outline", accent: "#E7C85B" },
+  { id: "ps2", label: "PS2", detail: "PlayStation 2", icon: "gamepad-variant", accent: "#72A7FF" },
 ];
 
 export default function CreateRoomScreen() {
   const { visibility } = useLocalSearchParams<{ visibility?: "public" | "private" }>();
-  const { t } = useLanguage();
-  const isPublicLobby = visibility === "public";
+  const { t } = useLanguage(); const isPublicLobby = visibility === "public";
   const [system, setSystem] = useState<SystemId>("ps1");
   const [name, setName] = useState(isPublicLobby ? t("crDefaultLobbyName") : t("crDefaultSessionName"));
-  const [hostName, setHostName] = useState("");
-  const [creating, setCreating] = useState(false);
-  const capacity = roomCapacityFor(system);
-
+  const [hostName, setHostName] = useState(""); const [creating, setCreating] = useState(false); const capacity = roomCapacityFor(system);
   const create = async () => {
     const normalizedHost = hostName.trim() || (await getProfileName())?.trim() || t("crFallbackHost");
-    if (name.trim().length < 2) {
-      haptic.error();
-      Alert.alert(t("nameShort"), t("nameShortText"));
-      return;
-    }
-    try {
-      setCreating(true);
-      const room = await createRealtimeRoom({ name: name.trim(), system, hostName: normalizedHost, visibility: isPublicLobby ? "public" : "private" });
-      await saveProfileName(normalizedHost);
-      await saveRoomCredential({ roomId: room.roomId, memberId: room.memberId, memberToken: room.memberToken });
-      haptic.success();
-      router.replace({ pathname: "/room/[roomId]", params: { roomId: String(room.roomId) } });
-    } catch (error) {
-      haptic.error();
-      Alert.alert(t("createRoomError"), error instanceof Error ? error.message : t("tryAgain"));
-    } finally {
-      setCreating(false);
-    }
+    if (name.trim().length < 2) { haptic.error(); Alert.alert(t("nameShort"), t("nameShortText")); return; }
+    try { setCreating(true); const room = await createRealtimeRoom({ name: name.trim(), system, hostName: normalizedHost, visibility: isPublicLobby ? "public" : "private" }); await saveProfileName(normalizedHost); await saveRoomCredential({ roomId: room.roomId, memberId: room.memberId, memberToken: room.memberToken }); haptic.success(); router.replace({ pathname: "/room/[roomId]", params: { roomId: String(room.roomId) } }); }
+    catch (error) { haptic.error(); Alert.alert(t("createRoomError"), error instanceof Error ? error.message : t("tryAgain")); }
+    finally { setCreating(false); }
   };
-
   return (
-    <ScreenContainer className="px-5" edges={["top", "bottom", "left", "right"]} containerClassName="bg-background">
-      <NeonCircuitBackground />
+    <ScreenContainer className="px-5" edges={["top", "bottom", "left", "right"]} containerClassName="bg-background"><NeonCircuitBackground />
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-        <View style={styles.header}>
-          <Pressable onPress={() => router.back()} style={({ pressed }) => [styles.back, pressed && styles.pressed]}><MaterialCommunityIcons name="arrow-right" size={21} color="#F8F5FF" /></Pressable>
-          <View style={styles.titleRow}><Image source={require("@/assets/images/classic-era-new-icon.png")} style={styles.brandIcon} /><Text style={styles.title}>{isPublicLobby ? t("hostPublicLobby") : t("createPrivateRoom")}</Text></View>
-          <View style={styles.headerSpace} />
-        </View>
-
-        <View style={styles.panel}>
-          <Text style={styles.panelLead}>{t("chooseEmulator")}</Text>
-          <Text style={styles.panelSub}>{isPublicLobby ? t("crPublicSub") : t("crPrivateSub")}</Text>
-          <View style={styles.systemGrid}>
-            {SYSTEMS.map((item) => {
-              const selected = system === item.id;
-              return (
-                <Pressable key={item.id} onPress={() => { haptic.selection(); setSystem(item.id); }} style={({ pressed }) => [styles.systemCard, selected && { borderColor: item.accent, backgroundColor: `${item.accent}18` }, pressed && styles.pressed]}>
-                  <MaterialCommunityIcons name={item.icon} size={26} color={item.accent} />
-                  <View style={styles.systemCopy}><Text style={[styles.systemTitle, { color: selected ? item.accent : "#F4F0FF" }]}>{item.label}</Text><Text style={styles.systemDetail}>{item.detail}</Text></View>
-                  {selected && <View style={[styles.selectedDot, { backgroundColor: item.accent }]} />}
-                </Pressable>
-              );
-            })}
-          </View>
-
-          <Text style={styles.label}>{isPublicLobby ? t("crLobbyName") : t("crRoomName")}</Text>
-          <TextInput value={name} onChangeText={setName} style={styles.input} placeholder={isPublicLobby ? t("crLobbyExample") : t("crRoomExample")} placeholderTextColor="#827B97" returnKeyType="done" textAlign="left" />
-          <Text style={styles.label}>{t("displayName")}</Text>
-          <TextInput value={hostName} onChangeText={setHostName} style={styles.input} placeholder={t("crFriendsVisible")} placeholderTextColor="#827B97" returnKeyType="done" textAlign="left" />
-
-          <View style={styles.capacityCard}>
-            <Text style={styles.capacityTitle}>{t("crCapacityTitle")} · {capacity.maxPlayers + capacity.maxSpectators} {t("crMembersShort")}</Text>
-            <Text style={styles.capacityText}>{capacity.minPlayers}-{capacity.maxPlayers} {t("crActivePlayersShort")} · {capacity.maxSpectators} {t("crSpectatorsShort")}</Text>
-            <Text style={styles.capacityNote}>{system === "nes" ? t("crNoteNes") : t("crNoteStd")}</Text>
-          </View>
-
-          <View style={styles.featureRow}>
-            <View style={styles.feature}><MaterialCommunityIcons name="microphone-outline" size={16} color="#69E8FF" /><Text style={styles.featureText}>{t("voiceShort")}</Text></View>
-            <View style={styles.feature}><MaterialCommunityIcons name="message-text-outline" size={16} color="#C58AFF" /><Text style={styles.featureText}>{t("chatShort")}</Text></View>
-            <View style={styles.feature}><MaterialCommunityIcons name="eye-outline" size={16} color="#FFD16A" /><Text style={styles.featureText}>{t("spectateShort")}</Text></View>
-          </View>
-
-          <Pressable onPress={create} disabled={creating} style={({ pressed }) => [styles.primaryButton, (pressed || creating) && styles.buttonPressed]}>
-            {creating ? <ActivityIndicator color="#FFFFFF" /> : <><Text style={styles.primaryText}>{isPublicLobby ? t("hostPublicLobby") : t("createRoomEnter")}</Text><MaterialCommunityIcons name="arrow-right" size={20} color="#FFFFFF" /></>}
-          </Pressable>
+        <View style={styles.header}><Pressable onPress={() => router.back()} style={({ pressed }) => [styles.back, pressed && styles.pressed]}><MaterialCommunityIcons name="arrow-right" size={21} color="#F8F5FF" /></Pressable><View style={styles.titleRow}><Image source={require("@/assets/images/classic-era-new-icon.png")} style={styles.brandIcon} /><Text style={styles.title}>{isPublicLobby ? t("hostPublicLobby") : t("createPrivateRoom")}</Text></View><View style={styles.headerSpace} /></View>
+        <View style={styles.panel}><Text style={styles.panelLead}>{t("chooseEmulator")}</Text><Text style={styles.panelSub}>{isPublicLobby ? t("crPublicSub") : t("crPrivateSub")}</Text>
+          <View style={styles.systemGrid}>{SYSTEMS.map((item) => { const selected = system === item.id; return <Pressable key={item.id} onPress={() => { haptic.selection(); setSystem(item.id); }} style={({ pressed }) => [styles.systemCard, selected && { borderColor: item.accent, backgroundColor: `${item.accent}18` }, pressed && styles.pressed]}><MaterialCommunityIcons name={item.icon} size={26} color={item.accent} /><View style={styles.systemCopy}><Text style={[styles.systemTitle, { color: selected ? item.accent : "#F4F0FF" }]}>{item.label}</Text><Text style={styles.systemDetail}>{item.detail}</Text></View>{selected && <View style={[styles.selectedDot, { backgroundColor: item.accent }]} />}</Pressable>; })}</View>
+          <Text style={styles.label}>{isPublicLobby ? t("crLobbyName") : t("crRoomName")}</Text><TextInput value={name} onChangeText={setName} style={styles.input} placeholder={isPublicLobby ? t("crLobbyExample") : t("crRoomExample")} placeholderTextColor="#827B97" returnKeyType="done" textAlign="left" />
+          <Text style={styles.label}>{t("displayName")}</Text><TextInput value={hostName} onChangeText={setHostName} style={styles.input} placeholder={t("crFriendsVisible")} placeholderTextColor="#827B97" returnKeyType="done" textAlign="left" />
+          <View style={styles.capacityCard}><Text style={styles.capacityTitle}>{t("crCapacityTitle")} · {capacity.maxPlayers + capacity.maxSpectators} {t("crMembersShort")}</Text><Text style={styles.capacityText}>{capacity.minPlayers}-{capacity.maxPlayers} {t("crActivePlayersShort")} · {capacity.maxSpectators} {t("crSpectatorsShort")}</Text><Text style={styles.capacityNote}>{system === "nes" ? t("crNoteNes") : t("crNoteStd")}</Text></View>
+          <View style={styles.featureRow}><View style={styles.feature}><MaterialCommunityIcons name="microphone-outline" size={16} color="#69E8FF" /><Text style={styles.featureText}>{t("voiceShort")}</Text></View><View style={styles.feature}><MaterialCommunityIcons name="message-text-outline" size={16} color="#C58AFF" /><Text style={styles.featureText}>{t("chatShort")}</Text></View><View style={styles.feature}><MaterialCommunityIcons name="eye-outline" size={16} color="#FFD16A" /><Text style={styles.featureText}>{t("spectateShort")}</Text></View></View>
+          <Pressable onPress={create} disabled={creating} style={({ pressed }) => [styles.primaryButton, (pressed || creating) && styles.buttonPressed]}>{creating ? <ActivityIndicator color="#FFFFFF" /> : <><Text style={styles.primaryText}>{isPublicLobby ? t("hostPublicLobby") : t("createRoomEnter")}</Text><MaterialCommunityIcons name="arrow-right" size={20} color="#FFFFFF" /></>}</Pressable>
         </View>
       </ScrollView>
     </ScreenContainer>
   );
 }
-
-const styles = StyleSheet.create({
-  content: { paddingTop: 10, paddingBottom: 32 },
-  header: { height: 57, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  back: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", backgroundColor: "#1A102D", borderWidth: 1, borderColor: "#412960" },
-  titleRow: { flexDirection: "row", alignItems: "center", gap: 10 },
-  brandIcon: { width: 41, height: 41, borderRadius: 12, borderWidth: 1, borderColor: "#594174" },
-  title: { color: "#FFFFFF", fontSize: 25, fontWeight: "900" },
-  headerSpace: { width: 40 },
-  panel: { backgroundColor: "rgba(19, 10, 36, 0.93)", borderWidth: 1, borderColor: "#55377F", borderRadius: 27, padding: 17, marginTop: 12, shadowColor: "#8E49E6", shadowOpacity: 0.23, shadowRadius: 18, elevation: 4 },
-  panelLead: { color: "#F8F4FF", fontSize: 19, fontWeight: "900", textAlign: "left" },
-  panelSub: { color: "#B8B0CA", fontSize: 12, textAlign: "left", lineHeight: 18, marginTop: 4 },
-  systemGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 16 },
-  systemCard: { width: "47.7%", minHeight: 82, padding: 12, borderRadius: 17, borderWidth: 1, borderColor: "#302044", backgroundColor: "#110A20", flexDirection: "row", alignItems: "center", gap: 9 },
-  systemCopy: { flex: 1, alignItems: "flex-start" },
-  systemTitle: { fontSize: 15, fontWeight: "900", textAlign: "left" },
-  systemDetail: { color: "#9F96B2", fontSize: 10, fontWeight: "700", textAlign: "left", marginTop: 3 },
-  selectedDot: { width: 8, height: 8, borderRadius: 4, position: "absolute", top: 10, left: 10 },
-  label: { color: "#ECE7F9", fontSize: 13, fontWeight: "900", textAlign: "left", marginTop: 17, marginBottom: 7 },
-  input: { minHeight: 51, backgroundColor: "#0E091A", borderRadius: 14, borderWidth: 1, borderColor: "#302144", paddingHorizontal: 14, color: "#F8F4FF", fontSize: 15 },
-  capacityCard: { marginTop: 17, borderRadius: 14, borderWidth: 1, borderColor: "#3F6D88", backgroundColor: "#102236", padding: 13 },
-  capacityTitle: { color: "#71E7FF", fontSize: 12, fontWeight: "900" },
-  capacityText: { color: "#F5FBFF", fontSize: 12, fontWeight: "900", marginTop: 6 },
-  capacityNote: { color: "#B1C5D4", fontSize: 10, lineHeight: 16, marginTop: 6 },
-  featureRow: { flexDirection: "row", justifyContent: "space-around", backgroundColor: "#100A1D", borderRadius: 14, marginTop: 16, paddingVertical: 10, borderWidth: 1, borderColor: "#29203B" },
-  feature: { flexDirection: "row", alignItems: "center", gap: 5 },
-  featureText: { color: "#BBB3C9", fontSize: 11, fontWeight: "800" },
-  primaryButton: { minHeight: 54, borderRadius: 17, marginTop: 18, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 8, backgroundColor: "#A54DF3" },
-  primaryText: { color: "#FFFFFF", fontSize: 15, fontWeight: "900" },
-  pressed: { opacity: 0.72 },
-  buttonPressed: { opacity: 0.82, transform: [{ scale: 0.985 }] },
+const styles = StyleSheet.create({ content:{paddingTop:10,paddingBottom:32}, header:{height:57,flexDirection:"row",alignItems:"center",justifyContent:"space-between"}, back:{width:40,height:40,borderRadius:20,alignItems:"center",justifyContent:"center",backgroundColor:"#1A102D",borderWidth:1,borderColor:"#412960"}, titleRow:{flexDirection:"row",alignItems:"center",gap:10}, brandIcon:{width:41,height:41,borderRadius:12,borderWidth:1,borderColor:"#594174"}, title:{color:"#FFFFFF",fontSize:25,fontWeight:"900"}, headerSpace:{width:40}, panel:{backgroundColor:"rgba(19, 10, 36, 0.93)",borderWidth:1,borderColor:"#55377F",borderRadius:27,padding:17,marginTop:12,shadowColor:"#8E49E6",shadowOpacity:0.23,shadowRadius:18,elevation:4}, panelLead:{color:"#F8F4FF",fontSize:19,fontWeight:"900",textAlign:"left"},panelSub:{color:"#B8B0CA",fontSize:12,textAlign:"left",lineHeight:18,marginTop:4},systemGrid:{flexDirection:"row",flexWrap:"wrap",gap:10,marginTop:16},systemCard:{width:"47.7%",minHeight:82,padding:12,borderRadius:17,borderWidth:1,borderColor:"#302044",backgroundColor:"#110A20",flexDirection:"row",alignItems:"center",gap:9},systemCopy:{flex:1,alignItems:"flex-start"},systemTitle:{fontSize:15,fontWeight:"900",textAlign:"left"},systemDetail:{color:"#9F96B2",fontSize:10,fontWeight:"700",textAlign:"left",marginTop:3},selectedDot:{width:8,height:8,borderRadius:4,position:"absolute",top:10,left:10},label:{color:"#ECE7F9",fontSize:13,fontWeight:"900",textAlign:"left",marginTop:17,marginBottom:7},input:{minHeight:51,backgroundColor:"#0E091A",borderRadius:14,borderWidth:1,borderColor:"#302144",paddingHorizontal:14,color:"#F8F4FF",fontSize:15},capacityCard:{marginTop:17,borderRadius:14,borderWidth:1,borderColor:"#3F6D88",backgroundColor:"#102236",padding:13},capacityTitle:{color:"#71E7FF",fontSize:12,fontWeight:"900"},capacityText:{color:"#F5FBFF",fontSize:12,fontWeight:"900",marginTop:6},capacityNote:{color:"#B1C5D4",fontSize:10,lineHeight:16,marginTop:6},featureRow:{flexDirection:"row",justifyContent:"space-around",backgroundColor:"#100A1D",borderRadius:14,marginTop:16,paddingVertical:10,borderWidth:1,borderColor:"#29203B"},feature:{flexDirection:"row",alignItems:"center",gap:5},featureText:{color:"#BBB3C9",fontSize:11,fontWeight:"800"},primaryButton:{minHeight:54,borderRadius:17,marginTop:18,alignItems:"center",justifyContent:"center",flexDirection:"row",gap:8,backgroundColor:"#A54DF3"},primaryText:{color:"#FFFFFF",fontSize:15,fontWeight:"900"},pressed:{opacity:0.72},buttonPressed:{opacity:0.82,transform:[{scale:0.985}]},
 });
