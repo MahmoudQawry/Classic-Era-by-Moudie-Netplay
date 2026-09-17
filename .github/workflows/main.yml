@@ -31,7 +31,24 @@ jobs:
       - name: 🔧 تطبيق أنواع الأنظمة الستة
         run: python3 scripts/patch-six-system-types.py
       - name: 🧪 فحص TypeScript
-        run: pnpm check
+        id: typecheck
+        run: |
+          set +e
+          pnpm check 2>&1 | tee ts-check.log
+          code=${PIPESTATUS[0]}
+          echo "$code" > ts-check.exit
+          exit 0
+      - name: 📎 حفظ تشخيص TypeScript
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ts-check-diagnostics
+          path: |
+            ts-check.log
+            ts-check.exit
+          if-no-files-found: error
+      - name: 🛑 رفض البناء عند فشل TypeScript
+        run: test "$(cat ts-check.exit)" = "0"
       - name: 🧪 تشغيل الاختبارات
         run: pnpm test
       - name: 🖐️ تثبيت نظام التحكم الحقيقي متعدد الأصابع
