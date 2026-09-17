@@ -7,8 +7,7 @@ import { ScreenContainer } from "@/components/screen-container";
 import { useLanguage } from "@/lib/language";
 import { RoomChat } from "@/components/room-chat";
 import { RoomVoiceChat, type RoomVoiceChatHandle } from "@/components/room-voice-chat";
-import { getRoomRelayUrl } from "@/lib/netplay-socket";
-import { createNetplaySocket } from "@/lib/netplay-socket";
+import { getRoomRelayUrl, createNetplaySocket } from "@/lib/netplay-socket";
 import { setRealtimeRoomReady } from "@/lib/realtime-room-service";
 import { getRoomCredential, type RoomCredential } from "@/lib/room-storage";
 import { useRealtimeRoomSnapshot } from "@/lib/use-realtime-room-snapshot";
@@ -114,7 +113,7 @@ export default function NativeRoomScreen() {
 
   const host = snapshotQuery.data?.members.find((member) => member.id === credential?.memberId)?.role === "host";
   const canStart = Boolean(ready && assignedPlayer === 1 && remoteOnline && connected && !starting);
-  return <ScreenContainer className="px-5" edges={["top", "bottom", "left", "right"]><ScrollView contentContainerStyle={styles.content}>
+  return <ScreenContainer className="px-5" edges={["top", "bottom", "left", "right"]}><ScrollView contentContainerStyle={styles.content}>
     <View style={styles.top}><Pressable onPress={() => router.replace({ pathname: "/room/[roomId]", params: { roomId: String(roomId) } })}><Text style={styles.back}>‹ {t("fcBackToRoom")}</Text></Pressable><Text style={[styles.chip, { color: meta.color }]}>{system.toUpperCase()} {t("segRoom")}</Text></View>
     <Text style={[styles.eyebrow, { color: meta.color }]}>{catalog?.coreName || t("lsCheckingCore")}</Text><Text style={styles.title}>{meta.title}</Text><Text style={styles.copy}>{t("segCopy")}</Text>
     <View style={styles.card}><Text style={styles.file}>{game?.name || t("fcNoGame")}</Text><Text style={styles.fileInfo}>{assignedPlayer ? `${t("rmPlayerShort")} ${assignedPlayer}` : t("segSpectatorSlot")}</Text></View>
