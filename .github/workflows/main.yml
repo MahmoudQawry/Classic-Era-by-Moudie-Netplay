@@ -13,6 +13,10 @@ jobs:
       EXPO_PUBLIC_NETPLAY_SERVICE_URL: ${{ vars.NETPLAY_SERVICE_URL }}
       EXPO_PUBLIC_NETPLAY_SERVICE_URLS: ${{ vars.NETPLAY_SERVICE_URLS }}
       EXPO_PUBLIC_API_BASE_URL: ${{ vars.API_BASE_URL }}
+      EXPO_PUBLIC_TURN_URL: ${{ vars.TURN_URL }}
+      EXPO_PUBLIC_TURN_USERNAME: ${{ vars.TURN_USERNAME }}
+      EXPO_PUBLIC_TURN_CREDENTIAL: ${{ vars.TURN_CREDENTIAL }}
+      EXPO_PUBLIC_LIVEKIT_URL: ${{ vars.LIVEKIT_URL }}
     steps:
       - name: 📥 جلب الكود
         uses: actions/checkout@v4
@@ -56,6 +60,18 @@ jobs:
           grep -q '"ps2"' modules/moudie-emulator/android/src/main/java/expo/modules/moudieemulator/NativeCoreCatalog.kt
           grep -q 'System.currentTimeMillis()' modules/moudie-emulator/android/src/main/java/expo/modules/moudieemulator/UniversalLibretroPlayerActivity.kt
           grep -q 'localDevicePorts' modules/moudie-emulator/android/src/main/java/expo/modules/moudieemulator/UniversalLibretroPlayerActivity.kt
+          grep -q 'n64' app/local-play.tsx
+          grep -q 'ps2' app/local-play.tsx
+          grep -q 'n64' 'app/library/[system].tsx'
+          grep -q 'ps2' 'app/library/[system].tsx'
+          grep -q 'n64' 'app/native/[system]/[roomId].tsx'
+          grep -q 'ps2' 'app/native/[system]/[roomId].tsx'
+      - name: 🌐 التحقق من إعداد خدمة الغرف قبل الشحن
+        run: |
+          if [ -z "${EXPO_PUBLIC_NETPLAY_SERVICE_URL}" ] && [ -z "${EXPO_PUBLIC_NETPLAY_SERVICE_URLS}" ] && [ -z "${EXPO_PUBLIC_API_BASE_URL}" ]; then
+            echo "ERROR: Android release has no reachable room/realtime service URL configured. Set NETPLAY_SERVICE_URL or API_BASE_URL in GitHub Actions Variables before shipping an online build."
+            exit 1
+          fi
       - name: 🔧 Prebuild Android
         run: npx expo prebuild --platform android
       - name: 🛡️ استعادة مسار الإقلاع العادي
