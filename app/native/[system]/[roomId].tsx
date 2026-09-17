@@ -2,7 +2,6 @@ import * as DocumentPicker from "expo-document-picker";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-
 import { ScreenContainer } from "@/components/screen-container";
 import { useLanguage } from "@/lib/language";
 import { RoomChat } from "@/components/room-chat";
@@ -18,11 +17,7 @@ type RoomSystem = "sega" | "n64" | "ps2";
 type Game = { name: string; uri: string; fingerprint: string };
 type PlayerSeat = 1 | 2 | 3 | 4;
 const isPlayerSeat = (value: unknown): value is PlayerSeat => typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= 4;
-const SYSTEM_META: Record<RoomSystem, { title: string; color: string; statusKey: string }> = {
-  sega: { title: "Sega Genesis", color: "#70E39B", statusKey: "segInitialStatus" },
-  n64: { title: "Nintendo 64", color: "#E7C85B", statusKey: "segInitialStatus" },
-  ps2: { title: "PlayStation 2", color: "#72A7FF", statusKey: "segInitialStatus" },
-};
+const SYSTEM_META: Record<RoomSystem, { title: string; color: string; statusKey: string }> = { sega: { title: "Sega Genesis", color: "#70E39B", statusKey: "segInitialStatus" }, n64: { title: "Nintendo 64", color: "#E7C85B", statusKey: "segInitialStatus" }, ps2: { title: "PlayStation 2", color: "#72A7FF", statusKey: "segInitialStatus" } };
 
 export default function NativeRoomScreen() {
   const { t } = useLanguage();
@@ -51,14 +46,7 @@ export default function NativeRoomScreen() {
   const coreVersion = `moudie-${system}-libretro-lockstep-v3`;
 
   useEffect(() => { if (Number.isFinite(numericRoomId)) getRoomCredential(numericRoomId).then(setCredential); }, [numericRoomId]);
-  useEffect(() => {
-    if (Platform.OS === "web") return;
-    const subscription = MoudieEmulatorModule.addListener("nativeOverlayAction", (payload) => {
-      if (payload.action === "toggle-microphone") void voiceChatRef.current?.setMicrophoneEnabled(!payload.muted);
-      if (payload.action === "toggle-speaker") void voiceChatRef.current?.setSpeakerEnabled?.(!payload.muted);
-    });
-    return () => subscription.remove();
-  }, []);
+  useEffect(() => { if (Platform.OS === "web") return; const subscription = MoudieEmulatorModule.addListener("nativeOverlayAction", (payload) => { if (payload.action === "toggle-microphone") void voiceChatRef.current?.setMicrophoneEnabled(!payload.muted); if (payload.action === "toggle-speaker") void voiceChatRef.current?.setSpeakerEnabled?.(!payload.muted); }); return () => subscription.remove(); }, []);
   useEffect(() => {
     if (!credential || Platform.OS === "web") return;
     const socket = createNetplaySocket({ roomId: numericRoomId, memberId: credential.memberId, memberToken: credential.memberToken });
@@ -83,23 +71,18 @@ export default function NativeRoomScreen() {
       if (!catalog.acceptedExtensions.includes(extension)) throw new Error(t("lsExtPrefix") + ": " + meta.title + " (" + catalog.acceptedExtensions.map((value) => "." + value).join(", ") + ")");
       if (Platform.OS === "web") throw new Error(t("androidRoomOnly"));
       setStatus(t("segCheckingFingerprint"));
-      const fingerprint = await MoudieEmulatorModule.fingerprintNativeGame(emulatorSystem, asset.uri, asset.name);
+      const fingerprint = await MoudieEmulatorModule.fingerprintNativeGame(system as EmulatorSystem, asset.uri, asset.name);
       setStatus(t("segPreparingCore"));
-      await MoudieEmulatorModule.prepareFastLaunch(emulatorSystem, asset.uri, asset.name);
-      setGame({ name: asset.name, uri: asset.uri, fingerprint }); setReady(false);
-      setStatus(t("pspCacheReady"));
-    } catch (error) { const message = error instanceof Error ? error.message : t("tryAgain"); Alert.alert(t("chooseGameError"), message); setStatus(message); }
-    finally { setPicking(false); }
+      await MoudieEmulatorModule.prepareFastLaunch(system as EmulatorSystem, asset.uri, asset.name);
+      setGame({ name: asset.name, uri: asset.uri, fingerprint }); setReady(false); setStatus(t("pspCacheReady"));
+    } catch (error) { const message = error instanceof Error ? error.message : t("tryAgain"); Alert.alert(t("chooseGameError"), message); setStatus(message); } finally { setPicking(false); }
   };
 
   const markReady = async () => {
     if (!credential || !game || !assignedPlayer || !connected) return;
-    try {
-      await setRealtimeRoomReady({ roomId: numericRoomId, memberId: credential.memberId, memberToken: credential.memberToken, isReady: true, fingerprint: game.fingerprint, coreVersion });
-      socketRef.current?.emit("netplay:session-ready", { system, fingerprint: game.fingerprint, coreVersion }); setReady(true); setStatus(t("pspReadyConfirmed"));
-    } catch (error) { Alert.alert(t("readyError"), error instanceof Error ? error.message : t("tryAgain")); }
+    try { await setRealtimeRoomReady({ roomId: numericRoomId, memberId: credential.memberId, memberToken: credential.memberToken, isReady: true, fingerprint: game.fingerprint, coreVersion }); socketRef.current?.emit("netplay:session-ready", { system, fingerprint: game.fingerprint, coreVersion }); setReady(true); setStatus(t("pspReadyConfirmed")); }
+    catch (error) { Alert.alert(t("readyError"), error instanceof Error ? error.message : t("tryAgain")); }
   };
-
   const requestStart = () => { socketRef.current?.emit("netplay:session-start-request", { system }); setStarting(true); setStatus(t("p1CheckingBoth")); };
   const launch = async (netplay = false, settingsMode = false, synchronizedStart = false) => {
     if (!game || Platform.OS === "web") return;
