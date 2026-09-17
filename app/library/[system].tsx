@@ -11,15 +11,13 @@ import type { EmulatorCoreCapability, EmulatorSystem } from "@/modules/moudie-em
 import { useLanguage } from "@/lib/language";
 
 const routeSystems: Record<string, EmulatorSystem> = { famicom: "nes", nes: "nes", ps1: "ps1", psp: "psp", sega: "sega", n64: "n64", ps2: "ps2" };
-
-type SubtitleKey = "lsNesSubtitle" | "lsPs1Subtitle" | "lsPspSubtitle" | "lsSegaSubtitle" | "lsN64Subtitle" | "lsPS2Subtitle";
-const displayMeta: Record<EmulatorSystem, { title: string; subtitleKey: SubtitleKey; color: string; icon: keyof typeof MaterialCommunityIcons.glyphMap }> = {
-  nes: { title: "Famicom / NES", subtitleKey: "lsNesSubtitle", color: "#F6C453", icon: "controller-classic-outline" },
-  ps1: { title: "PlayStation 1", subtitleKey: "lsPs1Subtitle", color: "#B978FF", icon: "sony-playstation" },
-  psp: { title: "PlayStation Portable", subtitleKey: "lsPspSubtitle", color: "#33D8FF", icon: "gamepad-outline" },
-  sega: { title: "Sega Genesis", subtitleKey: "lsSegaSubtitle", color: "#68E69A", icon: "gamepad-variant-outline" },
-  n64: { title: "Nintendo 64", subtitleKey: "lsN64Subtitle", color: "#E7C85B", icon: "controller-classic-outline" },
-  ps2: { title: "PlayStation 2", subtitleKey: "lsPS2Subtitle", color: "#72A7FF", icon: "gamepad-variant" },
+const displayMeta: Record<EmulatorSystem, { title: string; subtitle: string; color: string; icon: keyof typeof MaterialCommunityIcons.glyphMap }> = {
+  nes: { title: "Famicom / NES", subtitle: "FCEUmm · Classic 8-bit", color: "#F6C453", icon: "controller-classic-outline" },
+  ps1: { title: "PlayStation 1", subtitle: "PCSX-ReARMed · Save states and controller editing", color: "#B978FF", icon: "sony-playstation" },
+  psp: { title: "PlayStation Portable", subtitle: "PPSSPP · ISO, CSO, CHD, PBP", color: "#33D8FF", icon: "gamepad-outline" },
+  sega: { title: "Sega Genesis", subtitle: "Genesis Plus GX · 3 or 6 button layouts", color: "#68E69A", icon: "gamepad-variant-outline" },
+  n64: { title: "Nintendo 64", subtitle: "Parallel-N64 · N64 controller + analog stick", color: "#E7C85B", icon: "controller-classic-outline" },
+  ps2: { title: "PlayStation 2", subtitle: "Play! · Analog + six-button/shoulder controls", color: "#72A7FF", icon: "gamepad-variant" },
 };
 
 export default function EmulatorLibraryScreen() {
@@ -60,7 +58,7 @@ export default function EmulatorLibraryScreen() {
         <View style={styles.header}><Pressable onPress={() => router.back()} style={styles.back} accessibilityLabel={t("commonBack")}><MaterialCommunityIcons name="arrow-left" color="#FFFFFF" size={22} /></Pressable><Text style={styles.headerText}>{t("lsHeader")}</Text></View>
         <View style={[styles.hero, { borderColor: `${meta.color}88` }]}>
           <View style={[styles.heroGlow, { backgroundColor: meta.color }]} /><View style={[styles.iconShell, { borderColor: meta.color }]}><MaterialCommunityIcons name={meta.icon} size={45} color={meta.color} /></View>
-          <Text style={styles.title}>{meta.title}</Text><Text style={styles.subtitle}>{t(meta.subtitleKey)}</Text>
+          <Text style={styles.title}>{meta.title}</Text><Text style={styles.subtitle}>{meta.subtitle}</Text>
           <View style={styles.coreRow}><Text style={[styles.coreName, { color: meta.color }]}>{capability?.coreName || t("lsCheckingCore")}</Text><View style={[styles.statusDot, { backgroundColor: capability?.available ? "#62E9A1" : capability?.downloadable ? "#75E9FF" : "#FFB677" }]} /><Text style={styles.statusText}>{capability?.available ? t("lsCoreReady") : capability?.downloadable ? t("lsDownloadsFirst") : t("androidRequired")}</Text></View>
         </View>
         <View style={styles.panel}>
