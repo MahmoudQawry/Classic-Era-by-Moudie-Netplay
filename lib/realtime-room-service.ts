@@ -39,12 +39,12 @@ async function readTrpcResponse<T>(response: Response, baseUrl: string): Promise
   throw new Error("خدمة الغرف أعادت استجابة غير مكتملة.");
 }
 
-// Mutations are never replayed to a second relay; only idempotent read-only queries may fail over.
+// Mutations are never replayed to a second relay: replaying a create/join mutation can duplicate a room or consume a second seat.
 async function request<T>(procedure: string, input: unknown, method: "GET" | "POST"): Promise<T> {
   const urls = relayUrls();
   if (urls.length === 0) throw new Error("لم يتم إعداد خادم الغرف في هذا الإصدار من التطبيق.");
   let lastError: unknown = null;
-  const candidates = method === "GET" ? urls : [urls[0]];
+  const candidates = method === "GET" ? urls : [urls[0]].filter(Boolean);
   for (const baseUrl of candidates) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -53,8 +53,7 @@ async function request<T>(procedure: string, input: unknown, method: "GET" | "PO
         ? { method, headers: { "content-type": "application/json", accept: "application/json" }, body: JSON.stringify({ json: input }), signal: controller.signal }
         : { method, headers: { accept: "application/json" }, signal: controller.signal });
       if (method === "GET" && (response.status >= 500 || response.status === 408 || response.status === 429)) {
-        lastError = new Error(`relay ${baseUrl} returned HTTP ${response.status}`);
-        continue;
+        lastError = new Error(`relay ${baseUrl} returned HTTP ${response.status}`); continue;
       }
       return await readTrpcResponse<T>(response, baseUrl);
     } catch (error) {
