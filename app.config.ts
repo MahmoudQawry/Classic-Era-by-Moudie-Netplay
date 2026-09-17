@@ -11,9 +11,9 @@ const bundleId = rawBundleId
   .toLowerCase()
   .split(".")
   .map((segment) => (/^[a-zA-Z]/.test(segment) ? segment : "x" + segment))
-  .join(".") || "space.manus.app";
+  .join(".") || "com.classicera.netplay";
 const timestamp = bundleId.split(".").pop()?.replace(/^t/, "") ?? "";
-const schemeFromBundleId = `manus${timestamp}`;
+const schemeFromBundleId = `classicera${timestamp}`;
 
 const env = {
   appName: "Classic Era by Moudie",
@@ -39,7 +39,7 @@ const config: ExpoConfig = {
     infoPlist: { ITSAppUsesNonExemptEncryption: false },
   },
   android: {
-    versionCode: 50,
+    versionCode: 51,
     adaptiveIcon: {
       backgroundColor: "#101827",
       foregroundImage: "./assets/images/classic-era-new-icon.png",
