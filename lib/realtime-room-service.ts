@@ -19,6 +19,7 @@ async function readTrpcResponse<T>(response: Response, baseUrl: string): Promise
   const data = body.result?.data; if (data !== undefined) { if (typeof data === "object" && data !== null && "json" in data) { const jsonValue = (data as { json?: T }).json; if (jsonValue !== undefined) return jsonValue; } else return data as T; }
   throw new Error("خدمة الغرف أعادت استجابة غير مكتملة.");
 }
+// Mutations are never replayed to a second relay; only idempotent read-only queries may fail over.
 async function request<T>(procedure: string, input: unknown, method: "GET" | "POST"): Promise<T> {
   const urls = relayUrls(); let lastError: unknown = null; const candidates = method === "GET" ? urls : [urls[0]].filter(Boolean);
   for (const baseUrl of candidates) { const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS); try {
