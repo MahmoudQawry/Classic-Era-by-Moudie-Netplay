@@ -28,6 +28,10 @@ replacements = [
         '    val face = arrayOf(74 to 168, 132 to 110, 16 to 110, 74 to 52)\n    p.actionButtons.forEachIndexed { i, c -> addControl(c, Gravity.RIGHT or Gravity.BOTTOM, face.getOrElse(i) { 74 to 52 }.first, face.getOrElse(i) { 74 to 52 }.second) }\n',
         '''    val face = when (definition.system) {\n      "n64" -> arrayOf(74 to 168, 132 to 110, 74 to 52, 74 to 110, 16 to 110, 132 to 52, 16 to 52)\n      "sega" -> arrayOf(74 to 168, 132 to 110, 16 to 110, 74 to 52, 132 to 52, 16 to 52)\n      else -> arrayOf(74 to 168, 132 to 110, 16 to 110, 74 to 52)\n    }\n    p.actionButtons.forEachIndexed { i, c ->\n      val position = face.getOrElse(i) { face.last() }\n      addControl(c, Gravity.RIGHT or Gravity.BOTTOM, position.first, position.second)\n    }\n'''
     ),
+    (
+        '    p.shoulderButtons.forEachIndexed { i, c -> addControl(c, if (i % 2 == 0) Gravity.LEFT or Gravity.TOP else Gravity.RIGHT or Gravity.TOP, 16 + (i / 2) * 72, 18) }\n',
+        '    p.shoulderButtons.forEachIndexed { i, c -> val margin = 16 + (i / 2) * 72; val sideMargin = if (i % 2 == 0) margin else margin + 56; addControl(c, if (i % 2 == 0) Gravity.LEFT or Gravity.TOP else Gravity.RIGHT or Gravity.TOP, sideMargin, 18) }\n'
+    ),
 ]
 
 for old, new in replacements:
@@ -36,4 +40,4 @@ for old, new in replacements:
     text = text.replace(old, new, 1)
 
 path.write_text(text, encoding="utf-8")
-print("Universal emulator runtime patched: local multi-controller ports + lockstep clock consistency + safe Android navigation + six-button layouts")
+print("Universal emulator runtime patched: local multi-controller ports + lockstep clock consistency + safe Android navigation + six-button layouts + safe HUD spacing")
