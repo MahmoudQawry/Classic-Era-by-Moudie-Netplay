@@ -1,6 +1,6 @@
 import type { StyleProp, ViewStyle } from "react-native";
 
-export type EmulatorSystem = "nes" | "sega" | "ps1" | "psp";
+export type EmulatorSystem = "nes" | "sega" | "ps1" | "psp" | "n64" | "ps2";
 
 export type EmulatorRuntimeStatus = {
   runtime: "android-native" | "web-preview";
@@ -22,7 +22,7 @@ export type EmulatorCoreCapability = {
   available: boolean;
   downloadable: boolean;
   localPlay: boolean;
-  netplay: "retroarch" | "psp-network" | "planned";
+  netplay: "retroarch" | "psp-network" | "moudie-relay" | "planned";
   maxRoomMembers: number;
   maxControllerSlots: number;
   acceptedExtensions: string[];
@@ -39,4 +39,4 @@ export type MoudieEmulatorViewProps = {
   style?: StyleProp<ViewStyle>;
 };
 
-export const EMULATOR_SYSTEMS: EmulatorSystem[] = ["nes", "ps1", "psp", "sega"];
+export const EMULATOR_SYSTEMS: EmulatorSystem[] = ["nes", "ps1", "psp", "sega", "n64", "ps2"];
