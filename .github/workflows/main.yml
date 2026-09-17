@@ -20,12 +20,10 @@ jobs:
         uses: actions/checkout@v4
       - name: ⚙️ تثبيت Node.js
         uses: actions/setup-node@v4
-        with:
-          node-version: '20'
+        with: { node-version: '20' }
       - name: 📦 تثبيت pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 9.12.0
+        with: { version: 9.12.0 }
       - name: 📥 تثبيت الحزم
         run: pnpm install --no-frozen-lockfile
       - name: 🧪 فحص TypeScript
@@ -41,9 +39,7 @@ jobs:
           python3 scripts/fix-router-types.py
       - name: 🤖 تثبيت Java 17
         uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
+        with: { distribution: 'temurin', java-version: '17' }
       - name: 🎮 تضمين أنوية المحاكيات الستة في الـ APK
         run: |
           chmod +x scripts/sync-libretro-cores.sh
@@ -53,7 +49,7 @@ jobs:
           test -s modules/moudie-emulator/android/src/main/jniLibs/arm64-v8a/pcsx_rearmed_libretro_android.so
           test -s modules/moudie-emulator/android/src/main/jniLibs/arm64-v8a/ppsspp_libretro_android.so
           test -s modules/moudie-emulator/android/src/main/jniLibs/arm64-v8a/genesis_plus_gx_libretro_android.so
-          test -s modules/moudie-emulator/android/src/main/jniLibs/arm64-v8a/mupen64plus_next_libretro_android.so
+          test -s modules/moudie-emulator/android/src/main/jniLibs/arm64-v8a/parallel_n64_libretro_android.so
           test -s modules/moudie-emulator/android/src/main/jniLibs/arm64-v8a/play_libretro_android.so
           grep -q '"n64"' modules/moudie-emulator/android/src/main/java/expo/modules/moudieemulator/NativeCoreCatalog.kt
           grep -q '"ps2"' modules/moudie-emulator/android/src/main/java/expo/modules/moudieemulator/NativeCoreCatalog.kt
