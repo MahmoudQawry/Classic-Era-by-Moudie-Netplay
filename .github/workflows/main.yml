@@ -18,26 +18,20 @@ jobs:
     steps:
       - name: 📥 جلب الكود
         uses: actions/checkout@v4
-
       - name: ⚙️ تثبيت Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-
       - name: 📦 تثبيت pnpm
         uses: pnpm/action-setup@v4
         with:
           version: 9.12.0
-
       - name: 📥 تثبيت الحزم
         run: pnpm install --no-frozen-lockfile
-
       - name: 🧪 فحص TypeScript
         run: pnpm check
-
       - name: 🧪 تشغيل الاختبارات
         run: pnpm test
-
       - name: 🖐️ تثبيت نظام التحكم الحقيقي متعدد الأصابع
         run: |
           python3 scripts/apply-native-multitouch-fix.py
@@ -45,39 +39,34 @@ jobs:
           python3 scripts/apply-universal-connected-dpad.py
           python3 scripts/apply-famicom-connected-dpad.py
           python3 scripts/fix-router-types.py
-
       - name: 🤖 تثبيت Java 17
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
-
-      - name: 🎮 تضمين أنوية المحاكيات الأربعة في الـ APK
+      - name: 🎮 تضمين أنوية المحاكيات الستة في الـ APK
         run: |
           chmod +x scripts/sync-libretro-cores.sh
           ./scripts/sync-libretro-cores.sh arm64-v8a
+          python3 scripts/patch-six-core-catalog.py
           test -s modules/moudie-emulator/android/src/main/jniLibs/arm64-v8a/fceumm_libretro_android.so
           test -s modules/moudie-emulator/android/src/main/jniLibs/arm64-v8a/pcsx_rearmed_libretro_android.so
           test -s modules/moudie-emulator/android/src/main/jniLibs/arm64-v8a/ppsspp_libretro_android.so
           test -s modules/moudie-emulator/android/src/main/jniLibs/arm64-v8a/genesis_plus_gx_libretro_android.so
-
+          test -s modules/moudie-emulator/android/src/main/jniLibs/arm64-v8a/mupen64plus_next_libretro_android.so
+          test -s modules/moudie-emulator/android/src/main/jniLibs/arm64-v8a/play_libretro_android.so
+          grep -q '"n64"' modules/moudie-emulator/android/src/main/java/expo/modules/moudieemulator/NativeCoreCatalog.kt
+          grep -q '"ps2"' modules/moudie-emulator/android/src/main/java/expo/modules/moudieemulator/NativeCoreCatalog.kt
       - name: 🔧 Prebuild Android
         run: npx expo prebuild --platform android
-
       - name: 🛡️ استعادة مسار الإقلاع العادي
         run: python3 scripts/restore-plain-android-startup.py
-
       - name: 🔨 إصلاح صلاحيات Gradle
         run: chmod +x android/gradlew
-
       - name: 🏗️ بناء APK مستقل (Release)
         run: |
           cd android
-          ./gradlew assembleRelease \
-            --no-daemon \
-            -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=512m" \
-            -Dorg.gradle.daemon=false
-
+          ./gradlew assembleRelease --no-daemon -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=512m" -Dorg.gradle.daemon=false
       - name: 📤 رفع APK المستقل
         uses: actions/upload-artifact@v4
         with:
