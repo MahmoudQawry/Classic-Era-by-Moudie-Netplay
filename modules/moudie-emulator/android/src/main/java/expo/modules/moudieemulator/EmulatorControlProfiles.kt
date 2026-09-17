@@ -23,14 +23,13 @@ object EmulatorControlProfiles {
   val PSP = EmulatorControlProfile("psp", dpad(), listOf(EmulatorTouchButton("triangle", "△", KeyEvent.KEYCODE_BUTTON_X), EmulatorTouchButton("circle", "○", KeyEvent.KEYCODE_BUTTON_A), EmulatorTouchButton("square", "□", KeyEvent.KEYCODE_BUTTON_Y), EmulatorTouchButton("cross", "×", KeyEvent.KEYCODE_BUTTON_B)), listOf(EmulatorTouchButton("select", "SELECT", KeyEvent.KEYCODE_BUTTON_SELECT), EmulatorTouchButton("start", "START", KeyEvent.KEYCODE_BUTTON_START)), listOf(EmulatorTouchButton("l", "L", KeyEvent.KEYCODE_BUTTON_L1), EmulatorTouchButton("r", "R", KeyEvent.KEYCODE_BUTTON_R1)))
   val SEGA = EmulatorControlProfile("sega", dpad(), listOf(EmulatorTouchButton("a", "A", KeyEvent.KEYCODE_BUTTON_A), EmulatorTouchButton("b", "B", KeyEvent.KEYCODE_BUTTON_B), EmulatorTouchButton("c", "C", KeyEvent.KEYCODE_BUTTON_C), EmulatorTouchButton("x", "X", KeyEvent.KEYCODE_BUTTON_X), EmulatorTouchButton("y", "Y", KeyEvent.KEYCODE_BUTTON_Y), EmulatorTouchButton("z", "Z", KeyEvent.KEYCODE_BUTTON_Z)), listOf(EmulatorTouchButton("start", "START", KeyEvent.KEYCODE_BUTTON_START)))
 
-  // N64 keeps the familiar face-button cluster while exposing C/Z/L/R for games that use them.
   val N64 = EmulatorControlProfile("n64", dpad(), listOf(
     EmulatorTouchButton("a", "A", KeyEvent.KEYCODE_BUTTON_A), EmulatorTouchButton("b", "B", KeyEvent.KEYCODE_BUTTON_B),
-    EmulatorTouchButton("c", "C", KeyEvent.KEYCODE_BUTTON_C), EmulatorTouchButton("x", "C↑", KeyEvent.KEYCODE_BUTTON_X),
-    EmulatorTouchButton("y", "C↓", KeyEvent.KEYCODE_BUTTON_Y), EmulatorTouchButton("z", "Z", KeyEvent.KEYCODE_BUTTON_Z),
+    EmulatorTouchButton("cup", "C↑", KeyEvent.KEYCODE_BUTTON_X), EmulatorTouchButton("cdown", "C↓", KeyEvent.KEYCODE_BUTTON_Y),
+    EmulatorTouchButton("cleft", "C←", KeyEvent.KEYCODE_BUTTON_C), EmulatorTouchButton("cright", "C→", KeyEvent.KEYCODE_BUTTON_Z),
+    EmulatorTouchButton("z", "Z", KeyEvent.KEYCODE_BUTTON_L2),
   ), listOf(EmulatorTouchButton("start", "START", KeyEvent.KEYCODE_BUTTON_START)), listOf(EmulatorTouchButton("l", "L", KeyEvent.KEYCODE_BUTTON_L1), EmulatorTouchButton("r", "R", KeyEvent.KEYCODE_BUTTON_R1)))
 
-  // Play! uses the PS-style face/shoulder layout; analog is handled by the physical controller when available.
   val PS2 = EmulatorControlProfile("ps2", dpad(), listOf(
     EmulatorTouchButton("triangle", "△", KeyEvent.KEYCODE_BUTTON_X), EmulatorTouchButton("circle", "○", KeyEvent.KEYCODE_BUTTON_A),
     EmulatorTouchButton("square", "□", KeyEvent.KEYCODE_BUTTON_Y), EmulatorTouchButton("cross", "×", KeyEvent.KEYCODE_BUTTON_B),
