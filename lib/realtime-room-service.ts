@@ -20,6 +20,7 @@ async function readTrpcResponse<T>(response: Response, baseUrl: string): Promise
   throw new Error("خدمة الغرف أعادت استجابة غير مكتملة.");
 }
 // Mutations are never replayed to a second relay; only idempotent read-only queries may fail over.
+// A failed mutation can duplicate a room or consume a second seat, so POST requests stay on one relay.
 async function request<T>(procedure: string, input: unknown, method: "GET" | "POST"): Promise<T> {
   const urls = relayUrls(); let lastError: unknown = null; const candidates = method === "GET" ? urls : [urls[0]].filter(Boolean);
   for (const baseUrl of candidates) { const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS); try {
