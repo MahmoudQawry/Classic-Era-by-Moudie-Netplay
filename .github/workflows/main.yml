@@ -45,6 +45,7 @@ jobs:
           chmod +x scripts/sync-libretro-cores.sh
           ./scripts/sync-libretro-cores.sh arm64-v8a
           python3 scripts/patch-six-core-catalog.py
+          python3 scripts/patch-emulator-runtime.py
           test -s modules/moudie-emulator/android/src/main/jniLibs/arm64-v8a/fceumm_libretro_android.so
           test -s modules/moudie-emulator/android/src/main/jniLibs/arm64-v8a/pcsx_rearmed_libretro_android.so
           test -s modules/moudie-emulator/android/src/main/jniLibs/arm64-v8a/ppsspp_libretro_android.so
@@ -53,6 +54,8 @@ jobs:
           test -s modules/moudie-emulator/android/src/main/jniLibs/arm64-v8a/play_libretro_android.so
           grep -q '"n64"' modules/moudie-emulator/android/src/main/java/expo/modules/moudieemulator/NativeCoreCatalog.kt
           grep -q '"ps2"' modules/moudie-emulator/android/src/main/java/expo/modules/moudieemulator/NativeCoreCatalog.kt
+          grep -q 'System.currentTimeMillis()' modules/moudie-emulator/android/src/main/java/expo/modules/moudieemulator/UniversalLibretroPlayerActivity.kt
+          grep -q 'localDevicePorts' modules/moudie-emulator/android/src/main/java/expo/modules/moudieemulator/UniversalLibretroPlayerActivity.kt
       - name: 🔧 Prebuild Android
         run: npx expo prebuild --platform android
       - name: 🛡️ استعادة مسار الإقلاع العادي
