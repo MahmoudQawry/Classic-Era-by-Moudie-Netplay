@@ -30,4 +30,19 @@ describe("public lobby contract", () => {
     expect(service).toContain('"rooms.joinPublic"');
     expect(service).toContain('"rooms.publicList"');
   });
+
+  it("never exposes a hard-coded provider relay or endpoint in the public lobby path", () => {
+    const lobby = readProjectFile("app/public-lobby.tsx");
+    const oauth = readProjectFile("constants/oauth.ts");
+    expect(lobby).not.toContain("manus.space");
+    expect(lobby).not.toContain("Alert.alert(t(\"lbLoadError\"");
+    expect(oauth).not.toContain("manus.space");
+    expect(oauth).not.toContain("NATIVE_NETPLAY_SERVICE_FALLBACK_URL");
+  });
+
+  it("does not initialize the removed preview runtime at app startup", () => {
+    const layout = readProjectFile("app/_layout.tsx");
+    expect(layout).not.toContain("manus-runtime");
+    expect(layout).not.toContain("initManusRuntime");
+  });
 });
