@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Downloads Android arm64 Libretro cores and the matching PPSSPP system package
-# from the official Libretro buildbot. These files are intentionally not committed:
-# large native binaries are fetched by CI into the APK at build time.
+# Android arm64 Libretro cores are fetched from the official Libretro buildbot
+# during CI. Executable cores are never downloaded by the app at runtime.
 ABI="${1:-arm64-v8a}"
 TARGET="modules/moudie-emulator/android/src/main/jniLibs/${ABI}"
 ASSETS_TARGET="modules/moudie-emulator/android/src/main/assets/ppsspp"
@@ -24,8 +23,7 @@ fetch_core() {
   local local_name="$2"
   local archive="${TEMP_DIR}/${local_name}.zip"
   echo "Downloading ${remote_name}…"
-  curl --fail --location --retry 3 --retry-delay 2 \
-    -o "${archive}" "${BASE_URL}/${remote_name}_libretro_android.so.zip"
+  curl --fail --location --retry 3 --retry-delay 2 -o "${archive}" "${BASE_URL}/${remote_name}_libretro_android.so.zip"
   unzip -p "${archive}" "${remote_name}_libretro_android.so" > "${TARGET}/${local_name}_libretro_android.so"
   test -s "${TARGET}/${local_name}_libretro_android.so"
 }
@@ -34,16 +32,10 @@ fetch_ppsspp_assets() {
   local archive="${TEMP_DIR}/PPSSPP.zip"
   echo "Downloading official PPSSPP system assets…"
   curl --fail --location --retry 3 --retry-delay 2 -o "${archive}" "${SYSTEM_URL}"
-  rm -rf "${ASSETS_TARGET}"
-  mkdir -p "${ASSETS_TARGET}"
+  rm -rf "${ASSETS_TARGET}"; mkdir -p "${ASSETS_TARGET}"
   unzip -q "${archive}" -d "${ASSETS_TARGET}"
-  # Buildbot packages are expected to contain the PPSSPP directory. Keep a stable
-  # asset root regardless of whether the zip has a top-level folder.
   if [[ -d "${ASSETS_TARGET}/PPSSPP" ]]; then
-    shopt -s dotglob
-    mv "${ASSETS_TARGET}/PPSSPP"/* "${ASSETS_TARGET}/"
-    rmdir "${ASSETS_TARGET}/PPSSPP"
-    shopt -u dotglob
+    shopt -s dotglob; mv "${ASSETS_TARGET}/PPSSPP"/* "${ASSETS_TARGET}/"; rmdir "${ASSETS_TARGET}/PPSSPP"; shopt -u dotglob
   fi
   test -f "${ASSETS_TARGET}/ppge_atlas.zim" || { echo "PPSSPP assets are incomplete." >&2; exit 3; }
 }
@@ -52,6 +44,9 @@ fetch_core fceumm fceumm
 fetch_core pcsx_rearmed pcsx_rearmed
 fetch_core genesis_plus_gx genesis_plus_gx
 fetch_core ppsspp ppsspp
+fetch_core mupen64plus_next mupen64plus_next
+# Play! is the lighter PS2 Libretro option selected for a simple Android runtime.
+fetch_core play play
 fetch_ppsspp_assets
 
-echo "Installed Libretro cores and PPSSPP system assets."
+echo "Installed Libretro cores: NES, PS1, PSP, Sega, N64, PS2 (Play!)."
