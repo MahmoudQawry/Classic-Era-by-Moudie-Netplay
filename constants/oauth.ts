@@ -3,7 +3,7 @@ import * as ReactNative from "react-native";
 
 const bundleId = "com.app.moudienetplay";
 const timestamp = bundleId.split(".").pop()?.replace(/^t/, "") ?? "";
-const schemeFromBundleId = `manus${timestamp}`;
+const schemeFromBundleId = `classicera${timestamp}`;
 
 const env = {
   portal: process.env.EXPO_PUBLIC_OAUTH_PORTAL_URL ?? "",
@@ -17,18 +17,14 @@ const env = {
   deepLinkScheme: schemeFromBundleId,
 };
 
-// Backward-compatible fallback for the currently published project. Production
-// builds should set EXPO_PUBLIC_NETPLAY_SERVICE_URL to the global realtime
-// hostname. Regional URLs may be supplied as a comma-separated pool through
-// EXPO_PUBLIC_NETPLAY_SERVICE_URLS; the same room is deterministically pinned
-// to one relay so room state never gets split across regions.
-const NATIVE_NETPLAY_SERVICE_FALLBACK_URL = "https://moudienet-7h7tawv.manus.space";
+// Production builds must provide a real realtime service through environment
+// configuration. There is intentionally no hard-coded provider URL.
 const configuredRelayUrls = env.netplayServiceUrls
   .split(",")
   .map((url) => url.trim().replace(/\/$/, ""))
   .filter(Boolean);
-const NATIVE_NETPLAY_SERVICE_URL = (env.netplayServiceUrl || configuredRelayUrls[0] || NATIVE_NETPLAY_SERVICE_FALLBACK_URL).replace(/\/$/, "");
-const NATIVE_NETPLAY_SERVICE_URLS = Array.from(new Set([NATIVE_NETPLAY_SERVICE_URL, ...configuredRelayUrls]));
+const NATIVE_NETPLAY_SERVICE_URL = (env.netplayServiceUrl || configuredRelayUrls[0] || "").replace(/\/$/, "");
+const NATIVE_NETPLAY_SERVICE_URLS = Array.from(new Set([NATIVE_NETPLAY_SERVICE_URL, ...configuredRelayUrls].filter(Boolean)));
 
 // REST room credentials and Socket.IO must target the same published service.
 const NATIVE_API_FALLBACK_URL = NATIVE_NETPLAY_SERVICE_URL;
@@ -43,11 +39,9 @@ export const API_BASE_URL = env.apiBaseUrl;
 /**
  * Get the API base URL.
  *
- * Native production builds may use a dedicated API origin. The previous
- * implementation ignored EXPO_PUBLIC_API_BASE_URL on native and always sent
- * room snapshots/media-token requests to the realtime relay fallback. Keeping
- * an explicit native override makes the API and Socket.IO origins independently
- * configurable while preserving the old fallback when no override is set.
+ * Native production builds may use a dedicated API origin. When no origin is
+ * configured, return an empty value so callers can fail locally without
+ * contacting an unrelated service.
  */
 export function getApiBaseUrl(): string {
   if (ReactNative.Platform.OS !== "web") {
@@ -80,7 +74,7 @@ export function getNetplayServiceUrls(): string[] {
 }
 
 export const SESSION_TOKEN_KEY = "app_session_token";
-export const USER_INFO_KEY = "manus-runtime-user-info";
+export const USER_INFO_KEY = "runtime-user-info";
 
 const encodeState = (value: string) => {
   if (typeof globalThis.btoa === "function") {
