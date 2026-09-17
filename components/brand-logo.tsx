@@ -1,14 +1,13 @@
-import { StyleSheet, Text, View } from "react-native";
+import { Image, StyleSheet, View } from "react-native";
 
 type Props = { size?: number };
 
-/** Shared Moudie NetPlay brand mark. The MN monogram replaces the old single-M mark in UI chrome. */
+/** Shared MN brand mark. Uses the canonical app icon asset everywhere in the UI. */
 export function BrandLogo({ size = 44 }: Props) {
   const radius = Math.round(size * 0.28);
   return (
-    <View accessibilityLabel="MN — Moudie NetPlay" style={[styles.mark, { width: size, height: size, borderRadius: radius }]}>
-      <Text style={[styles.monogram, { fontSize: Math.max(16, Math.round(size * 0.42)) }]}>MN</Text>
-      <View style={styles.glow} />
+    <View accessibilityLabel="MN — Classic Era" style={[styles.mark, { width: size, height: size, borderRadius: radius }]}>
+      <Image source={require("@/assets/images/classic-era-new-icon.png")} style={styles.image} resizeMode="cover" />
     </View>
   );
 }
@@ -26,6 +25,5 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 4,
   },
-  monogram: { color: "#F7F4FF", fontWeight: "900", letterSpacing: -1, zIndex: 2 },
-  glow: { position: "absolute", width: "80%", height: "32%", bottom: -6, borderRadius: 30, backgroundColor: "#38DFFF", opacity: 0.18 },
+  image: { width: "100%", height: "100%" },
 });
