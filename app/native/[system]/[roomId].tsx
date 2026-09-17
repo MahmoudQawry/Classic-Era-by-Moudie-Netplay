@@ -7,7 +7,7 @@ import { ScreenContainer } from "@/components/screen-container";
 import { useLanguage } from "@/lib/language";
 import { RoomChat } from "@/components/room-chat";
 import { RoomVoiceChat, type RoomVoiceChatHandle } from "@/components/room-voice-chat";
-import { getNetplayServiceUrl } from "@/constants/oauth";
+import { getRoomRelayUrl } from "@/lib/netplay-socket";
 import { createNetplaySocket } from "@/lib/netplay-socket";
 import { setRealtimeRoomReady } from "@/lib/realtime-room-service";
 import { getRoomCredential, type RoomCredential } from "@/lib/room-storage";
@@ -15,16 +15,21 @@ import { useRealtimeRoomSnapshot } from "@/lib/use-realtime-room-snapshot";
 import MoudieEmulatorModule from "@/modules/moudie-emulator/src/MoudieEmulatorModule";
 import type { EmulatorSystem } from "@/modules/moudie-emulator/src/MoudieEmulator.types";
 
-type RoomSystem = "sega";
+type RoomSystem = "sega" | "n64" | "ps2";
 type Game = { name: string; uri: string; fingerprint: string };
 type PlayerSeat = 1 | 2 | 3 | 4;
 const isPlayerSeat = (value: unknown): value is PlayerSeat => typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= 4;
-const SYSTEM_META: Record<RoomSystem, { title: string; color: string }> = { sega: { title: "Sega Genesis", color: "#70E39B" } };
+const SYSTEM_META: Record<RoomSystem, { title: string; color: string; statusKey: string }> = {
+  sega: { title: "Sega Genesis", color: "#70E39B", statusKey: "segInitialStatus" },
+  n64: { title: "Nintendo 64", color: "#E7C85B", statusKey: "segInitialStatus" },
+  ps2: { title: "PlayStation 2", color: "#72A7FF", statusKey: "segInitialStatus" },
+};
 
 export default function NativeRoomScreen() {
   const { t } = useLanguage();
-  const { roomId } = useLocalSearchParams<{ roomId: string; system: string }>();
-  const system: RoomSystem = "sega";
+  const { roomId, system: rawSystem } = useLocalSearchParams<{ roomId: string; system: string }>();
+  const system: RoomSystem = rawSystem === "n64" ? "n64" : rawSystem === "ps2" ? "ps2" : "sega";
+  const emulatorSystem = system as EmulatorSystem;
   const meta = SYSTEM_META[system];
   const numericRoomId = Number(roomId);
   const [credential, setCredential] = useState<RoomCredential | null | undefined>(undefined);
@@ -38,13 +43,13 @@ export default function NativeRoomScreen() {
   const [starting, setStarting] = useState(false);
   const [picking, setPicking] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
-  const statusText = status === null ? t("segInitialStatus") : status;
+  const statusText = status === null ? t(meta.statusKey) : status;
   const socketRef = useRef<ReturnType<typeof createNetplaySocket> | null>(null);
   const voiceChatRef = useRef<RoomVoiceChatHandle | null>(null);
   const launchRef = useRef<(netplay?: boolean, settingsMode?: boolean, synchronizedStart?: boolean) => Promise<void>>(async () => undefined);
-  const catalog = useMemo(() => MoudieEmulatorModule.getCoreCatalog().find((entry) => entry.system === system), [system]);
+  const catalog = useMemo(() => MoudieEmulatorModule.getCoreCatalog().find((entry) => entry.system === emulatorSystem), [emulatorSystem]);
   const snapshotQuery = useRealtimeRoomSnapshot(numericRoomId, credential, 4_000);
-  const coreVersion = `moudie-${system}-libretro-lockstep-v2-adaptive`;
+  const coreVersion = `moudie-${system}-libretro-lockstep-v3`;
 
   useEffect(() => { if (Number.isFinite(numericRoomId)) getRoomCredential(numericRoomId).then(setCredential); }, [numericRoomId]);
   useEffect(() => {
@@ -65,7 +70,7 @@ export default function NativeRoomScreen() {
     const start = (payload: { system?: string }) => { if (payload.system === system) void launchRef.current(true, false, true); };
     socket.on("connect", () => setConnected(true)); socket.on("disconnect", disconnected); socket.on("netplay:joined", joined); socket.on("netplay:presence", presence); socket.on("netplay:session-start", start); socket.on("netplay:session-start-refused", (payload: { message?: string }) => setStatus(payload.message || t("segWaitingOther"))); socket.connect();
     return () => { socket.disconnect(); if (socketRef.current === socket) socketRef.current = null; };
-  }, [credential, game, numericRoomId, system]);
+  }, [credential, numericRoomId, system, t]);
 
   const chooseGame = async () => {
     try {
@@ -79,15 +84,14 @@ export default function NativeRoomScreen() {
       if (!catalog.acceptedExtensions.includes(extension)) throw new Error(t("lsExtPrefix") + ": " + meta.title + " (" + catalog.acceptedExtensions.map((value) => "." + value).join(", ") + ")");
       if (Platform.OS === "web") throw new Error(t("androidRoomOnly"));
       setStatus(t("segCheckingFingerprint"));
-      const fingerprint = await MoudieEmulatorModule.fingerprintNativeGame(system as EmulatorSystem, asset.uri, asset.name);
+      const fingerprint = await MoudieEmulatorModule.fingerprintNativeGame(emulatorSystem, asset.uri, asset.name);
       setStatus(t("segPreparingCore"));
-      await MoudieEmulatorModule.prepareFastLaunch(system as EmulatorSystem, asset.uri, asset.name);
+      await MoudieEmulatorModule.prepareFastLaunch(emulatorSystem, asset.uri, asset.name);
       setGame({ name: asset.name, uri: asset.uri, fingerprint }); setReady(false);
       setStatus(t("pspCacheReady"));
     } catch (error) { const message = error instanceof Error ? error.message : t("tryAgain"); Alert.alert(t("chooseGameError"), message); setStatus(message); }
     finally { setPicking(false); }
   };
-
 
   const markReady = async () => {
     if (!credential || !game || !assignedPlayer || !connected) return;
@@ -101,16 +105,16 @@ export default function NativeRoomScreen() {
   const launch = async (netplay = false, settingsMode = false, synchronizedStart = false) => {
     if (!game || Platform.OS === "web") return;
     try {
-      const session = netplay && credential && assignedPlayer && (synchronizedStart || connected) ? { serverUrl: getNetplayServiceUrl(), roomId: numericRoomId, memberId: credential.memberId, memberToken: credential.memberToken, system, fingerprint: game.fingerprint, coreVersion, player: assignedPlayer } : undefined;
+      const session = netplay && credential && assignedPlayer && (synchronizedStart || connected) ? { serverUrl: getRoomRelayUrl(numericRoomId), roomId: numericRoomId, memberId: credential.memberId, memberToken: credential.memberToken, system, fingerprint: game.fingerprint, coreVersion, player: assignedPlayer } : undefined;
       if (netplay && !session) throw new Error(t("netplayNeedsSeat"));
-      await MoudieEmulatorModule.launchNativeGame(system as EmulatorSystem, game.uri, game.name, { orientation, aspectRatio, settingsMode }, session);
+      await MoudieEmulatorModule.launchNativeGame(emulatorSystem, game.uri, game.name, { orientation, aspectRatio, settingsMode }, session);
     } catch (error) { const message = error instanceof Error ? error.message : t("tryAgain"); Alert.alert(t("startGameError") + `: ${meta.title}`, message); setStatus(message); }
   };
   launchRef.current = launch;
 
   const host = snapshotQuery.data?.members.find((member) => member.id === credential?.memberId)?.role === "host";
   const canStart = Boolean(ready && assignedPlayer === 1 && remoteOnline && connected && !starting);
-  return <ScreenContainer className="px-5" edges={["top", "bottom", "left", "right"]}><ScrollView contentContainerStyle={styles.content}>
+  return <ScreenContainer className="px-5" edges={["top", "bottom", "left", "right"]><ScrollView contentContainerStyle={styles.content}>
     <View style={styles.top}><Pressable onPress={() => router.replace({ pathname: "/room/[roomId]", params: { roomId: String(roomId) } })}><Text style={styles.back}>‹ {t("fcBackToRoom")}</Text></Pressable><Text style={[styles.chip, { color: meta.color }]}>{system.toUpperCase()} {t("segRoom")}</Text></View>
     <Text style={[styles.eyebrow, { color: meta.color }]}>{catalog?.coreName || t("lsCheckingCore")}</Text><Text style={styles.title}>{meta.title}</Text><Text style={styles.copy}>{t("segCopy")}</Text>
     <View style={styles.card}><Text style={styles.file}>{game?.name || t("fcNoGame")}</Text><Text style={styles.fileInfo}>{assignedPlayer ? `${t("rmPlayerShort")} ${assignedPlayer}` : t("segSpectatorSlot")}</Text></View>
