@@ -10,7 +10,7 @@ describe("Android startup splash safeguards", () => {
     const rootLayout = readProjectFile("app/_layout.tsx");
     expect(rootLayout).not.toContain("preventAutoHideAsync");
     expect(rootLayout).not.toContain("SplashScreen.hideAsync");
-    expect(rootLayout).toContain('if (Platform.OS !== "web") return;');
+    expect(rootLayout).toContain('const shouldOverrideSafeArea = Platform.OS === "web";');
   });
 
   it("does not install Expo's native pre-draw splash gate that can retain the Android logo", () => {
@@ -79,7 +79,6 @@ describe("Android startup splash safeguards", () => {
     expect(settings).not.toContain("🇬🇧");
     const language = readProjectFile("lib/language.tsx");
     expect(language).toContain('AppLanguage = "ar" | "en" | "fr"');
-    // Arabic wording reviewed with the owner: the lobby is now "الساحة".
     expect(language).toContain("الساحة");
     expect(language).toContain("Bibliothèque");
   });
