@@ -26,8 +26,10 @@ export default function PublicLobbyScreen() {
     try {
       setLoading(true);
       setRooms(await listPublicRealtimeRooms());
-    } catch (error) {
-      Alert.alert(t("lbLoadError"), error instanceof Error ? error.message : t("lbLoadErrorBody"));
+    } catch {
+      // Public lobby discovery is optional. Never interrupt the lobby with a
+      // provider/relay error dialog; an unavailable relay simply looks empty.
+      setRooms([]);
     } finally {
       setLoading(false);
     }
