@@ -100,6 +100,18 @@ jobs:
         run: |
           cd android
           ./gradlew assembleRelease --no-daemon -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=512m" -Dorg.gradle.daemon=false
+      - name: 🔬 تدقيق جسر Play! داخل APK
+        run: |
+          set -e
+          APK="android/app/build/outputs/apk/release/app-release.apk"
+          rm -rf /tmp/moudie-apk-check
+          mkdir -p /tmp/moudie-apk-check
+          unzip -q "$APK" 'lib/arm64-v8a/*' -d /tmp/moudie-apk-check
+          test -s /tmp/moudie-apk-check/lib/arm64-v8a/libmoudie_play_bridge.so
+          test -s /tmp/moudie-apk-check/lib/arm64-v8a/play_libretro_android.so
+          readelf -Ws /tmp/moudie-apk-check/lib/arm64-v8a/libmoudie_play_bridge.so | grep -q 'Java_expo_modules_moudieemulator_UniversalLibretroPlayerActivity_nativeInitializePlayJavaVm'
+          readelf -Ws /tmp/moudie-apk-check/lib/arm64-v8a/play_libretro_android.so | grep -q '_ZN9Framework7CJavaVM9SetJavaVMEP7_JavaVM'
+          echo "Play! JNI bridge and target setter symbol are present in the release APK."
       - name: 📤 رفع APK المستقل
         uses: actions/upload-artifact@v4
         with:
