@@ -3,11 +3,8 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 const activityPath = resolve("modules/moudie-emulator/android/src/main/java/expo/modules/moudieemulator/UniversalLibretroPlayerActivity.kt");
-const bridgePath = resolve("modules/moudie-emulator/android/src/main/cpp/play_jni_bridge.cpp");
-
 describe("native emulator control safeguards", () => {
   const activity = readFileSync(activityPath, "utf8");
-  const bridge = readFileSync(bridgePath, "utf8");
 
   it("enables an analog control by default for PS1, PSP, N64 and PS2 and persists it per system", () => {
     expect(activity).toContain('preferences.getBoolean("analog-enabled-\${definition.system}", definition.system in setOf("ps1", "psp", "n64", "ps2"))');
@@ -32,23 +29,22 @@ describe("native emulator control safeguards", () => {
     expect(catalog).toContain("EmulatorControlProfiles.PS2");
   });
 
-  it("prevents Play! from being loaded twice through System.load and dlopen", () => {
+  it("keeps Play! JavaVM initialization inside the exact libretro core instance", () => {
     expect(activity).not.toContain("System.load(core.absolutePath)");
-    expect(activity).toContain('System.loadLibrary("moudie_play_bridge")');
-    expect(activity).toContain("nativeInitializePlayJavaVm(core.absolutePath)");
-    expect(bridge).toContain("owns the FIRST");
-    expect(bridge).toContain("dlopen()");
+    expect(activity).not.toContain('System.loadLibrary("moudie_play_bridge")');
+    expect(activity).toContain("JNI_GetCreatedJavaVMs");
+    expect(activity).toContain("exact Play! library instance");
   });
 
   it("uses the LibretroDroid default renderer for PS2 to avoid an unnecessary post-processing shader", () => {
     expect(activity).toContain('shader = if (definition.system == "ps2") ShaderConfig.Default else ShaderConfig.Sharp');
   });
 
-  it("initializes the Play! JavaVM and Android JNI metadata before LibretroDroid starts the core", () => {
-    expect(bridge).toContain("_ZN9Framework7CJavaVM9SetJavaVMEP7_JavaVM");
-    expect(bridge).toContain("_ZN7android7content25ContentResolver_ClassInfo16PrepareClassInfoEv");
-    expect(bridge).toContain("_ZN7android8database16Cursor_ClassInfo16PrepareClassInfoEv");
-    expect(bridge).toContain("_ZN7android3net13Uri_ClassInfo16PrepareClassInfoEv");
-    expect(bridge).toContain("_ZN7android2os30ParcelFileDescriptor_ClassInfo16PrepareClassInfoEv");
+  it("keeps the patched Play! source bootstrap in the core sync pipeline", () => {
+    const script = readFileSync(resolve("scripts/sync-libretro-cores.sh"), "utf8");
+    expect(script).toContain("JNI_GetCreatedJavaVMs");
+    expect(script).toContain("Framework::CJavaVM::SetJavaVM(javaVm)");
+    expect(script).toContain("Moudie PS2 JNI bootstrap");
+    expect(script).toContain("build_play_core");
   });
 });
