@@ -9,8 +9,8 @@ describe("native emulator control safeguards", () => {
   const activity = readFileSync(activityPath, "utf8");
   const bridge = readFileSync(bridgePath, "utf8");
 
-  it("enables an analog control by default for PS1, PSP and PS2 and persists it per system", () => {
-    expect(activity).toContain('preferences.getBoolean("analog-enabled-\${definition.system}", definition.system in setOf("ps1", "psp", "ps2"))');
+  it("enables an analog control by default for PS1, PSP, N64 and PS2 and persists it per system", () => {
+    expect(activity).toContain('preferences.getBoolean("analog-enabled-\${definition.system}", definition.system in setOf("ps1", "psp", "n64", "ps2"))');
     expect(activity).toContain('addUtilityButton("analog"');
     expect(activity).toContain('restoreControl(stick, "analog")');
     expect(activity).toContain('saveControl(stick, "analog")');
@@ -21,6 +21,15 @@ describe("native emulator control safeguards", () => {
     expect(activity).toContain("ScaleGestureDetector");
     expect(activity).toContain("stick.translationX");
     expect(activity).toContain("stick.translationY");
+  });
+
+  it("exposes N64 and PS2 through the native catalog", () => {
+    const catalogPath = resolve("modules/moudie-emulator/android/src/main/java/expo/modules/moudieemulator/NativeCoreCatalog.kt");
+    const catalog = readFileSync(catalogPath, "utf8");
+    expect(catalog).toContain('Definition("n64"');
+    expect(catalog).toContain('Definition("ps2"');
+    expect(catalog).toContain("EmulatorControlProfiles.N64");
+    expect(catalog).toContain("EmulatorControlProfiles.PS2");
   });
 
   it("initializes the Play! JavaVM and Android JNI metadata before LibretroDroid starts the core", () => {
