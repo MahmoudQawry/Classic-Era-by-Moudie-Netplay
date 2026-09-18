@@ -148,25 +148,10 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
       showError("PlayStation 2 requires OpenGL ES 3.2 or higher on Android. This device reports an older graphics level, so the game was blocked instead of crashing the app.")
       return
     }
-    // Play! is an Android-specific core whose emulation thread calls into
-    // Framework::CJavaVM. LibretroDroid opens cores with dlopen(), so the
-    // core's JavaVM field is not initialized automatically. The small bridge
-    // below calls the exported Play! setter with the current process JavaVM
-    // before LibretroDroid starts the core.
-    if (definition.system == "ps2") {
-      val initialized = runCatching {
-        // Load the exact Play! shared-library instance into Android's class-loader
-        // namespace first. The bridge then uses RTLD_NOLOAD so its SetJavaVM call
-        // targets this same instance instead of a second linker-namespace copy.
-        System.loadLibrary("moudie_play_bridge")
-        nativeInitializePlayJavaVm(core.absolutePath)
-      }.getOrDefault(false)
-      if (!initialized) {
-        showError("Could not initialize the Play! PS2 Android runtime. The native JavaVM bridge could not initialize the core.")
-        return
-      }
-    }
-
+    // Play! is built with a libretro-specific Android bootstrap that calls
+    // JNI_GetCreatedJavaVMs() from retro_init(). This initializes CJavaVM inside
+    // the exact Play! library instance that LibretroDroid loaded, avoiding any
+    // duplicate linker-namespace/JNI state.
     preferences = getSharedPreferences("moudie-controller-layouts", Context.MODE_PRIVATE)
     analogEnabled = preferences.getBoolean("analog-enabled-${definition.system}", definition.system in setOf("ps1", "psp", "n64", "ps2"))
     editMode = intent.getBooleanExtra(EXTRA_PLAYER_SETTINGS_MODE, false)
