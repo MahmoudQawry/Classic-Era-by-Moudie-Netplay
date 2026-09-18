@@ -80,11 +80,23 @@ Java_expo_modules_moudieemulator_UniversalLibretroPlayerActivity_nativeInitializ
   // These are the ClassInfo preparation functions retained/exported by the
   // current arm64 Play! libretro build. Other Play! ClassInfo symbols are
   // stripped from the prebuilt core, so silently skip symbols that are absent.
+  // Reproduce the complete Android JNI_OnLoad initialization used by the
+  // official Play! frontend. The libretro build does not receive JNI_OnLoad
+  // from Android's loader, so initializing only the JavaVM is insufficient:
+  // later PS2 startup code can access any of these generated ClassInfo objects.
   constexpr const char* kPrepareSymbols[] = {
+      "_ZN3java3net14URL_ClassInfo16PrepareClassInfoEv",
+      "_ZN3java3net26HttpURLConnection_ClassInfo16PrepareClassInfoEv",
+      "_ZN3java4io21InputStream_ClassInfo16PrepareClassInfoEv",
+      "_ZN3java4io22OutputStream_ClassInfo16PrepareClassInfoEv",
+      "_ZN3java8security24MessageDigest_ClassInfo16PrepareClassInfoEv",
+      "_ZN4javax6crypto19Mac_ClassInfo16PrepareClassInfoEv",
+      "_ZN4javax6crypto4spec23SecretKeySpec_ClassInfo16PrepareClassInfoEv",
       "_ZN7android7content25ContentResolver_ClassInfo16PrepareClassInfoEv",
       "_ZN7android8database16Cursor_ClassInfo16PrepareClassInfoEv",
       "_ZN7android3net13Uri_ClassInfo16PrepareClassInfoEv",
       "_ZN7android2os30ParcelFileDescriptor_ClassInfo16PrepareClassInfoEv",
+      "_ZN3com20virtualapplications4play22Bootable_ClassInfo16PrepareClassInfoEv",
   };
   for (const char* symbol_name : kPrepareSymbols) {
     prepareClassInfo(gPlayHandle, symbol_name);
