@@ -37,6 +37,15 @@ describe("native emulator control safeguards", () => {
 
   it("uses the LibretroDroid default renderer for PS2 to avoid an unnecessary post-processing shader", () => {
     expect(activity).toContain('shader = if (definition.system == "ps2") ShaderConfig.Default else ShaderConfig.Sharp');
+    expect(activity).toContain('preferLowLatencyAudio = definition.system != "ps2"');
+    expect(activity).toContain('Variable("play_res_multi", "1")');
+    expect(activity).toContain("ViewportAlignment.CENTER");
+  });
+
+  it("uses vsync-driven dirty rendering for deterministic netplay", () => {
+    expect(activity).toContain("GLSurfaceView.RENDERMODE_WHEN_DIRTY");
+    expect(activity).toContain("Choreographer.FrameCallback");
+    expect(activity).toContain("postFrameCallback");
   });
 
   it("keeps the patched Play! source bootstrap in the core sync pipeline", () => {
@@ -45,5 +54,6 @@ describe("native emulator control safeguards", () => {
     expect(script).toContain("Framework::CJavaVM::SetJavaVM(javaVm)");
     expect(script).toContain("Moudie PS2 JNI bootstrap");
     expect(script).toContain("build_play_core");
+    expect(script).toContain("-DGLES_COMPATIBILITY=1");
   });
 });

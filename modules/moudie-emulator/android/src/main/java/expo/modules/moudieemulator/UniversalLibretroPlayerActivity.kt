@@ -8,8 +8,6 @@ import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.opengl.GLSurfaceView
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
 import android.util.Base64
 import android.view.Choreographer
 import android.view.Gravity
@@ -26,6 +24,8 @@ import androidx.lifecycle.lifecycleScope
 import com.swordfish.libretrodroid.GLRetroView
 import com.swordfish.libretrodroid.GLRetroViewData
 import com.swordfish.libretrodroid.ShaderConfig
+import com.swordfish.libretrodroid.Variable
+import com.swordfish.libretrodroid.ViewportAlignment
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -81,6 +81,8 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
   private val pressedTouchKeys = linkedSetOf<Int>()
   private var frameStarted = 0L
   private var frameCount = 0
+  private var emulatorFrameCount = 0
+  private var emulatorFrameStarted = 0L
   private var selectedStateSlot = 1
   @Volatile private var stateActionInProgress = false
   private var netplayClient: UniversalNetplayClient? = null
@@ -89,7 +91,7 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
   private var sessionPlayerMemberIds: List<Int> = emptyList()
   private var lockstepNetplay = false
   private val lockstepActive = AtomicBoolean(false)
-  private val lockstepHandler = Handler(Looper.getMainLooper())
+  private val lockstepChoreographer = Choreographer.getInstance()
   private data class AnalogInput(val x: Int, val y: Int)
   private val remoteFrameMasks = TreeMap<Long, MutableMap<Int, Int>>()
   private val remoteFrameAnalogs = TreeMap<Long, MutableMap<Int, AnalogInput>>()
@@ -122,8 +124,11 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
       frameCount++
       val elapsed = t - frameStarted
       if (elapsed >= 1_000_000_000L) {
-        updateMetric((frameCount * 1_000_000_000L / elapsed).coerceAtMost(120L))
+        val emulatorElapsed = if (emulatorFrameStarted == 0L) elapsed else t - emulatorFrameStarted
+        updateMetric((emulatorFrameCount * 1_000_000_000L / max(1L, emulatorElapsed)).coerceAtMost(120L))
         frameStarted = t; frameCount = 0
+        emulatorFrameCount = 0
+        emulatorFrameStarted = t
       }
       Choreographer.getInstance().postFrameCallback(this)
     }
@@ -162,10 +167,26 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
     retroView = GLRetroView(this, GLRetroViewData(this).apply {
       coreFilePath = core.absolutePath; gameFilePath = gameFile.absolutePath
       systemDirectory = system.absolutePath; savesDirectory = saves.absolutePath
-      shader = if (definition.system == "ps2") ShaderConfig.Default else ShaderConfig.Sharp; preferLowLatencyAudio = true; rumbleEventsEnabled = true
+      shader = if (definition.system == "ps2") ShaderConfig.Default else ShaderConfig.Sharp
+      preferLowLatencyAudio = definition.system != "ps2"
+      rumbleEventsEnabled = true
+      viewportAlignment = ViewportAlignment.CENTER
+      variables = if (definition.system == "ps2") arrayOf(
+        Variable("play_res_multi", "1"),
+        Variable("play_presentation_mode", "Fit Screen"),
+        Variable("play_bilinear_filtering", "false"),
+      ) else emptyArray()
     }).apply { renderMode = GLSurfaceView.RENDERMODE_CONTINUOUSLY }
     lifecycle.addObserver(retroView)
     lifecycleScope.launch { retroView.getGLRetroErrors().collect { showToast(errorMessage(it, gameFile.name)) } }
+    lifecycleScope.launch {
+      retroView.getGLRetroEvents().collect { event ->
+        if (event is GLRetroView.GLRetroEvents.FrameRendered) {
+          if (emulatorFrameStarted == 0L) emulatorFrameStarted = System.nanoTime()
+          emulatorFrameCount++
+        }
+      }
+    }
 
     root = FrameLayout(this).apply { setBackgroundColor(Color.BLACK); isMotionEventSplittingEnabled = true }
     gameFrame = FrameLayout(this).apply { addView(retroView, FrameLayout.LayoutParams(-1, -1)) }
@@ -284,7 +305,7 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
     if (!lockstepActive.compareAndSet(false, true)) return
     sessionPlayerMemberIds = members
     localPlayerIndex = members.indexOf(localMemberId)
-    sessionStartTimeMs = startAt
+    sessionStartTimeMs = android.os.SystemClock.elapsedRealtime() + (startAt - System.currentTimeMillis())
     nextLockstepFrame = 0L
     predictedFrames = 0
     consecutiveDesyncs = 0
@@ -303,14 +324,19 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
         netplayClient?.sendInputFrame(frame.toLong(), 0)
       }
     }
-    lockstepHandler.postDelayed(lockstepTick, maxOf(0L, startAt - System.currentTimeMillis()))
+    retroView.renderMode = GLSurfaceView.RENDERMODE_WHEN_DIRTY
+    lockstepChoreographer.postFrameCallbackDelayed(lockstepTick, maxOf(0L, startAt - System.currentTimeMillis()))
     showToast("Shared session started with adaptive sync. Delay: ${netplayInputDelayFrames} frames.")
   }
 
-  private fun stopLockstep() { lockstepActive.set(false); lockstepHandler.removeCallbacksAndMessages(null) }
+  private fun stopLockstep() {
+    lockstepActive.set(false)
+    lockstepChoreographer.removeFrameCallback(lockstepTick)
+    if (::retroView.isInitialized) retroView.renderMode = GLSurfaceView.RENDERMODE_CONTINUOUSLY
+  }
 
-  private val lockstepTick = object : Runnable {
-    override fun run() {
+  private val lockstepTick = object : Choreographer.FrameCallback {
+    override fun doFrame(frameTimeNanos: Long) {
       if (!lockstepActive.get() || !::retroView.isInitialized) return
       val now = android.os.SystemClock.elapsedRealtime()
       val targetFrame = nextLockstepFrame + netplayInputDelayFrames
@@ -320,7 +346,6 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
       synchronized(localFrameAnalogs) { localFrameAnalogs[targetFrame] = currentAnalog }
       netplayClient?.sendInputFrame(targetFrame, currentMask, currentAnalog.x, currentAnalog.y)
 
-      // Cleanup old history
       synchronized(localFrameMasks) {
         val toRemove = localFrameMasks.keys.filter { it < nextLockstepFrame - FRAME_HISTORY_CLEANUP_THRESHOLD }
         toRemove.forEach { localFrameMasks.remove(it) }
@@ -339,14 +364,14 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
       val remoteAnalogs = synchronized(remoteFrameAnalogs) { remoteFrameAnalogs.remove(nextLockstepFrame) }
       val localAnalog = synchronized(localFrameAnalogs) { localFrameAnalogs.remove(nextLockstepFrame) ?: AnalogInput(0, 0) }
       val remoteMembers = sessionPlayerMemberIds.filter { it != localMemberId }
+
       if (remoteMasks == null || remoteMembers.any { it !in remoteMasks }) {
         predictedFrames++
-        if (remoteMasks != null) {
-          remoteMasks.forEach { (memberId, mask) -> lastRemoteMasks[memberId] = mask }
-        }
+        if (remoteMasks != null) remoteMasks.forEach { (memberId, mask) -> lastRemoteMasks[memberId] = mask }
+
         if (predictedFrames > MAX_PREDICTION_FRAMES) {
           if (predictedFrames == MAX_PREDICTION_FRAMES + 1) {
-            showToast("Waiting for players... ${predictedFrames * 16}ms")
+            showToast("Waiting for players... ${predictedFrames * 17}ms")
             netplayClient?.requestState(lastNetplaySyncId)
             netplayClient?.reportDesync(nextLockstepFrame, predictedFrames)
           }
@@ -362,10 +387,10 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
               consecutiveDesyncs = 0
             }
           }
-          lockstepHandler.postDelayed(this, 16L)
+          lockstepChoreographer.postFrameCallback(this)
           return
         }
-        // Prediction: reuse last known
+
         applyMask(localMask, localPlayerIndex, appliedMasksByPort[localPlayerIndex] ?: 0)
         applyAnalog(localAnalog, localPlayerIndex)
         appliedMasksByPort[localPlayerIndex] = localMask
@@ -379,15 +404,11 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
         }
         retroView.requestRender()
         nextLockstepFrame += 1L
-        val nextExpectedTime = sessionStartTimeMs + (nextLockstepFrame * NETPLAY_FRAME_INTERVAL_MS)
-        val delay = (nextExpectedTime - now).coerceIn(1L, 32L)
-        lockstepHandler.postDelayed(this, delay)
+        lockstepChoreographer.postFrameCallback(this)
         return
       }
 
-      if (predictedFrames > 10) {
-        showToast("Re-synced after ${predictedFrames} predicted frames")
-      }
+      if (predictedFrames > 10) showToast("Re-synced after ${predictedFrames} predicted frames")
       predictedFrames = 0
       lastFrameReceivedAt = now
       consecutiveDesyncs = 0
@@ -403,19 +424,14 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
         applyAnalog(analog, port)
         appliedMasksByPort[port] = mask
       }
+
       retroView.requestRender()
       nextLockstepFrame += 1L
-      val nextExpectedTime = sessionStartTimeMs + (nextLockstepFrame * NETPLAY_FRAME_INTERVAL_MS)
-      val drift = now - nextExpectedTime
+      val expectedElapsedMs = nextLockstepFrame * (1000.0 / 60.0)
+      val actualElapsedMs = (now - sessionStartTimeMs).toDouble()
+      val drift = actualElapsedMs - expectedElapsedMs
       frameDriftMs = (frameDriftMs * 0.9 + drift * 0.1).toLong()
-      val adjustedInterval = when {
-        frameDriftMs > 32 -> 8L
-        frameDriftMs > 16 -> 12L
-        frameDriftMs < -32 -> 24L
-        frameDriftMs < -16 -> 20L
-        else -> NETPLAY_FRAME_INTERVAL_MS
-      }
-      lockstepHandler.postDelayed(this, adjustedInterval)
+      lockstepChoreographer.postFrameCallback(this)
     }
   }
 

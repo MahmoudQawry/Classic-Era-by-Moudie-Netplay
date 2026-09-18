@@ -71,6 +71,8 @@ PY
     -DBUILD_PLAY=off \
     -DBUILD_TESTS=no \
     -DENABLE_AMAZON_S3=no \
+    -DGLES_COMPATIBILITY=1 \
+    -DANDROID_STL=c++_static \
     -DANDROID_ABI="${ABI}" \
     -DANDROID_NATIVE_API_LEVEL=24 \
     -DANDROID_NDK="${ndk}" \
