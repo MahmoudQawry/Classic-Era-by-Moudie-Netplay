@@ -1,5 +1,7 @@
 from pathlib import Path
 
+# Keep this patch idempotent: the canonical Kotlin source already contains the PS2 bridge.
+
 path = Path("modules/moudie-emulator/android/src/main/java/expo/modules/moudieemulator/UniversalLibretroPlayerActivity.kt")
 text = path.read_text(encoding="utf-8")
 
