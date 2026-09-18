@@ -42,7 +42,7 @@ replacements = [
     ),
     (
         '  private fun supportsPlayPs2Graphics(): Boolean {\n',
-        '  private external fun nativeInitializePlayJavaVm(corePath: String): Boolean\n\n  private fun supportsPlayPs2Graphics(): Boolean {\n'
+        '  private fun supportsPlayPs2Graphics(): Boolean {\n'
     ),
 ]
 
@@ -74,6 +74,13 @@ if ps2_preload not in text:
     if guard not in text:
         raise SystemExit("PS2 graphics guard missing")
     text = text.replace(guard, ps2_preload, 1)
+
+bridge_decl = '  private external fun nativeInitializePlayJavaVm(corePath: String): Boolean\\n\\n'
+if bridge_decl not in text:
+    support_marker = '  private fun supportsPlayPs2Graphics(): Boolean {\\n'
+    if support_marker not in text:
+        raise SystemExit("PS2 support marker missing")
+    text = text.replace(support_marker, bridge_decl + support_marker, 1)
 
 for old, new in replacements:
     if old not in text:
