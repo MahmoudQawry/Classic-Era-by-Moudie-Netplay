@@ -90,8 +90,13 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
   private var lockstepNetplay = false
   private val lockstepActive = AtomicBoolean(false)
   private val lockstepHandler = Handler(Looper.getMainLooper())
+  private data class AnalogInput(val x: Int, val y: Int)
   private val remoteFrameMasks = TreeMap<Long, MutableMap<Int, Int>>()
+  private val remoteFrameAnalogs = TreeMap<Long, MutableMap<Int, AnalogInput>>()
   private val localFrameMasks = TreeMap<Long, Int>()
+  private val localFrameAnalogs = TreeMap<Long, AnalogInput>()
+  private var currentAnalogX = 0
+  private var currentAnalogY = 0
   private val localPressedKeys = mutableSetOf<Int>()
   private val appliedMasksByPort = mutableMapOf<Int, Int>()
   private var nextLockstepFrame = 0L
@@ -160,7 +165,7 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
     }
 
     preferences = getSharedPreferences("moudie-controller-layouts", Context.MODE_PRIVATE)
-    analogEnabled = preferences.getBoolean("analog-enabled-${definition.system}", definition.system in setOf("ps1", "psp", "ps2"))
+    analogEnabled = preferences.getBoolean("analog-enabled-${definition.system}", definition.system in setOf("ps1", "psp", "n64", "ps2"))
     editMode = intent.getBooleanExtra(EXTRA_PLAYER_SETTINGS_MODE, false)
     aspectMode = intent.getStringExtra(EXTRA_PLAYER_ASPECT_RATIO)?.takeIf { it in setOf("fit", "4:3", "16:9") } ?: preferences.getString("${definition.system}.aspect", "fit") ?: "fit"
     val saves = File(filesDir, "moudie-${definition.system}/saves").apply { mkdirs() }
@@ -216,7 +221,10 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
       onBootstrap = { runOnUiThread { if (localPlayerIndex == 0) sendInitialNetplayState() else netplayClient?.requestState(-1L) } },
       onSessionGo = { startAt, members -> runOnUiThread { startLockstep(startAt, members) } },
       onStateRequest = { if (localPlayerIndex == 0) sendInitialNetplayState() },
-      onRemoteInput = { remoteMemberId, frame, mask -> synchronized(remoteFrameMasks) { remoteFrameMasks.getOrPut(frame) { mutableMapOf() }[remoteMemberId] = mask } },
+      onRemoteInput = { remoteMemberId, frame, mask, analogX, analogY ->
+        synchronized(remoteFrameMasks) { remoteFrameMasks.getOrPut(frame) { mutableMapOf() }[remoteMemberId] = mask }
+        synchronized(remoteFrameAnalogs) { remoteFrameAnalogs.getOrPut(frame) { mutableMapOf() }[remoteMemberId] = AnalogInput(analogX, analogY) }
+      },
       onRemoteState = { encoded, syncId, encoding -> restoreNetplayState(encoded, syncId, encoding) },
       onChat = { displayName, text -> runOnUiThread { showToast("$displayName: $text") } },
       onStatus = { message -> runOnUiThread { showToast(message) } },
@@ -297,6 +305,8 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
     lastFrameReceivedAt = android.os.SystemClock.elapsedRealtime()
     appliedMasksByPort.clear()
     synchronized(remoteFrameMasks) { remoteFrameMasks.clear() }
+    synchronized(remoteFrameAnalogs) { remoteFrameAnalogs.clear() }
+    synchronized(localFrameAnalogs) { localFrameAnalogs.clear() }
     synchronized(localFrameMasks) {
       localFrameMasks.clear()
       val bufferFrames = maxOf(netplayInputDelayFrames, JITTER_BUFFER_FRAMES.toLong())
@@ -317,8 +327,10 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
       val now = android.os.SystemClock.elapsedRealtime()
       val targetFrame = nextLockstepFrame + netplayInputDelayFrames
       val currentMask = currentLocalMask()
+      val currentAnalog = AnalogInput(currentAnalogX, currentAnalogY)
       synchronized(localFrameMasks) { localFrameMasks[targetFrame] = currentMask }
-      netplayClient?.sendInputFrame(targetFrame, currentMask)
+      synchronized(localFrameAnalogs) { localFrameAnalogs[targetFrame] = currentAnalog }
+      netplayClient?.sendInputFrame(targetFrame, currentMask, currentAnalog.x, currentAnalog.y)
 
       // Cleanup old history
       synchronized(localFrameMasks) {
@@ -329,9 +341,15 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
         val toRemove = remoteFrameMasks.keys.filter { it < nextLockstepFrame - FRAME_HISTORY_CLEANUP_THRESHOLD }
         toRemove.forEach { remoteFrameMasks.remove(it) }
       }
+      synchronized(remoteFrameAnalogs) {
+        val toRemove = remoteFrameAnalogs.keys.filter { it < nextLockstepFrame - FRAME_HISTORY_CLEANUP_THRESHOLD }
+        toRemove.forEach { remoteFrameAnalogs.remove(it) }
+      }
 
       val localMask = synchronized(localFrameMasks) { localFrameMasks.remove(nextLockstepFrame) ?: 0 }
       val remoteMasks = synchronized(remoteFrameMasks) { remoteFrameMasks.remove(nextLockstepFrame) }
+      val remoteAnalogs = synchronized(remoteFrameAnalogs) { remoteFrameAnalogs.remove(nextLockstepFrame) }
+      val localAnalog = synchronized(localFrameAnalogs) { localFrameAnalogs.remove(nextLockstepFrame) ?: AnalogInput(0, 0) }
       val remoteMembers = sessionPlayerMemberIds.filter { it != localMemberId }
       if (remoteMasks == null || remoteMembers.any { it !in remoteMasks }) {
         predictedFrames++
@@ -361,11 +379,14 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
         }
         // Prediction: reuse last known
         applyMask(localMask, localPlayerIndex, appliedMasksByPort[localPlayerIndex] ?: 0)
+        applyAnalog(localAnalog, localPlayerIndex)
         appliedMasksByPort[localPlayerIndex] = localMask
         remoteMembers.forEach { memberId ->
           val port = sessionPlayerMemberIds.indexOf(memberId)
           val mask = remoteMasks?.get(memberId) ?: lastRemoteMasks[memberId] ?: 0
+          val analog = remoteAnalogs?.get(memberId) ?: AnalogInput(0, 0)
           applyMask(mask, port, appliedMasksByPort[port] ?: 0)
+          applyAnalog(analog, port)
           appliedMasksByPort[port] = mask
         }
         retroView.requestRender()
@@ -389,7 +410,9 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
       remoteMembers.forEach { memberId ->
         val port = sessionPlayerMemberIds.indexOf(memberId)
         val mask = remoteMasks.getValue(memberId)
+        val analog = remoteAnalogs?.get(memberId) ?: AnalogInput(0, 0)
         applyMask(mask, port, appliedMasksByPort[port] ?: 0)
+        applyAnalog(analog, port)
         appliedMasksByPort[port] = mask
       }
       retroView.requestRender()
@@ -406,6 +429,10 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
       }
       lockstepHandler.postDelayed(this, adjustedInterval)
     }
+  }
+
+  private fun applyAnalog(input: AnalogInput, port: Int) {
+    retroView.sendMotionEvent(GLRetroView.MOTION_SOURCE_ANALOG_LEFT, input.x / 127f, input.y / 127f, port)
   }
 
   private fun applyMask(mask: Int, port: Int, previous: Int) {
@@ -513,8 +540,15 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
     if (analogStick != null) return
     val stick = AnalogStickView(
       this,
-      onMove = { x, y -> if (!editMode) retroView.sendMotionEvent(GLRetroView.MOTION_SOURCE_ANALOG_LEFT, x, y, localPlayerIndex) },
-      onRelease = { if (!editMode) retroView.sendMotionEvent(GLRetroView.MOTION_SOURCE_ANALOG_LEFT, 0f, 0f, localPlayerIndex) },
+      onMove = { x, y ->
+        currentAnalogX = (x.coerceIn(-1f, 1f) * 127f).toInt()
+        currentAnalogY = (y.coerceIn(-1f, 1f) * 127f).toInt()
+        if (!editMode && !lockstepNetplay) retroView.sendMotionEvent(GLRetroView.MOTION_SOURCE_ANALOG_LEFT, x, y, localPlayerIndex)
+      },
+      onRelease = {
+        currentAnalogX = 0; currentAnalogY = 0
+        if (!editMode && !lockstepNetplay) retroView.sendMotionEvent(GLRetroView.MOTION_SOURCE_ANALOG_LEFT, 0f, 0f, localPlayerIndex)
+      },
     )
     val size = dp(126)
     stick.isFocusable = false
