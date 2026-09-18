@@ -40,6 +40,10 @@ replacements = [
         '    p.shoulderButtons.forEachIndexed { i, c -> addControl(c, if (i % 2 == 0) Gravity.LEFT or Gravity.TOP else Gravity.RIGHT or Gravity.TOP, 16 + (i / 2) * 72, 18) }\n',
         '    p.shoulderButtons.forEachIndexed { i, c -> val margin = 16 + (i / 2) * 72; val sideMargin = if (i % 2 == 0) margin else margin + 56; addControl(c, if (i % 2 == 0) Gravity.LEFT or Gravity.TOP else Gravity.RIGHT or Gravity.TOP, sideMargin, 18) }\n'
     ),
+    (
+        '  private fun supportsPlayPs2Graphics(): Boolean {\n',
+        '  private external fun nativeInitializePlayJavaVm(corePath: String): Boolean\n\n  private fun supportsPlayPs2Graphics(): Boolean {\n'
+    ),
 ]
 
 ps2_preload = '''    if (definition.system == "ps2" && !supportsPlayPs2Graphics()) {
@@ -60,8 +64,6 @@ ps2_preload = '''    if (definition.system == "ps2" && !supportsPlayPs2Graphics(
         return
       }
     }
-    private external fun nativeInitializePlayJavaVm(corePath: String): Boolean
-
 
 if ps2_preload not in text:
     guard = '''    if (definition.system == "ps2" && !supportsPlayPs2Graphics()) {
