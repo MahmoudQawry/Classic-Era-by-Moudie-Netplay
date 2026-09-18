@@ -143,14 +143,18 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
       showError("PlayStation 2 requires OpenGL ES 3.2 or higher on Android. This device reports an older graphics level, so the game was blocked instead of crashing the app.")
       return
     }
-    // Play! is a special Android core: its native code expects JNI_OnLoad(JavaVM*)
-    // to run before its emulation thread starts. LibretroDroid loads cores with
-    // dlopen(), which does not provide that JNI initialization. Preload the PS2
-    // library through Android so JNI_OnLoad receives the process JavaVM first;
-    // LibretroDroid can then reuse the already loaded image.
+    // Play! is an Android-specific core whose emulation thread calls into
+    // Framework::CJavaVM. LibretroDroid opens cores with dlopen(), so the
+    // core's JavaVM field is not initialized automatically. The small bridge
+    // below calls the exported Play! setter with the current process JavaVM
+    // before LibretroDroid starts the core.
     if (definition.system == "ps2") {
-      runCatching { System.load(core.absolutePath) }.onFailure { error ->
-        showError("Could not initialize the Play! PS2 runtime. " + (error.message ?: "Native library load failed."))
+      val initialized = runCatching {
+        System.loadLibrary("moudie_play_bridge")
+        nativeInitializePlayJavaVm(core.absolutePath)
+      }.getOrDefault(false)
+      if (!initialized) {
+        showError("Could not initialize the Play! PS2 Android runtime. The native JavaVM bridge could not initialize the core.")
         return
       }
     }
@@ -627,6 +631,8 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
   private fun metric() = TextView(this).apply { text = "FPS — · LOCAL"; textSize = 10f; gravity = Gravity.CENTER; setTextColor(Color.rgb(194, 243, 255)); setPadding(dp(12), 0, dp(12), 0); background = bg(Color.argb(130, 2, 12, 24), Color.argb(125, 21, 178, 238), 16) }
   private fun updateMetric(fps: Long?) { metricPill.text = if (lockstepNetplay) "FPS ${fps?.toString() ?: "—"} · ${netplayQuality.compactLabel()} · P${localPlayerIndex + 1}" else "FPS ${fps?.toString() ?: "—"} · LOCAL" }
   private fun applyAspectRatio() { if (aspectMode == "fit" || root.width <= 0 || root.height <= 0) return; val ratio = if (aspectMode == "4:3") 4f / 3f else 16f / 9f; var w = root.width; var h = (w / ratio).toInt(); if (h > root.height) { h = root.height; w = (h * ratio).toInt() }; gameFrame.layoutParams = FrameLayout.LayoutParams(w, h, Gravity.CENTER) }
+  private external fun nativeInitializePlayJavaVm(corePath: String): Boolean
+
   private fun supportsPlayPs2Graphics(): Boolean {
     val activityManager = getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager ?: return false
     val info = activityManager.deviceConfigurationInfo ?: return false
