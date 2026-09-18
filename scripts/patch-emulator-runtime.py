@@ -17,6 +17,10 @@ replacements = [
         '    analogEnabled = preferences.getBoolean("analog-enabled", definition.system in setOf("n64", "ps2", "psp"))\n'
     ),
     (
+        '    if (definition.system == "ps2" && !supportsPlayPs2Graphics()) {\\n      showError("PlayStation 2 requires OpenGL ES 3.2 or higher on Android. This device reports an older graphics level, so the game was blocked instead of crashing the app.")\\n      return\\n    }\\n',
+        '    if (definition.system == "ps2" && !supportsPlayPs2Graphics()) {\\n      showError("PlayStation 2 requires OpenGL ES 3.2 or higher on Android. This device reports an older graphics level, so the game was blocked instead of crashing the app.")\\n      return\\n    }\\n    // Play! exposes Android/JNI initialization through JNI_OnLoad. LibretroDroid\\n    // opens cores with dlopen(), so explicitly load the PS2 core first to ensure\\n    // the process JavaVM is registered before Play! creates its emulation thread.\\n    if (definition.system == "ps2") {\\n      runCatching { System.load(core.absolutePath) }.onFailure { error ->\\n        showError("Could not initialize the Play! PS2 runtime. " + (error.message ?: "Native library load failed."))\\n        return\\n      }\\n    }\\n'
+    ),
+    (
         '    addController()\n    addMenu()\n',
         '    addController()\n    if (analogEnabled) attachAnalogStick()\n    addMenu()\n'
     ),
