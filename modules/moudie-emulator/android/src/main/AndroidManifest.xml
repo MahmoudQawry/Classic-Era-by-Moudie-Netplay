@@ -1,9 +1,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-  <application>
+  <application android:largeHeap="true">
     <activity
       android:name=".PS1PlayerActivity"
       android:configChanges="keyboard|keyboardHidden|orientation|screenSize|smallestScreenSize|screenLayout|uiMode"
       android:exported="false"
+      android:process=":emulator"
       android:screenOrientation="fullSensor"
       android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
     <activity
@@ -17,6 +18,7 @@
       android:name=".FamicomCompatPlayerActivity"
       android:configChanges="keyboard|keyboardHidden|orientation|screenSize|smallestScreenSize|screenLayout|uiMode"
       android:exported="false"
+      android:process=":emulator"
       android:screenOrientation="fullSensor"
       android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
   </application>
