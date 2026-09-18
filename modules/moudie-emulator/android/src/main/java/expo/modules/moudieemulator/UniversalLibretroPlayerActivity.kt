@@ -155,6 +155,10 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
     // before LibretroDroid starts the core.
     if (definition.system == "ps2") {
       val initialized = runCatching {
+        // Load the exact Play! shared-library instance into Android's class-loader
+        // namespace first. The bridge then uses RTLD_NOLOAD so its SetJavaVM call
+        // targets this same instance instead of a second linker-namespace copy.
+        System.load(core.absolutePath)
         System.loadLibrary("moudie_play_bridge")
         nativeInitializePlayJavaVm(core.absolutePath)
       }.getOrDefault(false)
