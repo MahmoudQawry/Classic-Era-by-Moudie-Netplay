@@ -25,7 +25,6 @@ import com.swordfish.libretrodroid.GLRetroView
 import com.swordfish.libretrodroid.GLRetroViewData
 import com.swordfish.libretrodroid.ShaderConfig
 import com.swordfish.libretrodroid.Variable
-import com.swordfish.libretrodroid.ViewportAlignment
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -170,7 +169,6 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
       shader = if (definition.system == "ps2") ShaderConfig.Default else ShaderConfig.Sharp
       preferLowLatencyAudio = definition.system != "ps2"
       rumbleEventsEnabled = true
-      viewportAlignment = ViewportAlignment.CENTER
       variables = if (definition.system == "ps2") arrayOf(
         Variable("play_res_multi", "1"),
         Variable("play_presentation_mode", "Fit Screen"),

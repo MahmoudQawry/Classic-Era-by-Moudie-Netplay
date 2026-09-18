@@ -39,7 +39,6 @@ describe("native emulator control safeguards", () => {
     expect(activity).toContain('shader = if (definition.system == "ps2") ShaderConfig.Default else ShaderConfig.Sharp');
     expect(activity).toContain('preferLowLatencyAudio = definition.system != "ps2"');
     expect(activity).toContain('Variable("play_res_multi", "1")');
-    expect(activity).toContain("ViewportAlignment.CENTER");
   });
 
   it("uses vsync-driven dirty rendering for deterministic netplay", () => {
