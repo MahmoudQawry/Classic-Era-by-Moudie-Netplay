@@ -16,11 +16,7 @@ replacements = [
         '    analogEnabled = preferences.getBoolean("analog-enabled", false)\n',
         '    analogEnabled = preferences.getBoolean("analog-enabled", definition.system in setOf("n64", "ps2", "psp"))\n'
     ),
-    (
-        '    if (definition.system == "ps2" && !supportsPlayPs2Graphics()) {\\n      showError("PlayStation 2 requires OpenGL ES 3.2 or higher on Android. This device reports an older graphics level, so the game was blocked instead of crashing the app.")\\n      return\\n    }\\n',
-        '    if (definition.system == "ps2" && !supportsPlayPs2Graphics()) {\\n      showError("PlayStation 2 requires OpenGL ES 3.2 or higher on Android. This device reports an older graphics level, so the game was blocked instead of crashing the app.")\\n      return\\n    }\\n    // Play! exposes Android/JNI initialization through JNI_OnLoad. LibretroDroid\\n    // opens cores with dlopen(), so explicitly load the PS2 core first to ensure\\n    // the process JavaVM is registered before Play! creates its emulation thread.\\n    if (definition.system == "ps2") {\\n      runCatching { System.load(core.absolutePath) }.onFailure { error ->\\n        showError("Could not initialize the Play! PS2 runtime. " + (error.message ?: "Native library load failed."))\\n        return\\n      }\\n    }\\n'
-    ),
-    (
+   (
         '    addController()\n    addMenu()\n',
         '    addController()\n    if (analogEnabled) attachAnalogStick()\n    addMenu()\n'
     ),
@@ -45,6 +41,30 @@ replacements = [
         '    p.shoulderButtons.forEachIndexed { i, c -> val margin = 16 + (i / 2) * 72; val sideMargin = if (i % 2 == 0) margin else margin + 56; addControl(c, if (i % 2 == 0) Gravity.LEFT or Gravity.TOP else Gravity.RIGHT or Gravity.TOP, sideMargin, 18) }\n'
     ),
 ]
+
+ps2_preload = '''    if (definition.system == "ps2" && !supportsPlayPs2Graphics()) {
+      showError("PlayStation 2 requires OpenGL ES 3.2 or higher on Android. This device reports an older graphics level, so the game was blocked instead of crashing the app.")
+      return
+    }
+    // Play! exposes Android/JNI initialization through JNI_OnLoad. LibretroDroid
+    // opens cores with dlopen(), so explicitly load the PS2 core first to ensure
+    // the process JavaVM is registered before Play! creates its emulation thread.
+    if (definition.system == "ps2") {
+      runCatching { System.load(core.absolutePath) }.onFailure { error ->
+        showError("Could not initialize the Play! PS2 runtime. " + (error.message ?: "Native library load failed."))
+        return
+      }
+    }
+'''
+if ps2_preload not in text:
+    guard = '''    if (definition.system == "ps2" && !supportsPlayPs2Graphics()) {
+      showError("PlayStation 2 requires OpenGL ES 3.2 or higher on Android. This device reports an older graphics level, so the game was blocked instead of crashing the app.")
+      return
+    }
+'''
+    if guard not in text:
+        raise SystemExit("PS2 graphics guard missing")
+    text = text.replace(guard, ps2_preload, 1)
 
 for old, new in replacements:
     if old not in text:
