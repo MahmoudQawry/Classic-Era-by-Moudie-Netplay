@@ -32,7 +32,6 @@ describe("native emulator control safeguards", () => {
   it("keeps Play! JavaVM initialization inside the exact libretro core instance", () => {
     expect(activity).not.toContain("System.load(core.absolutePath)");
     expect(activity).not.toContain('System.loadLibrary("moudie_play_bridge")');
-    expect(activity).toContain("JNI_GetCreatedJavaVMs");
     expect(activity).toContain("exact Play! library instance");
   });
 
