@@ -160,7 +160,7 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
     }
 
     preferences = getSharedPreferences("moudie-controller-layouts", Context.MODE_PRIVATE)
-    analogEnabled = preferences.getBoolean("analog-enabled", false)
+    analogEnabled = preferences.getBoolean("analog-enabled-${definition.system}", definition.system in setOf("ps1", "psp", "ps2"))
     editMode = intent.getBooleanExtra(EXTRA_PLAYER_SETTINGS_MODE, false)
     aspectMode = intent.getStringExtra(EXTRA_PLAYER_ASPECT_RATIO)?.takeIf { it in setOf("fit", "4:3", "16:9") } ?: preferences.getString("${definition.system}.aspect", "fit") ?: "fit"
     val saves = File(filesDir, "moudie-${definition.system}/saves").apply { mkdirs() }
@@ -180,6 +180,7 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
     metricPill = metric()
     root.addView(metricPill, FrameLayout.LayoutParams(-2, dp(32), Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply { topMargin = dp(14) })
     addController()
+    if (analogEnabled) attachAnalogStick()
     addMenu()
     setContentView(root)
     root.post { applyAspectRatio(); restoreScreen(); enableScreenEditor(); if (editMode) showEditorBar() }
@@ -488,15 +489,12 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
       showToast(if (speakerEnabled) "Phone speaker enabled." else "Automatic audio output enabled.")
     }
     addUtilityButton("chat", "CHAT", dp(122)) { showChatInput() }
-    val analogButton = addUtilityButton("analog", if (analogEnabled) "ANLG" else "ANLG×", dp(176)) { toggleAnalogStick() }
-    analogHudButton = analogButton
-    if (analogEnabled) attachAnalogStick()
   }
 
   /** ANALOG button: shows/hides the on-screen analog stick (PSP nub / left axis). */
   private fun toggleAnalogStick() {
     analogEnabled = !analogEnabled
-    preferences.edit().putBoolean("analog-enabled", analogEnabled).apply()
+    preferences.edit().putBoolean("analog-enabled-${definition.system}", analogEnabled).apply()
     analogHudButton?.text = if (analogEnabled) "ANLG" else "ANLG×"
     if (analogEnabled) {
       attachAnalogStick()
@@ -512,8 +510,8 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
     if (analogStick != null) return
     val stick = AnalogStickView(
       this,
-      onMove = { x, y -> retroView.sendMotionEvent(GLRetroView.MOTION_SOURCE_ANALOG_LEFT, x, y, localPlayerIndex) },
-      onRelease = { retroView.sendMotionEvent(GLRetroView.MOTION_SOURCE_ANALOG_LEFT, 0f, 0f, localPlayerIndex) },
+      onMove = { x, y -> if (!editMode) retroView.sendMotionEvent(GLRetroView.MOTION_SOURCE_ANALOG_LEFT, x, y, localPlayerIndex) },
+      onRelease = { if (!editMode) retroView.sendMotionEvent(GLRetroView.MOTION_SOURCE_ANALOG_LEFT, 0f, 0f, localPlayerIndex) },
     )
     val size = dp(126)
     stick.isFocusable = false
@@ -521,7 +519,44 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
       leftMargin = dp(16)
       bottomMargin = dp(210)
     })
+    configureAnalogEditing(stick)
+    restoreControl(stick, "analog")
     analogStick = stick
+  }
+
+  private fun configureAnalogEditing(stick: View) {
+    var dx = 0f
+    var dy = 0f
+    var ox = 0f
+    var oy = 0f
+    val scaler = ScaleGestureDetector(this, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
+      override fun onScale(detector: ScaleGestureDetector): Boolean {
+        if (!editMode) return false
+        val s = max(.35f, stick.scaleX * detector.scaleFactor)
+        stick.scaleX = s
+        stick.scaleY = s
+        return true
+      }
+    })
+    stick.setOnTouchListener { _, event ->
+      scaler.onTouchEvent(event)
+      if (!editMode) return@setOnTouchListener false
+      when (event.actionMasked) {
+        MotionEvent.ACTION_DOWN -> {
+          selected = stick to "analog"
+          dx = event.rawX
+          dy = event.rawY
+          ox = stick.translationX
+          oy = stick.translationY
+        }
+        MotionEvent.ACTION_MOVE -> if (!scaler.isInProgress) {
+          stick.translationX = ox + event.rawX - dx
+          stick.translationY = oy + event.rawY - dy
+        }
+        MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> saveControl(stick, "analog")
+      }
+      true
+    }
   }
 
   private fun addUtilityButton(id: String, label: String, leftMargin: Int, onClick: () -> Unit): TextView {
