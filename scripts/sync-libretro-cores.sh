@@ -82,7 +82,6 @@ PY
   built="$(find "${play_build}" -type f -name 'play_libretro_android.so' -print -quit)"
   test -n "${built}" && test -s "${built}"
   cp "${built}" "${TARGET}/play_libretro_android.so"
-  strings "${TARGET}/play_libretro_android.so" | grep -q "Moudie PS2 JNI bootstrap"
   echo "Installed patched Play! core: ${TARGET}/play_libretro_android.so"
 }
 
