@@ -31,10 +31,12 @@ Java_expo_modules_moudieemulator_UniversalLibretroPlayerActivity_nativeInitializ
   const char* path = env->GetStringUTFChars(core_path, nullptr);
   if (path == nullptr) return JNI_FALSE;
 
-  // Kotlin loads the core with System.load() first. Prefer the already-loaded
-  // instance so the JavaVM setter modifies the exact libretro core instance
-  // that LibretroDroid will subsequently use. If it is not loaded yet, load
-  // it here as a fallback.
+  // IMPORTANT: do not use System.load() for Play! from Kotlin. LibretroDroid
+  // subsequently opens the core with dlopen(). Android can place those loads
+  // in different linker namespaces, which can create two copies of Play!'s
+  // static Framework::CJavaVM::m_vm. The bridge therefore owns the FIRST
+  // dlopen() of the core, initializes that exact handle, and LibretroDroid's
+  // later dlopen() reuses the already-loaded object.
   if (gPlayHandle == nullptr) {
 #ifdef RTLD_NOLOAD
     gPlayHandle = dlopen(path, RTLD_NOLOAD | RTLD_NOW | RTLD_GLOBAL);
