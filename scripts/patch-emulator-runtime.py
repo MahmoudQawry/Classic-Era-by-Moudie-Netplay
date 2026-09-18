@@ -46,7 +46,7 @@ replacements = [
     ),
 ]
 
-ps2_preload = '''    if (definition.system == "ps2" && !supportsPlayPs2Graphics()) {
+ps2_preload = """    if (definition.system == "ps2" && !supportsPlayPs2Graphics()) {
       showError("PlayStation 2 requires OpenGL ES 3.2 or higher on Android. This device reports an older graphics level, so the game was blocked instead of crashing the app.")
       return
     }
@@ -71,7 +71,7 @@ if ps2_preload not in text:
       showError("PlayStation 2 requires OpenGL ES 3.2 or higher on Android. This device reports an older graphics level, so the game was blocked instead of crashing the app.")
       return
     }
-'''
+"""
     if guard not in text:
         raise SystemExit("PS2 graphics guard missing")
     text = text.replace(guard, ps2_preload, 1)
