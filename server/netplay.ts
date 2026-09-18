@@ -10,7 +10,7 @@ import { socketCors } from "./_core/cors";
 import { RoomLifecycleRegistry, SlidingWindowLimiter } from "./room-lifecycle";
 import { roomCapacityFor } from "../shared/room-capacity";
 
-type NetplaySystem = "ps1" | "nes" | "psp" | "sega";
+type NetplaySystem = "ps1" | "nes" | "psp" | "sega" | "n64" | "ps2";
 
 type NetplaySession = {
   roomId: number;
@@ -50,7 +50,7 @@ const roomChannel = (roomId: number) => `netplay:${roomId}`;
 const memberKey = (roomId: number, memberId: number, clientKind: NetplaySession["clientKind"]) => `${roomId}:${memberId}:${clientKind}`;
 
 // adaptive tracking structures
-type FrameInputRecord = { mask: number; receivedAt: number; memberId: number };
+type FrameInputRecord = { mask: number; analogX: number; analogY: number; receivedAt: number; memberId: number };
 type RoomFrameHistory = Map<number, Map<number, FrameInputRecord>>; // frame -> memberId -> record
 type RoomFrameTracker = Map<number, number>; // memberId -> lastFrame
 
@@ -595,7 +595,7 @@ export function registerNetplayServer(server: HttpServer) {
         frameMap = new Map();
         history.set(frame, frameMap);
       }
-      frameMap.set(session.memberId, { mask, receivedAt: Date.now(), memberId: session.memberId });
+      frameMap.set(session.memberId, { mask, analogX, analogY, receivedAt: Date.now(), memberId: session.memberId });
 
       // Cleanup old frames (keep last 60)
       for (const oldFrame of history.keys()) {
@@ -658,7 +658,7 @@ export function registerNetplayServer(server: HttpServer) {
     });
 
     socket.on("netplay:universal-ready", (payload: SessionReadyPayload) => {
-      const system = payload?.system === "psp" || payload?.system === "sega" ? payload.system : null;
+      const system = payload?.system === "psp" || payload?.system === "sega" || payload?.system === "n64" || payload?.system === "ps2" ? payload.system : null;
       const fingerprint = typeof payload?.fingerprint === "string" ? payload.fingerprint.toLowerCase() : "";
       const coreVersion = typeof payload?.coreVersion === "string" ? payload.coreVersion.trim() : "";
       const pending = pendingSessions.get(session.roomId);
@@ -683,10 +683,12 @@ export function registerNetplayServer(server: HttpServer) {
       io.to(channel).emit("netplay:universal-session-bootstrap", { system, fingerprint, hostMemberId: (host.data.session as NetplaySession).memberId, playerMemberIds: requiredPlayerIds, inputDelay: roomInputDelays.get(session.roomId) ?? 3 });
     });
 
-    socket.on("netplay:universal-input", (payload: Ps1InputPayload) => {
+    socket.on("netplay:universal-input", (payload: Ps1InputPayload & { analogX?: unknown; analogY?: unknown }) => {
       const frame = Number(payload?.frame);
       const mask = Number(payload?.mask);
-      if (!Number.isSafeInteger(frame) || frame < 0 || !Number.isSafeInteger(mask) || mask < 0 || mask > 0xffff || typeof socket.data.universalFingerprint !== "string") return;
+      const analogX = Number(payload?.analogX ?? 0);
+      const analogY = Number(payload?.analogY ?? 0);
+      if (!Number.isSafeInteger(frame) || frame < 0 || !Number.isSafeInteger(mask) || mask < 0 || mask > 0xffff || !Number.isInteger(analogX) || !Number.isInteger(analogY) || analogX < -127 || analogX > 127 || analogY < -127 || analogY > 127 || typeof socket.data.universalFingerprint !== "string") return;
       if (session.role === "spectator") return;
 
       const rateKey = `${session.roomId}:${session.memberId}:universal`;
@@ -716,7 +718,7 @@ export function registerNetplayServer(server: HttpServer) {
         if (oldFrame < frame - 60) history.delete(oldFrame);
       }
 
-      socket.to(channel).emit("netplay:universal-input", { memberId: session.memberId, frame, mask, serverTime: Date.now() });
+      socket.to(channel).emit("netplay:universal-input", { memberId: session.memberId, frame, mask, analogX, analogY, serverTime: Date.now() });
     });
 
     socket.on("netplay:universal-state", (payload: Ps1StatePayload) => {
