@@ -64,6 +64,7 @@ ps2_preload = '''    if (definition.system == "ps2" && !supportsPlayPs2Graphics(
         return
       }
     }
+'''
 
 if ps2_preload not in text:
     guard = '''    if (definition.system == "ps2" && !supportsPlayPs2Graphics()) {
@@ -75,9 +76,9 @@ if ps2_preload not in text:
         raise SystemExit("PS2 graphics guard missing")
     text = text.replace(guard, ps2_preload, 1)
 
-bridge_decl = '  private external fun nativeInitializePlayJavaVm(corePath: String): Boolean\\n\\n'
+bridge_decl = '  private external fun nativeInitializePlayJavaVm(corePath: String): Boolean\n\n'
 if bridge_decl not in text:
-    support_marker = '  private fun supportsPlayPs2Graphics(): Boolean {\\n'
+    support_marker = '  private fun supportsPlayPs2Graphics(): Boolean {\n'
     if support_marker not in text:
         raise SystemExit("PS2 support marker missing")
     text = text.replace(support_marker, bridge_decl + support_marker, 1)
