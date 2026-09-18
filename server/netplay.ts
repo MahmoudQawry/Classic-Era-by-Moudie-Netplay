@@ -50,7 +50,7 @@ const roomChannel = (roomId: number) => `netplay:${roomId}`;
 const memberKey = (roomId: number, memberId: number, clientKind: NetplaySession["clientKind"]) => `${roomId}:${memberId}:${clientKind}`;
 
 // adaptive tracking structures
-type FrameInputRecord = { mask: number; analogX: number; analogY: number; receivedAt: number; memberId: number };
+type FrameInputRecord = { mask: number; analogX?: number; analogY?: number; receivedAt: number; memberId: number };
 type RoomFrameHistory = Map<number, Map<number, FrameInputRecord>>; // frame -> memberId -> record
 type RoomFrameTracker = Map<number, number>; // memberId -> lastFrame
 
