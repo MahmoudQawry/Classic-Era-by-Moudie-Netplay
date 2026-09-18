@@ -1,5 +1,6 @@
 package expo.modules.moudieemulator
 
+import android.app.ActivityManager
 import android.app.AlertDialog
 import android.content.Context
 import android.content.pm.ActivityInfo
@@ -138,6 +139,10 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
     val core = File(intent.getStringExtra(EXTRA_CORE_PATH).orEmpty())
     if (!gameFile.isFile || !gameFile.canRead()) { showError("Could not read the game file. Choose it again from the library."); return }
     if (!core.isFile || core.length() == 0L) { showError("Could not load ${definition.coreName}. Reinstall the complete APK."); return }
+    if (definition.system == "ps2" && !supportsPlayPs2Graphics()) {
+      showError("PlayStation 2 requires OpenGL ES 3.2 or higher on Android. This device reports an older graphics level, so the game was blocked instead of crashing the app.")
+      return
+    }
 
     preferences = getSharedPreferences("moudie-controller-layouts", Context.MODE_PRIVATE)
     analogEnabled = preferences.getBoolean("analog-enabled", false)
@@ -611,6 +616,12 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
   private fun metric() = TextView(this).apply { text = "FPS — · LOCAL"; textSize = 10f; gravity = Gravity.CENTER; setTextColor(Color.rgb(194, 243, 255)); setPadding(dp(12), 0, dp(12), 0); background = bg(Color.argb(130, 2, 12, 24), Color.argb(125, 21, 178, 238), 16) }
   private fun updateMetric(fps: Long?) { metricPill.text = if (lockstepNetplay) "FPS ${fps?.toString() ?: "—"} · ${netplayQuality.compactLabel()} · P${localPlayerIndex + 1}" else "FPS ${fps?.toString() ?: "—"} · LOCAL" }
   private fun applyAspectRatio() { if (aspectMode == "fit" || root.width <= 0 || root.height <= 0) return; val ratio = if (aspectMode == "4:3") 4f / 3f else 16f / 9f; var w = root.width; var h = (w / ratio).toInt(); if (h > root.height) { h = root.height; w = (h * ratio).toInt() }; gameFrame.layoutParams = FrameLayout.LayoutParams(w, h, Gravity.CENTER) }
+  private fun supportsPlayPs2Graphics(): Boolean {
+    val activityManager = getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager ?: return false
+    val info = activityManager.deviceConfigurationInfo ?: return false
+    return info.reqGlEsVersion >= 0x00030002
+  }
+
   private fun errorMessage(e: Int, name: String) = when (e) { GLRetroView.ERROR_LOAD_LIBRARY -> "Could not load ${definition.coreName}. Reinstall the complete APK."; GLRetroView.ERROR_LOAD_GAME -> "Could not open $name. Check that it is compatible with ${definition.title}."; GLRetroView.ERROR_GL_NOT_COMPATIBLE -> "This device does not support the graphics configuration required by this emulator."; else -> "${definition.coreName} stopped while starting the game (code $e)." }
   private fun showError(m: String) { setContentView(TextView(this).apply { text = m; gravity = Gravity.CENTER; setTextColor(Color.WHITE); setBackgroundColor(Color.rgb(3, 8, 18)); textSize = 16f; setPadding(dp(28), dp(28), dp(28), dp(28)); setOnClickListener { finish() } }) }
   private fun showToast(m: String) = Toast.makeText(this, m, Toast.LENGTH_SHORT).show()
