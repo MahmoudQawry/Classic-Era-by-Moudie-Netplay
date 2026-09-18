@@ -267,7 +267,6 @@ class MoudieEmulatorModule : Module() {
     return digest.digest().joinToString("") { byte -> "%02x".format(byte.toInt() and 0xff) }
   }
 
-  private val supportedSystems = setOf("nes", "sega", "ps1", "psp")
   private val ps1BiosCandidates = setOf("scph5500.bin", "scph5501.bin", "scph5502.bin", "scph1001.bin")
   private val ps1GameExtensions = setOf("bin", "cue", "iso", "chd", "pbp")
 
@@ -319,6 +318,8 @@ class MoudieEmulatorModule : Module() {
       ),
       "sega" to mapOf("required" to false, "available" to true, "message" to "Genesis Plus GX is bundled. Sega games normally do not require a BIOS file."),
       "psp" to mapOf("required" to false, "available" to true, "message" to "PPSSPP core and its local system assets are bundled. PSP game files remain on this device."),
+      "n64" to mapOf("required" to false, "available" to true, "message" to "Parallel-N64 is bundled with the Android build; game files remain on this device."),
+      "ps2" to mapOf("required" to false, "available" to true, "message" to "Play! is bundled with the Android build; supported games depend on Play! compatibility and device graphics support."),
     )
   }
 
