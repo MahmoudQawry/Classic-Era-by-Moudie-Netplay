@@ -82,31 +82,7 @@ replacements = [
         '    p.shoulderButtons.forEachIndexed { i, c -> addControl(c, if (i % 2 == 0) Gravity.LEFT or Gravity.TOP else Gravity.RIGHT or Gravity.TOP, 16 + (i / 2) * 72, 18) }\n',
         '    p.shoulderButtons.forEachIndexed { i, c -> val margin = 16 + (i / 2) * 72; val sideMargin = if (i % 2 == 0) margin else margin + 56; addControl(c, if (i % 2 == 0) Gravity.LEFT or Gravity.TOP else Gravity.RIGHT or Gravity.TOP, sideMargin, 18) }\n'
     ),
-    (
-        '  private fun supportsPlayPs2Graphics(): Boolean {\n',
-        '  private external fun nativeInitializePlayJavaVm(corePath: String): Boolean\n\n  private fun supportsPlayPs2Graphics(): Boolean {\n'
-    ),
-]
 
-ps2_preload = """    if (definition.system == "ps2" && !supportsPlayPs2Graphics()) {
-      showError("PlayStation 2 requires OpenGL ES 3.2 or higher on Android. This device reports an older graphics level, so the game was blocked instead of crashing the app.")
-      return
-    }
-    // Play! is an Android-specific core whose emulation thread calls into
-    // Framework::CJavaVM. LibretroDroid opens cores with dlopen(), so the
-    // core's JavaVM field is not initialized automatically. The native bridge
-    // sets it from the current process JavaVM before the core starts.
-    if (definition.system == "ps2") {
-      val initialized = runCatching {
-        System.loadLibrary("moudie_play_bridge")
-        nativeInitializePlayJavaVm(core.absolutePath)
-      }.getOrDefault(false)
-      if (!initialized) {
-        showError("Could not initialize the Play! PS2 Android runtime. The native JavaVM bridge could not initialize the core.")
-        return
-      }
-    }
-"""
 
 if ps2_preload not in text:
     guard = """    if (definition.system == "ps2" && !supportsPlayPs2Graphics()) {
