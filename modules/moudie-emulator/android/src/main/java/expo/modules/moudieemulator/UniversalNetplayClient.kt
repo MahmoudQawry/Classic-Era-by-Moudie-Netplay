@@ -21,7 +21,7 @@ class UniversalNetplayClient(
   private val onBootstrap: (playerMemberIds: List<Int>) -> Unit,
   private val onSessionGo: (startAt: Long, playerMemberIds: List<Int>) -> Unit,
   private val onStateRequest: () -> Unit,
-  private val onRemoteInput: (remoteMemberId: Int, frame: Long, mask: Int) -> Unit,
+  private val onRemoteInput: (remoteMemberId: Int, frame: Long, mask: Int, analogX: Int, analogY: Int) -> Unit,
   private val onRemoteState: (encodedState: String, syncId: Long, encoding: String) -> Unit,
   private val onChat: (displayName: String, text: String) -> Unit,
   private val onStatus: (String) -> Unit,
@@ -118,7 +118,9 @@ class UniversalNetplayClient(
         val remoteMemberId = payload.optInt("memberId", 0)
         val frame = payload.optLong("frame", -1L)
         val mask = payload.optInt("mask", -1)
-        if (remoteMemberId > 0 && frame >= 0L && mask in 0..0xffff) onRemoteInput(remoteMemberId, frame, mask)
+        val analogX = payload.optInt("analogX", 0).coerceIn(-127, 127)
+        val analogY = payload.optInt("analogY", 0).coerceIn(-127, 127)
+        if (remoteMemberId > 0 && frame >= 0L && mask in 0..0xffff) onRemoteInput(remoteMemberId, frame, mask, analogX, analogY)
       }
       on("netplay:universal-state") { args ->
         val payload = args.firstOrNull() as? JSONObject ?: return@on
@@ -138,9 +140,9 @@ class UniversalNetplayClient(
     }
   }
 
-  fun sendInputFrame(frame: Long, mask: Int) {
-    if (frame < 0L || mask !in 0..0xffff || socket?.connected() != true) return
-    socket?.emit("netplay:universal-input", JSONObject().put("frame", frame).put("mask", mask))
+  fun sendInputFrame(frame: Long, mask: Int, analogX: Int = 0, analogY: Int = 0) {
+    if (frame < 0L || mask !in 0..0xffff || analogX !in -127..127 || analogY !in -127..127 || socket?.connected() != true) return
+    socket?.emit("netplay:universal-input", JSONObject().put("frame", frame).put("mask", mask).put("analogX", analogX).put("analogY", analogY))
   }
 
   fun sendState(encodedState: String, syncId: Long, encoding: String) {
