@@ -143,6 +143,17 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
       showError("PlayStation 2 requires OpenGL ES 3.2 or higher on Android. This device reports an older graphics level, so the game was blocked instead of crashing the app.")
       return
     }
+    // Play! is a special Android core: its native code expects JNI_OnLoad(JavaVM*)
+    // to run before its emulation thread starts. LibretroDroid loads cores with
+    // dlopen(), which does not provide that JNI initialization. Preload the PS2
+    // library through Android so JNI_OnLoad receives the process JavaVM first;
+    // LibretroDroid can then reuse the already loaded image.
+    if (definition.system == "ps2") {
+      runCatching { System.load(core.absolutePath) }.onFailure { error ->
+        showError("Could not initialize the Play! PS2 runtime. " + (error.message ?: "Native library load failed."))
+        return
+      }
+    }
 
     preferences = getSharedPreferences("moudie-controller-layouts", Context.MODE_PRIVATE)
     analogEnabled = preferences.getBoolean("analog-enabled", false)
