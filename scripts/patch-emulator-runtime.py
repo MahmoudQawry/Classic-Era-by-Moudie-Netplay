@@ -22,14 +22,6 @@ replacements = [
 """
     ),
     (
-        '    analogEnabled = preferences.getBoolean("analog-enabled", false)\n',
-        '    analogEnabled = preferences.getBoolean("analog-enabled", definition.system in setOf("n64", "ps2", "psp"))\n'
-    ),
-    (
-        "    addController()\n    addMenu()\n",
-        "    addController()\n    if (analogEnabled) attachAnalogStick()\n    addMenu()\n"
-    ),
-    (
         '  override fun onKeyDown(k: Int, e: KeyEvent): Boolean { sendLocalKey(KeyEvent.ACTION_DOWN, k); return super.onKeyDown(k, e) }\n  override fun onKeyUp(k: Int, e: KeyEvent): Boolean { sendLocalKey(KeyEvent.ACTION_UP, k); return super.onKeyUp(k, e) }\n  override fun onGenericMotionEvent(e: MotionEvent?): Boolean { if (e != null) { retroView.sendMotionEvent(GLRetroView.MOTION_SOURCE_DPAD, e.getAxisValue(MotionEvent.AXIS_HAT_X), e.getAxisValue(MotionEvent.AXIS_HAT_Y), localPlayerIndex); retroView.sendMotionEvent(GLRetroView.MOTION_SOURCE_ANALOG_LEFT, e.getAxisValue(MotionEvent.AXIS_X), e.getAxisValue(MotionEvent.AXIS_Y), localPlayerIndex); retroView.sendMotionEvent(GLRetroView.MOTION_SOURCE_ANALOG_RIGHT, e.getAxisValue(MotionEvent.AXIS_Z), e.getAxisValue(MotionEvent.AXIS_RZ), localPlayerIndex) }; return super.onGenericMotionEvent(e) }\n',
         """  override fun onKeyDown(k: Int, e: KeyEvent): Boolean {
     if (KeyEvent.isGamepadButton(k) || k == KeyEvent.KEYCODE_DPAD_UP || k == KeyEvent.KEYCODE_DPAD_DOWN || k == KeyEvent.KEYCODE_DPAD_LEFT || k == KeyEvent.KEYCODE_DPAD_RIGHT) {
