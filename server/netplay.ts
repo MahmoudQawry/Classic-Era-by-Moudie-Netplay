@@ -32,7 +32,7 @@ const VOICE_SIGNAL_KINDS = new Set(["voice-hello", "voice-ready", "voice-offer",
 type SessionReadyPayload = { system?: unknown; fingerprint?: unknown; coreVersion?: unknown };
 type SessionStartPayload = { system?: unknown };
 type Ps1ReadyPayload = { fingerprint?: unknown; coreVersion?: unknown };
-type Ps1InputPayload = { frame?: unknown; mask?: unknown };
+type Ps1InputPayload = { frame?: unknown; mask?: unknown; analogX?: unknown; analogY?: unknown };
 type Ps1StatePayload = { snapshot?: unknown; syncId?: unknown; encoding?: unknown };
 type Ps1SyncAckPayload = { syncId?: unknown };
 type StateRequestPayload = { minimumSyncId?: unknown };
@@ -568,7 +568,9 @@ export function registerNetplayServer(server: HttpServer) {
     socket.on("netplay:ps1-input", (payload: Ps1InputPayload) => {
       const frame = Number(payload?.frame);
       const mask = Number(payload?.mask);
-      if (!Number.isSafeInteger(frame) || frame < 0 || !Number.isSafeInteger(mask) || mask < 0 || mask > 0xffff || typeof socket.data.ps1Fingerprint !== "string") return;
+      const analogX = Number(payload?.analogX ?? 0);
+      const analogY = Number(payload?.analogY ?? 0);
+      if (!Number.isSafeInteger(frame) || frame < 0 || !Number.isSafeInteger(mask) || mask < 0 || mask > 0xffff || !Number.isInteger(analogX) || !Number.isInteger(analogY) || analogX < -127 || analogX > 127 || analogY < -127 || analogY > 127 || typeof socket.data.ps1Fingerprint !== "string") return;
       if (session.role === "spectator") return;
       
       // Rate limiting
@@ -602,7 +604,7 @@ export function registerNetplayServer(server: HttpServer) {
         if (oldFrame < frame - 60) history.delete(oldFrame);
       }
 
-      socket.to(channel).emit("netplay:ps1-input", { memberId: session.memberId, frame, mask, serverTime: Date.now() });
+      socket.to(channel).emit("netplay:ps1-input", { memberId: session.memberId, frame, mask, analogX, analogY, serverTime: Date.now() });
     });
 
     socket.on("netplay:ps1-state", (payload: Ps1StatePayload) => {
@@ -712,7 +714,7 @@ export function registerNetplayServer(server: HttpServer) {
         frameMap = new Map();
         history.set(frame, frameMap);
       }
-      frameMap.set(session.memberId, { mask, receivedAt: Date.now(), memberId: session.memberId });
+      frameMap.set(session.memberId, { mask, analogX, analogY, receivedAt: Date.now(), memberId: session.memberId });
 
       for (const oldFrame of history.keys()) {
         if (oldFrame < frame - 60) history.delete(oldFrame);
