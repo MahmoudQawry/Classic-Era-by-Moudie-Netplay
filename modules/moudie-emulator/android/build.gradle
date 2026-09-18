@@ -36,6 +36,16 @@ android {
   defaultConfig {
     versionCode 1
     versionName ""
+    externalNativeBuild {
+      cmake {
+        arguments "-DANDROID_STL=c++_static"
+      }
+    }
+  }
+  externalNativeBuild {
+    cmake {
+      path file("src/main/cpp/CMakeLists.txt")
+    }
   }
   lintOptions {
     abortOnError false
