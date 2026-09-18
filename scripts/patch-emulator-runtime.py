@@ -82,17 +82,7 @@ replacements = [
         '    p.shoulderButtons.forEachIndexed { i, c -> addControl(c, if (i % 2 == 0) Gravity.LEFT or Gravity.TOP else Gravity.RIGHT or Gravity.TOP, 16 + (i / 2) * 72, 18) }\n',
         '    p.shoulderButtons.forEachIndexed { i, c -> val margin = 16 + (i / 2) * 72; val sideMargin = if (i % 2 == 0) margin else margin + 56; addControl(c, if (i % 2 == 0) Gravity.LEFT or Gravity.TOP else Gravity.RIGHT or Gravity.TOP, sideMargin, 18) }\n'
     ),
-
-
-if ps2_preload not in text:
-    guard = """    if (definition.system == "ps2" && !supportsPlayPs2Graphics()) {
-      showError("PlayStation 2 requires OpenGL ES 3.2 or higher on Android. This device reports an older graphics level, so the game was blocked instead of crashing the app.")
-      return
-    }
-"""
-    if guard not in text:
-        raise SystemExit("PS2 graphics guard missing")
-    text = text.replace(guard, ps2_preload, 1)
+]
 
 for old, new in replacements:
     if old not in text:
