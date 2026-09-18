@@ -27,7 +27,7 @@ from pathlib import Path
 import sys
 path = Path(sys.argv[1])
 text = path.read_text()
-include = "#ifdef __ANDROID__\n#include <jni.h>\n#include \"android/JavaVM.h\"\n#endif\n"
+include = "#ifdef __ANDROID__\n#include <jni.h>\n#include <dlfcn.h>\n#include \"android/JavaVM.h\"\n#endif\n"
 anchor = "#include \"PH_Libretro_Input.h\"\n"
 if include not in text:
     if anchor not in text: raise SystemExit("Could not locate Play! libretro include anchor")
@@ -38,7 +38,16 @@ bootstrap = """void retro_init()
 #ifdef __ANDROID__
 \tJavaVM* javaVm = nullptr;
 \tjsize javaVmCount = 0;
-\tif(JNI_GetCreatedJavaVMs(&javaVm, 1, &javaVmCount) == JNI_OK && javaVm != nullptr && javaVmCount > 0)
+\tusing GetCreatedJavaVMsFn = jint (*)(JavaVM**, jsize, jsize*);
+\tauto getCreatedJavaVMs = reinterpret_cast<GetCreatedJavaVMsFn>(dlsym(RTLD_DEFAULT, "JNI_GetCreatedJavaVMs"));
+\tvoid* jniProvider = nullptr;
+\tif(getCreatedJavaVMs == nullptr)
+\t{
+\t\tjniProvider = dlopen("libnativehelper.so", RTLD_NOW | RTLD_LOCAL);
+\t\tif(jniProvider != nullptr)
+\t\t\tgetCreatedJavaVMs = reinterpret_cast<GetCreatedJavaVMsFn>(dlsym(jniProvider, "JNI_GetCreatedJavaVMs"));
+\t}
+\tif(getCreatedJavaVMs != nullptr && getCreatedJavaVMs(&javaVm, 1, &javaVmCount) == JNI_OK && javaVm != nullptr && javaVmCount > 0)
 \t{
 \t\t// LibretroDroid uses dlopen(), so Android does not invoke Play! JNI_OnLoad automatically.
 \t\t// Initialize CJavaVM inside THIS Play! library instance.
