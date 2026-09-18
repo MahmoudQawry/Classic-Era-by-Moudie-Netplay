@@ -32,6 +32,18 @@ describe("native emulator control safeguards", () => {
     expect(catalog).toContain("EmulatorControlProfiles.PS2");
   });
 
+  it("prevents Play! from being loaded twice through System.load and dlopen", () => {
+    expect(activity).not.toContain("System.load(core.absolutePath)");
+    expect(activity).toContain('System.loadLibrary("moudie_play_bridge")');
+    expect(activity).toContain("nativeInitializePlayJavaVm(core.absolutePath)");
+    expect(bridge).toContain("owns the FIRST");
+    expect(bridge).toContain("dlopen()");
+  });
+
+  it("uses the LibretroDroid default renderer for PS2 to avoid an unnecessary post-processing shader", () => {
+    expect(activity).toContain('shader = if (definition.system == "ps2") ShaderConfig.Default else ShaderConfig.Sharp');
+  });
+
   it("initializes the Play! JavaVM and Android JNI metadata before LibretroDroid starts the core", () => {
     expect(bridge).toContain("_ZN9Framework7CJavaVM9SetJavaVMEP7_JavaVM");
     expect(bridge).toContain("_ZN7android7content25ContentResolver_ClassInfo16PrepareClassInfoEv");
