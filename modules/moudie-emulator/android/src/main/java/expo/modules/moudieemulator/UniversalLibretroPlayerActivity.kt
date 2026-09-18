@@ -435,6 +435,9 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
     p.actionButtons.forEachIndexed { i, c -> addControl(c, Gravity.RIGHT or Gravity.BOTTOM, face.getOrElse(i) { 74 to 52 }.first, face.getOrElse(i) { 74 to 52 }.second) }
     p.shoulderButtons.forEachIndexed { i, c -> addControl(c, if (i % 2 == 0) Gravity.LEFT or Gravity.TOP else Gravity.RIGHT or Gravity.TOP, 16 + (i / 2) * 72, 18) }
     p.systemButtons.forEachIndexed { i, c -> addControl(c, Gravity.CENTER_HORIZONTAL or Gravity.BOTTOM, i * 84 - 42, 24) }
+    if (definition.system in setOf("ps1", "psp", "ps2")) {
+      analogHudButton = addUtilityButton("analog", if (analogEnabled) "ANLG" else "ANLG×", dp(176)) { toggleAnalogStick() }
+    }
   }
 
   private fun addControl(c: EmulatorTouchButton, gravity: Int, x: Int, y: Int) {
@@ -521,6 +524,7 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
     })
     configureAnalogEditing(stick)
     restoreControl(stick, "analog")
+    controls += stick to "analog"
     analogStick = stick
   }
 
