@@ -27,7 +27,7 @@ from pathlib import Path
 import sys
 path = Path(sys.argv[1])
 text = path.read_text()
-include = "#ifdef __ANDROID__\n#include <jni.h>\n#endif\n"
+include = "#ifdef __ANDROID__\n#include <jni.h>\n#include \"android/JavaVM.h\"\n#endif\n"
 anchor = "#include \"PH_Libretro_Input.h\"\n"
 if include not in text:
     if anchor not in text: raise SystemExit("Could not locate Play! libretro include anchor")
