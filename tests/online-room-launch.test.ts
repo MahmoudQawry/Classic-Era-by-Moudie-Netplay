@@ -49,7 +49,7 @@ describe("online room launch safeguards", () => {
     expect(famicom).toContain("(1..5)");
 
     expect(universal).toContain("RENDERMODE_CONTINUOUSLY");
-    expect(universal).toContain("preferLowLatencyAudio = true");
+    expect(universal).toContain("preferLowLatencyAudio = definition.system != \"ps2\"");
     expect(universal).toContain("ShaderConfig.Sharp");
     expect(universal).toContain("applyAspectRatio()");
     expect(universal).toContain("retroView.getGLRetroErrors()");
