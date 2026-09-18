@@ -20,7 +20,7 @@ build_play_core() {
   fi
 
   echo "Building patched Play! core from upstream source..."
-  git clone --depth 1 --filter=blob:none https://github.com/jpd002/Play-.git "${play_source}"
+  git clone --depth 1 --recurse-submodules --shallow-submodules https://github.com/jpd002/Play-.git "${play_source}"
 
   python3 - "${play_source}/Source/ui_libretro/main_libretro.cpp" <<'PY'
 from pathlib import Path
