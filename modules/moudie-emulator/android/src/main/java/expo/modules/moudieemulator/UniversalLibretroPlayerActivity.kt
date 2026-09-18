@@ -158,7 +158,6 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
         // Load the exact Play! shared-library instance into Android's class-loader
         // namespace first. The bridge then uses RTLD_NOLOAD so its SetJavaVM call
         // targets this same instance instead of a second linker-namespace copy.
-        System.load(core.absolutePath)
         System.loadLibrary("moudie_play_bridge")
         nativeInitializePlayJavaVm(core.absolutePath)
       }.getOrDefault(false)
@@ -178,7 +177,7 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
     retroView = GLRetroView(this, GLRetroViewData(this).apply {
       coreFilePath = core.absolutePath; gameFilePath = gameFile.absolutePath
       systemDirectory = system.absolutePath; savesDirectory = saves.absolutePath
-      shader = ShaderConfig.Sharp; preferLowLatencyAudio = true; rumbleEventsEnabled = true
+      shader = if (definition.system == "ps2") ShaderConfig.Default else ShaderConfig.Sharp; preferLowLatencyAudio = true; rumbleEventsEnabled = true
     }).apply { renderMode = GLSurfaceView.RENDERMODE_CONTINUOUSLY }
     lifecycle.addObserver(retroView)
     lifecycleScope.launch { retroView.getGLRetroErrors().collect { showToast(errorMessage(it, gameFile.name)) } }
