@@ -4,6 +4,7 @@
 
 namespace {
 using SetJavaVmFn = void (*)(JavaVM*);
+using PrepareClassInfoFn = void (*)();
 
 constexpr const char* kSetter =
     "_ZN9Framework7CJavaVM9SetJavaVMEP7_JavaVM";
@@ -42,8 +43,26 @@ Java_expo_modules_moudieemulator_UniversalLibretroPlayerActivity_nativeInitializ
     return JNI_FALSE;
   }
 
+  // The Play! libretro build used here does not export JNI_OnLoad, so the
+  // JavaVM setter alone is insufficient. Upstream Play! initializes its
+  // Android JNI ClassInfo singletons from JNI_OnLoad. Reproduce the
+  // available initialization hooks before LibretroDroid starts the core.
   reinterpret_cast<SetJavaVmFn>(setter_symbol)(vm);
+
+  constexpr const char* kPrepareSymbols[] = {
+      "_ZN7android7content25ContentResolver_ClassInfo16PrepareClassInfoEv",
+      "_ZN7android8database16Cursor_ClassInfo16PrepareClassInfoEv",
+      "_ZN7android3net13Uri_ClassInfo16PrepareClassInfoEv",
+      "_ZN7android2os30ParcelFileDescriptor_ClassInfo16PrepareClassInfoEv",
+  };
+  for (const char* symbol_name : kPrepareSymbols) {
+    void* symbol = dlsym(gPlayHandle, symbol_name);
+    if (symbol != nullptr) {
+      reinterpret_cast<PrepareClassInfoFn>(symbol)();
+    }
+  }
+
   env->ReleaseStringUTFChars(core_path, path);
-  __android_log_print(ANDROID_LOG_INFO, "MoudiePlayBridge", "Play! JavaVM initialized");
+  __android_log_print(ANDROID_LOG_INFO, "MoudiePlayBridge", "Play! JavaVM and Android JNI bridge initialized");
   return JNI_TRUE;
 }
