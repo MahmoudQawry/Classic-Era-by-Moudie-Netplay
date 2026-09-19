@@ -22,6 +22,51 @@ build_play_core() {
   echo "Building patched Play! core from upstream source..."
   git clone --depth 1 --recurse-submodules --shallow-submodules https://github.com/jpd002/Play-.git "${play_source}"
 
+  python3 - "\${play_source}/Source/ui_libretro/GSH_OpenGL_Libretro.cpp" <<'PY'
+from pathlib import Path
+import sys
+path = Path(sys.argv[1])
+text = path.read_text()
+text = text.replace(
+"""\tif(g_hw_render.get_current_framebuffer)
+\t\tm_presentFramebuffer = g_hw_render.get_current_framebuffer();
+""",
+"""\t// Moudie frontend: Play!'s GS runs on the libretro/GL thread and presents
+\t// directly into the GLSurfaceView default framebuffer. LibretroDroid's
+\t// intermediate FBO is not used for this core because Play! owns the
+\t// presentation pass and asynchronous GS state can otherwise leave the
+\t// hand-off texture black even while the emulator/audio/input are alive.
+\tm_presentFramebuffer = 0;
+""",
+1)
+text = text.replace(
+"""\tif(g_hw_render.get_current_framebuffer)
+\t\tm_presentFramebuffer = g_hw_render.get_current_framebuffer();
+\telse
+\t\treturn;
+
+\tCGSH_OpenGL::FlipImpl(dispInfo);
+""",
+"""\t// Keep presentation on the Android window framebuffer for this frontend.
+\tm_presentFramebuffer = 0;
+\tCGSH_OpenGL::FlipImpl(dispInfo);
+""",
+1)
+text = text.replace(
+"""\tif(g_video_cb)
+\t\tg_video_cb(RETRO_HW_FRAME_BUFFER_VALID, GetCrtWidth() * g_res_factor, GetCrtHeight() * g_res_factor, 0);
+""",
+"""\t// The framebuffer is already the Android GLSurfaceView default framebuffer.
+\t// Do not invoke LibretroDroid's hardware-video callback here: that callback
+\t// would run its own post-processing renderer and clear the framebuffer we
+\t// just presented.
+""",
+1)
+if "Moudie frontend: Play!'s GS runs on the libretro/GL thread" not in text:
+    raise SystemExit("Direct presentation patch was not applied")
+path.write_text(text)
+PY
+
   python3 - "${play_source}/Source/ui_libretro/main_libretro.cpp" <<'PY'
 from pathlib import Path
 import sys
