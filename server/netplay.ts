@@ -420,7 +420,7 @@ export function registerNetplayServer(server: HttpServer) {
 
     socket.on("netplay:session-ready", (payload: SessionReadyPayload) => {
       if (session.clientKind !== "room-ui" || session.role === "spectator") return;
-      const system = payload?.system === "ps1" || payload?.system === "nes" || payload?.system === "psp" || payload?.system === "sega" ? payload.system : null;
+      const system = payload?.system === "ps1" || payload?.system === "nes" || payload?.system === "psp" || payload?.system === "sega" || payload?.system === "n64" || payload?.system === "ps2" ? payload.system : null;
       const fingerprint = typeof payload?.fingerprint === "string" ? payload.fingerprint.toLowerCase() : "";
       const coreVersion = typeof payload?.coreVersion === "string" ? payload.coreVersion.trim() : "";
       if (!system || !/^[a-f0-9]{64}$/.test(fingerprint) || !coreVersion) return;
