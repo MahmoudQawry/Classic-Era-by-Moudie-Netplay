@@ -64,18 +64,22 @@ from pathlib import Path
 import sys
 path = Path(sys.argv[1])
 text = path.read_text()
-include = """#ifdef __ANDROID__
+
+include = '''#ifdef __ANDROID__
 #include <jni.h>
 #include <dlfcn.h>
 #include "android/JavaVM.h"
 #endif
-"""
-anchor = '#include "PH_Libretro_Input.h"\\n'
-if include not in text:
-    if anchor not in text: raise SystemExit("Could not locate Play! libretro include anchor")
-    text = text.replace(anchor, anchor + "\\n" + include, 1)
-anchor = "void retro_init()\\n{\\n"
-bootstrap = """void retro_init()
+'''
+include_anchor = '#include "PH_Libretro_Input.h"'
+if "Moudie PS2 JNI bootstrap" not in text:
+    if include not in text:
+        if include_anchor not in text:
+            raise SystemExit("Could not locate Play! libretro include anchor")
+        text = text.replace(include_anchor, include_anchor + "\n\n" + include, 1)
+
+    anchor = "void retro_init()\n{"
+    bootstrap = '''void retro_init()
 {
 #ifdef __ANDROID__
 	JavaVM* javaVm = nullptr;
@@ -99,9 +103,9 @@ bootstrap = """void retro_init()
 		CLog::GetInstance().Print(LOG_NAME, "%s\\n", "Moudie PS2 JNI bootstrap FAILED: JavaVM unavailable");
 	}
 #endif
-"""
-if "Moudie PS2 JNI bootstrap" not in text:
-    if anchor not in text: raise SystemExit("Could not locate Play! retro_init")
+'''
+    if anchor not in text:
+        raise SystemExit("Could not locate Play! retro_init")
     text = text.replace(anchor, bootstrap, 1)
 path.write_text(text)
 PY
