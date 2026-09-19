@@ -54,5 +54,7 @@ describe("native emulator control safeguards", () => {
     expect(script).toContain("Moudie PS2 JNI bootstrap");
     expect(script).toContain("build_play_core");
     expect(script).toContain("-DGLES_COMPATIBILITY=1");
+    expect(script).toContain("m_presentFramebuffer = 0");
+    expect(script).toContain("Do not invoke LibretroDroid's hardware-video callback here");
   });
 });
