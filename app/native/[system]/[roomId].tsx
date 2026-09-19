@@ -8,6 +8,7 @@ import { RoomChat } from "@/components/room-chat";
 import { RoomVoiceChat, type RoomVoiceChatHandle } from "@/components/room-voice-chat";
 import { getRoomRelayUrl, createNetplaySocket } from "@/lib/netplay-socket";
 import { setRealtimeRoomReady } from "@/lib/realtime-room-service";
+import { trpc } from "@/lib/trpc";
 import { getRoomCredential, type RoomCredential } from "@/lib/room-storage";
 import { useRealtimeRoomSnapshot } from "@/lib/use-realtime-room-snapshot";
 import MoudieEmulatorModule from "@/modules/moudie-emulator/src/MoudieEmulatorModule";
@@ -37,6 +38,7 @@ export default function NativeRoomScreen() {
   const [starting, setStarting] = useState(false);
   const [picking, setPicking] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
+  const [mediaToken, setMediaToken] = useState<{ configured: boolean; url?: string; roomName?: string; token?: string; canPublish?: boolean; message?: string } | null>(null);
   const statusText = status === null ? t(meta.statusKey) : status;
   const socketRef = useRef<ReturnType<typeof createNetplaySocket> | null>(null);
   const voiceChatRef = useRef<RoomVoiceChatHandle | null>(null);
@@ -44,8 +46,24 @@ export default function NativeRoomScreen() {
   const catalog = useMemo(() => MoudieEmulatorModule.getCoreCatalog().find((entry) => entry.system === emulatorSystem), [emulatorSystem]);
   const snapshotQuery = useRealtimeRoomSnapshot(numericRoomId, credential, 4_000);
   const coreVersion = `moudie-${system}-libretro-lockstep-v3`;
+  const mediaTokenMutation = trpc.rooms.mediaToken.useMutation();
 
   useEffect(() => { if (Number.isFinite(numericRoomId)) getRoomCredential(numericRoomId).then(setCredential); }, [numericRoomId]);
+  useEffect(() => {
+    if (!credential || Platform.OS === "web") return;
+    let cancelled = false;
+    const refresh = async () => {
+      try {
+        const next = await mediaTokenMutation.mutateAsync({ roomId: numericRoomId, memberId: credential.memberId, memberToken: credential.memberToken });
+        if (!cancelled) setMediaToken(next);
+      } catch {
+        if (!cancelled) setMediaToken({ configured: false, message: t("voiceSetupFailed") });
+      }
+    };
+    void refresh();
+    const timer = setInterval(() => { void refresh(); }, 15 * 60 * 1000);
+    return () => { cancelled = true; clearInterval(timer); };
+  }, [credential, mediaTokenMutation, numericRoomId, t]);
   useEffect(() => { if (Platform.OS === "web") return; const subscription = MoudieEmulatorModule.addListener("nativeOverlayAction", (payload) => { if (payload.action === "toggle-microphone") void voiceChatRef.current?.setMicrophoneEnabled(!payload.muted); if (payload.action === "toggle-speaker") void voiceChatRef.current?.setSpeakerEnabled?.(!payload.muted); }); return () => subscription.remove(); }, []);
   useEffect(() => {
     if (!credential || Platform.OS === "web") return;
@@ -105,7 +123,7 @@ export default function NativeRoomScreen() {
     <View style={styles.status}><Text style={styles.statusTitle}>{t("fcNetplayStatus")}</Text><Text style={styles.statusText}>{statusText}</Text></View>
     {game && connected && assignedPlayer && <Pressable onPress={markReady} disabled={ready} style={({ pressed }) => [styles.ready, (pressed || ready) && styles.disabled]}><Text style={styles.readyText}>{ready ? t("fcReadyConfirmed") : t("pspReady2")}</Text></Pressable>}
     {canStart && <Pressable onPress={requestStart} style={({ pressed }) => [styles.start, pressed && styles.disabled]}><Text style={styles.startText}>{t("segStartSession")}</Text></Pressable>}
-    {Platform.OS !== "web" && <><RoomChat socket={connected ? socketRef.current : null} title={`${meta.title} · ${t("roomChat")}`} /><RoomVoiceChat ref={voiceChatRef} socket={connected ? socketRef.current : null} isHost={Boolean(host)} remoteOnline={remoteOnline} memberId={credential?.memberId} members={snapshotQuery.data?.members ?? []} /></>}
+    {Platform.OS !== "web" && <><RoomChat socket={connected ? socketRef.current : null} title={`${meta.title} · ${t("roomChat")}`} /><RoomVoiceChat ref={voiceChatRef} mediaToken={mediaToken} socket={connected ? socketRef.current : null} memberRole={snapshotQuery.data?.members.find((member) => member.id === credential?.memberId)?.role} memberId={credential?.memberId} members={snapshotQuery.data?.members ?? []} /></>}
   </ScrollView></ScreenContainer>;
 }
 
