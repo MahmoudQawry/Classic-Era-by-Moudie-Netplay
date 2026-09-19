@@ -108,6 +108,7 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
   private var predictedFrames = 0
   private var lastRemoteMasks = mutableMapOf<Int, Int>()
   private var lastFrameReceivedAt = 0L
+  private var lastRemoteFrameWaitStartedAt = 0L
   private var consecutiveDesyncs = 0
   private var frameDriftMs = 0L
   @Volatile private var lastNetplaySyncId = -1L
@@ -310,6 +311,7 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
     frameDriftMs = 0L
     lastRemoteMasks.clear()
     lastFrameReceivedAt = android.os.SystemClock.elapsedRealtime()
+    lastRemoteFrameWaitStartedAt = lastFrameReceivedAt
     appliedMasksByPort.clear()
     synchronized(remoteFrameMasks) { remoteFrameMasks.clear() }
     synchronized(remoteFrameAnalogs) { remoteFrameAnalogs.clear() }
@@ -364,50 +366,28 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
       val remoteMembers = sessionPlayerMemberIds.filter { it != localMemberId }
 
       if (remoteMasks == null || remoteMembers.any { it !in remoteMasks }) {
-        predictedFrames++
-        if (remoteMasks != null) remoteMasks.forEach { (memberId, mask) -> lastRemoteMasks[memberId] = mask }
-
-        if (predictedFrames > MAX_PREDICTION_FRAMES) {
-          if (predictedFrames == MAX_PREDICTION_FRAMES + 1) {
-            showToast("Waiting for players... ${predictedFrames * 17}ms")
-            netplayClient?.requestState(lastNetplaySyncId)
-            netplayClient?.reportDesync(nextLockstepFrame, predictedFrames)
+        // Deterministic lockstep must never advance a frame with guessed remote input.
+        // A missing packet stalls this exact frame; after a sustained stall we request
+        // the authoritative state and adapt the input delay instead of diverging.
+        if (now - lastRemoteFrameWaitStartedAt > RESYNC_TIMEOUT_MS) {
+          showToast("Connection slow - resynchronizing shared frame...")
+          netplayClient?.requestState(-1L)
+          netplayClient?.reportDesync(nextLockstepFrame, 1)
+          lastRemoteFrameWaitStartedAt = now
+          consecutiveDesyncs++
+          if (consecutiveDesyncs > 1 && netplayInputDelayFrames < 8) {
+            netplayInputDelayFrames++
+            netplayClient?.requestDelayIncrease(netplayInputDelayFrames, "lockstep-stall")
+            consecutiveDesyncs = 0
           }
-          if (now - lastFrameReceivedAt > RESYNC_TIMEOUT_MS) {
-            showToast("Connection slow - resyncing...")
-            netplayClient?.requestState(-1L)
-            lastFrameReceivedAt = now
-            consecutiveDesyncs++
-            if (consecutiveDesyncs > 3 && netplayInputDelayFrames < 8) {
-              netplayInputDelayFrames++
-              netplayClient?.requestDelayIncrease(netplayInputDelayFrames, "high-prediction")
-              showToast("Increased buffer to ${netplayInputDelayFrames} frames")
-              consecutiveDesyncs = 0
-            }
-          }
-          lockstepChoreographer.postFrameCallback(this)
-          return
         }
-
-        applyMask(localMask, localPlayerIndex, appliedMasksByPort[localPlayerIndex] ?: 0)
-        applyAnalog(localAnalog, localPlayerIndex)
-        appliedMasksByPort[localPlayerIndex] = localMask
-        remoteMembers.forEach { memberId ->
-          val port = sessionPlayerMemberIds.indexOf(memberId)
-          val mask = remoteMasks?.get(memberId) ?: lastRemoteMasks[memberId] ?: 0
-          val analog = remoteAnalogs?.get(memberId) ?: AnalogInput(0, 0)
-          applyMask(mask, port, appliedMasksByPort[port] ?: 0)
-          applyAnalog(analog, port)
-          appliedMasksByPort[port] = mask
-        }
-        retroView.requestRender()
-        nextLockstepFrame += 1L
-        lockstepChoreographer.postFrameCallback(this)
+        lockstepChoreographer.postFrameCallbackDelayed(this, 4L)
         return
       }
 
       if (predictedFrames > 10) showToast("Re-synced after ${predictedFrames} predicted frames")
       predictedFrames = 0
+      lastRemoteFrameWaitStartedAt = now
       lastFrameReceivedAt = now
       consecutiveDesyncs = 0
       remoteMasks.forEach { (memberId, mask) -> lastRemoteMasks[memberId] = mask }
