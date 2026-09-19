@@ -5,6 +5,8 @@ const bundleId = "com.app.moudienetplay";
 const timestamp = bundleId.split(".").pop()?.replace(/^t/, "") ?? "";
 const schemeFromBundleId = `classicera${timestamp}`;
 
+const DEFAULT_NATIVE_SERVICE_URL = "https://moudienet-7h7tawv.manus.space";
+
 const env = {
   portal: process.env.EXPO_PUBLIC_OAUTH_PORTAL_URL ?? "",
   server: process.env.EXPO_PUBLIC_OAUTH_SERVER_URL ?? "",
@@ -18,7 +20,7 @@ const env = {
 };
 
 const configuredRelayUrls = env.netplayServiceUrls.split(",").map((url) => url.trim().replace(/\/$/, "")).filter(Boolean);
-const NATIVE_NETPLAY_SERVICE_URL = (env.netplayServiceUrl || configuredRelayUrls[0] || env.apiBaseUrl || "").replace(/\/$/, "");
+const NATIVE_NETPLAY_SERVICE_URL = (env.netplayServiceUrl || configuredRelayUrls[0] || env.apiBaseUrl || DEFAULT_NATIVE_SERVICE_URL).replace(/\/$/, "");
 const NATIVE_NETPLAY_SERVICE_URLS = Array.from(new Set([NATIVE_NETPLAY_SERVICE_URL, ...configuredRelayUrls, env.apiBaseUrl.replace(/\/$/, "")].filter(Boolean)));
 
 // Kept as the stable native fallback contract used by the existing launch safeguards.
