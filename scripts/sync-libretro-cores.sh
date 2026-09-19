@@ -70,15 +70,11 @@ include = """#ifdef __ANDROID__
 #include "android/JavaVM.h"
 #endif
 """
-anchor = '#include "PH_Libretro_Input.h"
-'
+anchor = '#include "PH_Libretro_Input.h"\\n'
 if include not in text:
     if anchor not in text: raise SystemExit("Could not locate Play! libretro include anchor")
-    text = text.replace(anchor, anchor + "
-" + include, 1)
-anchor = "void retro_init()
-{
-"
+    text = text.replace(anchor, anchor + "\\n" + include, 1)
+anchor = "void retro_init()\\n{\\n"
 bootstrap = """void retro_init()
 {
 #ifdef __ANDROID__
@@ -96,11 +92,11 @@ bootstrap = """void retro_init()
 	if(getCreatedJavaVMs != nullptr && getCreatedJavaVMs(&javaVm, 1, &javaVmCount) == JNI_OK && javaVm != nullptr && javaVmCount > 0)
 	{
 		Framework::CJavaVM::SetJavaVM(javaVm);
-		CLog::GetInstance().Print(LOG_NAME, "%s\n", "Moudie PS2 JNI bootstrap: JavaVM initialized");
+		CLog::GetInstance().Print(LOG_NAME, "%s\\n", "Moudie PS2 JNI bootstrap: JavaVM initialized");
 	}
 	else
 	{
-		CLog::GetInstance().Print(LOG_NAME, "%s\n", "Moudie PS2 JNI bootstrap FAILED: JavaVM unavailable");
+		CLog::GetInstance().Print(LOG_NAME, "%s\\n", "Moudie PS2 JNI bootstrap FAILED: JavaVM unavailable");
 	}
 #endif
 """
