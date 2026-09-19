@@ -91,6 +91,8 @@ function BuiltInVoice({ socket, memberId, members }: { socket?: unknown; memberI
   const [channel, setChannel] = useState<VoiceChannel>("room");
   const channelRef = useRef<VoiceChannel>("room");
   const [connected, setConnected] = useState(0);
+  const remoteChannelRef = useRef<Map<number, VoiceChannel>>(new Map());
+  const remoteTrackRef = useRef<Map<number, any[]>>(new Map());
   const [status, setStatus] = useState(t("voiceBuiltInReady"));
   const disposedRef = useRef(false);
   const candidateQueue = useRef<Map<number, any[]>>(new Map());
@@ -102,6 +104,16 @@ function BuiltInVoice({ socket, memberId, members }: { socket?: unknown; memberI
 
   const emit = (event: string, payload?: any) => socketRef.current?.emit?.(event, payload);
   const refreshCount = () => setConnected([...peersRef.current.values()].filter((p) => p.connectionState === "connected").length);
+  const localRole = members?.find((m) => m.id === memberId)?.role;
+  const canHear = (remoteId: number) => {
+    const remoteChannel = remoteChannelRef.current.get(remoteId) ?? "room";
+    if (remoteChannel === "team" && localRole === "spectator") return false;
+    return speakerRef.current;
+  };
+  const applyRemoteAudioPolicy = (remoteId: number) => {
+    const enabled = canHear(remoteId);
+    for (const track of remoteTrackRef.current.get(remoteId) ?? []) track.enabled = enabled;
+  };
   const greet = () => emit("netplay:signal", { signal: { kind: "voice-hello" } });
 
   const ensureStream = async () => {
@@ -138,7 +150,19 @@ function BuiltInVoice({ socket, memberId, members }: { socket?: unknown; memberI
     peer.oniceconnectionstatechange = () => {
       if ((peer.iceConnectionState === "failed" || peer.iceConnectionState === "disconnected") && !disposedRef.current) scheduleOffer(remoteId, true);
     };
-    peer.ontrack = (e: any) => { const track = e.track; if (track) track.enabled = speakerRef.current; refreshCount(); };
+    peer.onnegotiationneeded = () => {
+      if (!disposedRef.current) scheduleOffer(remoteId);
+    };
+    peer.ontrack = (e: any) => {
+      const track = e.track;
+      if (track) {
+        const tracks = remoteTrackRef.current.get(remoteId) ?? [];
+        if (!tracks.includes(track)) tracks.push(track);
+        remoteTrackRef.current.set(remoteId, tracks);
+        applyRemoteAudioPolicy(remoteId);
+      }
+      refreshCount();
+    };
     peersRef.current.set(remoteId, peer);
     return peer;
   };
@@ -158,6 +182,17 @@ function BuiltInVoice({ socket, memberId, members }: { socket?: unknown; memberI
   useEffect(() => {
     const sock = socketRef.current; const localId = Number(memberId); if (!sock?.on || !Number.isInteger(localId) || localId <= 0) return;
     disposedRef.current = false;
+    const onVoiceStatus = (payload: any) => {
+      const remoteId = Number(payload?.memberId);
+      if (!Number.isInteger(remoteId) || remoteId <= 0 || remoteId === localId) return;
+      const nextChannel: VoiceChannel = payload?.voiceChannel === "team" ? "team" : "room";
+      remoteChannelRef.current.set(remoteId, nextChannel);
+      if (payload?.microphoneEnabled === false) {
+        for (const track of remoteTrackRef.current.get(remoteId) ?? []) track.enabled = false;
+      } else {
+        applyRemoteAudioPolicy(remoteId);
+      }
+    };
     const onSignal = async (payload: any) => {
       const remoteId = Number(payload?.fromMemberId); const signal = payload?.signal as Signal | undefined;
       if (!Number.isInteger(remoteId) || remoteId <= 0 || remoteId === localId || !signal || disposedRef.current) return;
@@ -178,7 +213,7 @@ function BuiltInVoice({ socket, memberId, members }: { socket?: unknown; memberI
       }
     };
     const onConnect = () => { greet(); for (const id of peersRef.current.keys()) scheduleOffer(id, true); };
-    sock.on("netplay:signal", onSignal); sock.on("connect", onConnect);
+    sock.on("netplay:signal", onSignal); sock.on("netplay:voice-status", onVoiceStatus); sock.on("connect", onConnect);
     const timer = setInterval(() => {
       if (!sock.connected || disposedRef.current) return;
       const expected = Math.max(0, (members?.length ?? 1) - 1);
@@ -188,7 +223,7 @@ function BuiltInVoice({ socket, memberId, members }: { socket?: unknown; memberI
     }, 5000);
     const app = AppState.addEventListener("change", (state) => { if (state === "active") { greet(); for (const id of peersRef.current.keys()) scheduleOffer(id, true); } });
     greet();
-    return () => { disposedRef.current = true; clearInterval(timer); app.remove(); sock.off?.("netplay:signal", onSignal); sock.off?.("connect", onConnect); for (const timer of retryRef.current.values()) clearTimeout(timer); retryRef.current.clear(); for (const peer of peersRef.current.values()) peer.close(); peersRef.current.clear(); candidateQueue.current.clear(); streamRef.current?.getTracks().forEach((track: any) => track.stop()); streamRef.current = null; InCallManager.stop(); AudioSession.stopAudioSession().catch(() => undefined); };
+    return () => { disposedRef.current = true; clearInterval(timer); app.remove(); sock.off?.("netplay:signal", onSignal); sock.off?.("netplay:voice-status", onVoiceStatus); sock.off?.("connect", onConnect); for (const timer of retryRef.current.values()) clearTimeout(timer); retryRef.current.clear(); for (const peer of peersRef.current.values()) peer.close(); peersRef.current.clear(); candidateQueue.current.clear(); streamRef.current?.getTracks().forEach((track: any) => track.stop()); streamRef.current = null; InCallManager.stop(); AudioSession.stopAudioSession().catch(() => undefined); };
   }, [socket, memberId, members?.length]);
 
   const onMic = async (enabled: boolean) => {
@@ -197,7 +232,7 @@ function BuiltInVoice({ socket, memberId, members }: { socket?: unknown; memberI
     setMic(enabled); micRef.current = enabled;
     emit("netplay:voice-status", { microphoneEnabled: enabled, speakerEnabled: speakerRef.current, voiceChannel: channelRef.current, isSpeaking: enabled });
   };
-  const onSpeaker = (enabled: boolean) => { setSpeaker(enabled); speakerRef.current = enabled; emit("netplay:voice-status", { microphoneEnabled: micRef.current, speakerEnabled: enabled, voiceChannel: channelRef.current }); };
+  const onSpeaker = (enabled: boolean) => { setSpeaker(enabled); speakerRef.current = enabled; for (const id of peersRef.current.keys()) applyRemoteAudioPolicy(id); emit("netplay:voice-status", { microphoneEnabled: micRef.current, speakerEnabled: enabled, voiceChannel: channelRef.current }); };
   const onChannel = (next: VoiceChannel) => { setChannel(next); channelRef.current = next; emit("netplay:voice-status", { microphoneEnabled: micRef.current, speakerEnabled: speakerRef.current, voiceChannel: next }); };
 
   return <><AudioSessionGuard /><VoiceControls microphoneEnabled={mic} speakerEnabled={speaker} channel={channel} connectedCount={connected} status={status} members={members} localMemberId={memberId} onMic={onMic} onSpeaker={onSpeaker} onChannel={onChannel} /></>;
