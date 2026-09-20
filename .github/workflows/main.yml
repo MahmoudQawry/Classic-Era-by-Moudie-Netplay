@@ -127,6 +127,16 @@ jobs:
         run: |
           cd android
           ./gradlew assembleRelease --no-daemon -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=512m" -Dorg.gradle.daemon=false
+      - name: 🚫 فحص الكلمات والعناوين المحظورة من APK
+        run: |
+          set -e
+          APK="android/app/build/outputs/apk/release/app-release.apk"
+          if strings "$APK" | grep -Eiq 'manus|pubg|moudienet-7h7tawv'; then
+            echo "ERROR: forbidden provider/game branding or stale relay URL detected inside APK."
+            exit 1
+          fi
+          echo "Forbidden branding/stale relay scan passed."
+
       - name: 🔬 تدقيق جسر Play! داخل APK
         run: |
           set -e
