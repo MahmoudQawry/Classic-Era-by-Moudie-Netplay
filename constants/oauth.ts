@@ -12,8 +12,8 @@ const env = {
   ownerId: process.env.EXPO_PUBLIC_OWNER_OPEN_ID ?? "",
   ownerName: process.env.EXPO_PUBLIC_OWNER_NAME ?? "",
   apiBaseUrl: process.env.EXPO_PUBLIC_API_BASE_URL ?? "",
-  netplayServiceUrl: process.env.EXPO_PUBLIC_NETPLAY_SERVICE_URL ?? "",
-  netplayServiceUrls: process.env.EXPO_PUBLIC_NETPLAY_SERVICE_URLS ?? "",
+  netplayServiceUrl: process.env.EXPO_PUBLIC_NETPLAY_SERVICE_URL ?? "https://classic-era-by-moudie-netplay.moudienetplay.workers.dev",
+  netplayServiceUrls: process.env.EXPO_PUBLIC_NETPLAY_SERVICE_URLS ?? "https://classic-era-by-moudie-netplay.moudienetplay.workers.dev",
   deepLinkScheme: schemeFromBundleId,
 };
 
