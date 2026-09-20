@@ -42,8 +42,8 @@ class CloudflareNetplaySocket {
         this.dispatch(packet.event,packet.payload);
       } catch(error){this.dispatch("error",error);}
     };
-    ws.onerror=(event)=>{this.dispatch("connect_error",event);this.dispatch("error",event);};
-    ws.onclose=()=>{const wasConnected=this.connected;this.connected=false;this.ws=null;if(wasConnected)this.dispatch("disconnect");if(!this.manuallyClosed){if(this.reconnectTimer)clearTimeout(this.reconnectTimer);this.reconnectTimer=setTimeout(()=>this.connect(),1000);}};
+    ws.onerror=(event)=>{this.dispatch("connect_error",new Error("WebSocket connection failed: "+url));this.dispatch("error",event);};
+    ws.onclose=(event)=>{const wasConnected=this.connected;this.connected=false;this.ws=null;if(!wasConnected)this.dispatch("connect_error",new Error(`WebSocket closed before authentication (code ${event.code})`));if(wasConnected)this.dispatch("disconnect");if(!this.manuallyClosed){if(this.reconnectTimer)clearTimeout(this.reconnectTimer);this.reconnectTimer=setTimeout(()=>this.connect(),1000);}};
     return this;
   }
   disconnect(){this.manuallyClosed=true;this.connected=false;if(this.reconnectTimer)clearTimeout(this.reconnectTimer);this.reconnectTimer=null;this.ws?.close();this.ws=null;return this;}
