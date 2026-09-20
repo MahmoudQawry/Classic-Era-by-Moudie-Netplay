@@ -1,8 +1,16 @@
 import { AccessToken } from "livekit-server-sdk";
 
 export type LiveKitMemberRole = "host" | "player" | "spectator";
+export type LiveKitVoiceChannel = "room" | "team";
 
 type LiveKitRuntime = { url: string; apiKey: string; apiSecret: string };
+type TokenResult = {
+  configured: true;
+  url: string;
+  roomName: string;
+  token: string;
+  canPublish: boolean;
+};
 
 function configuredRuntime(): LiveKitRuntime | null {
   const url = process.env.LIVEKIT_URL?.trim();
@@ -12,9 +20,57 @@ function configuredRuntime(): LiveKitRuntime | null {
   return { url, apiKey, apiSecret };
 }
 
-/** Creates one isolated adaptive room voice channel. All room members, including
- * spectators, may speak and listen; room membership is still enforced by the
- * signed room credential before a token is issued. */
+async function issueToken(runtime: LiveKitRuntime, input: {
+  roomName: string;
+  memberId: number;
+  displayName: string;
+  role: LiveKitMemberRole;
+  channel: LiveKitVoiceChannel;
+}): Promise<TokenResult> {
+  const identity = `member-${input.memberId}`;
+  const canPublish = input.channel === "room" || input.role !== "spectator";
+  const token = new AccessToken(runtime.apiKey, runtime.apiSecret, {
+    identity,
+    name: input.displayName,
+    ttl: "2h",
+    metadata: JSON.stringify({
+      roomId: input.roomName.split("-").pop(),
+      memberId: input.memberId,
+      role: input.role,
+      voiceChannel: input.channel,
+    }),
+    attributes: {
+      role: input.role,
+      voiceChannel: input.channel,
+    },
+  });
+
+  token.addGrant({
+    room: input.roomName,
+    roomJoin: true,
+    canSubscribe: input.channel === "room" || input.role !== "spectator",
+    canPublish,
+    canPublishData: false,
+    canUpdateOwnMetadata: false,
+  });
+
+  return {
+    configured: true,
+    url: runtime.url,
+    roomName: input.roomName,
+    token: await token.toJwt(),
+    canPublish,
+  };
+}
+
+/**
+ * Voice is deliberately split into two LiveKit SFU rooms:
+ *   - moudie-room-{id}: everyone in the room (players + spectators)
+ *   - moudie-team-{id}: active players only
+ *
+ * This prevents "team" privacy from depending on client-side track.enabled
+ * flags. Each channel has its own signed authorization boundary.
+ */
 export async function createRoomMediaToken(input: {
   roomId: number;
   memberId: number;
@@ -22,32 +78,33 @@ export async function createRoomMediaToken(input: {
   role: LiveKitMemberRole;
 }) {
   const runtime = configuredRuntime();
-  if (!runtime) return { configured: false as const, message: "خدمة الصوت الجماعي لم تُضبط بعد على الخادم." };
+  if (!runtime) {
+    return {
+      configured: false as const,
+      message: "خدمة الصوت الجماعي لم تُضبط بعد على الخادم.",
+    };
+  }
 
-  const roomName = `moudie-room-${input.roomId}`;
-  const identity = `member-${input.memberId}`;
-  const token = new AccessToken(runtime.apiKey, runtime.apiSecret, {
-    identity,
-    name: input.displayName,
-    ttl: "2h",
-    metadata: JSON.stringify({ roomId: input.roomId, memberId: input.memberId, role: input.role }),
-    attributes: { role: input.role, roomId: String(input.roomId) },
+  const roomToken = await issueToken(runtime, {
+    roomName: `moudie-room-${input.roomId}`,
+    memberId: input.memberId,
+    displayName: input.displayName,
+    role: input.role,
+    channel: "room",
   });
 
-  token.addGrant({
-    room: roomName,
-    roomJoin: true,
-    canSubscribe: true,
-    canPublish: true,
-    canPublishData: true,
-    canUpdateOwnMetadata: false,
-  });
+  const teamMediaToken = input.role === "spectator"
+    ? null
+    : await issueToken(runtime, {
+      roomName: `moudie-team-${input.roomId}`,
+      memberId: input.memberId,
+      displayName: input.displayName,
+      role: input.role,
+      channel: "team",
+    });
 
   return {
-    configured: true as const,
-    url: runtime.url,
-    roomName,
-    token: await token.toJwt(),
-    canPublish: true,
+    ...roomToken,
+    teamMediaToken,
   };
 }
