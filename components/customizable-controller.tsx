@@ -2,8 +2,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PanResponder, Pressable, StyleSheet, Text, useWindowDimensions, View, type LayoutChangeEvent } from "react-native";
 
-type SystemId = "famicom" | "ps1" | "psp" | "sega";
-type ControlId = "UP" | "DOWN" | "LEFT" | "RIGHT" | "A" | "B" | "C" | "X" | "O" | "TRIANGLE" | "SQUARE" | "L" | "R" | "L1" | "R1" | "START" | "SELECT" | "ONE" | "TWO" | "THREE" | "FOUR";
+type SystemId = "famicom" | "ps1" | "psp" | "sega" | "n64" | "ps2";
+type ControlId = "UP" | "DOWN" | "LEFT" | "RIGHT" | "A" | "B" | "C" | "X" | "O" | "TRIANGLE" | "SQUARE" | "Z" | "L" | "R" | "L1" | "R1" | "L2" | "R2" | "START" | "SELECT" | "ONE" | "TWO" | "THREE" | "FOUR";
 type Orientation = "portrait" | "landscape";
 type Position = { x: number; y: number; size: number };
 type ControllerLayout = Partial<Record<ControlId, Position>>;
@@ -39,6 +39,18 @@ const profiles: Record<SystemId, { controls: ControlId[]; accent: string; labels
     controls: ["UP", "DOWN", "LEFT", "RIGHT", "X", "O", "TRIANGLE", "SQUARE", "L", "R", "START", "SELECT"],
     labels: { UP: "▲", DOWN: "▼", LEFT: "◀", RIGHT: "▶", X: "×", O: "○", TRIANGLE: "△", SQUARE: "□", L: "L", R: "R", START: "START", SELECT: "SELECT" },
     defaults: { UP: { x: 13, y: 54, size: 54 }, DOWN: { x: 13, y: 73, size: 54 }, LEFT: { x: 3, y: 64, size: 54 }, RIGHT: { x: 23, y: 64, size: 54 }, TRIANGLE: { x: 78, y: 54, size: 52 }, X: { x: 78, y: 73, size: 52 }, SQUARE: { x: 68, y: 64, size: 52 }, O: { x: 88, y: 64, size: 52 }, L: { x: 5, y: 37, size: 44 }, R: { x: 82, y: 37, size: 44 }, START: { x: 52, y: 89, size: 41 }, SELECT: { x: 37, y: 89, size: 41 } },
+  },
+  n64: {
+    accent: "#E7C85B",
+    controls: ["UP","DOWN","LEFT","RIGHT","A","B","Z","L","R","C","X","Y","START"],
+    labels: { UP:"▲", DOWN:"▼", LEFT:"◀", RIGHT:"▶", A:"A", B:"B", Z:"Z", L:"L", R:"R", C:"C", X:"C←", Y:"C↑", START:"START" },
+    defaults: { UP:{x:13,y:54,size:54}, DOWN:{x:13,y:73,size:54}, LEFT:{x:3,y:64,size:54}, RIGHT:{x:23,y:64,size:54}, A:{x:78,y:70,size:54}, B:{x:65,y:62,size:54}, Z:{x:50,y:73,size:48}, L:{x:5,y:37,size:44}, R:{x:82,y:37,size:44}, C:{x:88,y:74,size:46}, X:{x:88,y:54,size:46}, Y:{x:76,y:54,size:46}, START:{x:51,y:89,size:40} },
+  },
+  ps2: {
+    accent: "#72A7FF",
+    controls: ["UP","DOWN","LEFT","RIGHT","TRIANGLE","CROSS","SQUARE","O","L1","R1","L2","R2","START","SELECT"],
+    labels: { UP:"▲", DOWN:"▼", LEFT:"◀", RIGHT:"▶", TRIANGLE:"△", CROSS:"×", SQUARE:"□", O:"○", L1:"L1", R1:"R1", L2:"L2", R2:"R2", START:"START", SELECT:"SELECT" },
+    defaults: { UP:{x:13,y:54,size:54}, DOWN:{x:13,y:73,size:54}, LEFT:{x:3,y:64,size:54}, RIGHT:{x:23,y:64,size:54}, TRIANGLE:{x:78,y:52,size:50}, CROSS:{x:78,y:72,size:50}, SQUARE:{x:68,y:62,size:50}, O:{x:88,y:62,size:50}, L1:{x:5,y:37,size:42}, R1:{x:82,y:37,size:42}, L2:{x:5,y:28,size:42}, R2:{x:82,y:28,size:42}, START:{x:52,y:89,size:40}, SELECT:{x:37,y:89,size:40} },
   },
   sega: {
     accent: "#70E39B",
@@ -165,7 +177,7 @@ export function CustomizableController({ system, editable, orientation, onButton
         const position = layout[id] ?? profile.defaults[id];
         if (!position) return null;
         const controlSize = position.size;
-        const isMeta = id === "START" || id === "SELECT" || id === "L" || id === "R" || id === "L1" || id === "R1";
+        const isMeta = id === "START" || id === "SELECT" || id === "L" || id === "R" || id === "L1" || id === "R1" || id === "L2" || id === "R2";
         const isDirection = id === "UP" || id === "DOWN" || id === "LEFT" || id === "RIGHT";
         const selected = selectedControl === id && editable;
         return (
