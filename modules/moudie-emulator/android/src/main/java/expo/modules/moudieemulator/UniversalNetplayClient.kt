@@ -1,193 +1,67 @@
 package expo.modules.moudieemulator
 
-import io.socket.client.IO
-import io.socket.client.Socket
 import org.json.JSONObject
 
 data class UniversalNetplayConfig(
-  val serverUrl: String,
-  val roomId: Int,
-  val memberId: Int,
-  val memberToken: String,
-  val system: String,
-  val fingerprint: String,
-  val coreVersion: String,
-  val playerIndex: Int,
+  val serverUrl:String,val roomId:Int,val memberId:Int,val memberToken:String,
+  val system:String,val fingerprint:String,val coreVersion:String,val playerIndex:Int,
 )
 
-/** Dedicated low-latency emulator transport for PSP and Sega with adaptive improvements */
 class UniversalNetplayClient(
-  private val config: UniversalNetplayConfig,
-  private val onBootstrap: (playerMemberIds: List<Int>) -> Unit,
-  private val onSessionGo: (startAt: Long, playerMemberIds: List<Int>) -> Unit,
-  private val onStateRequest: () -> Unit,
-  private val onRemoteInput: (remoteMemberId: Int, frame: Long, mask: Int, analogX: Int, analogY: Int) -> Unit,
-  private val onRemoteState: (encodedState: String, syncId: Long, encoding: String) -> Unit,
-  private val onChat: (displayName: String, text: String) -> Unit,
-  private val onStatus: (String) -> Unit,
-  private val onQuality: (NetplayQuality) -> Unit,
-  private val onDelayUpdate: ((delay: Long) -> Unit)? = null,
-) {
-  companion object {
-    private const val MIN_ACTIVE_PLAYERS = 2
-    private const val MAX_ACTIVE_PLAYERS = 4
+  private val config:UniversalNetplayConfig,
+  private val onBootstrap:(playerMemberIds:List<Int>)->Unit,
+  private val onSessionGo:(startAt:Long,playerMemberIds:List<Int>)->Unit,
+  private val onStateRequest:()->Unit,
+  private val onRemoteInput:(remoteMemberId:Int,frame:Long,mask:Int,analogX:Int,analogY:Int)->Unit,
+  private val onRemoteState:(encodedState:String,syncId:Long,encoding:String)->Unit,
+  private val onChat:(displayName:String,text:String)->Unit,
+  private val onStatus:(String)->Unit,
+  private val onQuality:(NetplayQuality)->Unit,
+  private val onDelayUpdate:((delay:Long)->Unit)?=null,
+){
+  private var transport:CloudflareNetplayWebSocket?=null
+  fun connect(){
+    if(transport!=null)return
+    transport=CloudflareNetplayWebSocket(config.serverUrl,config.roomId,config.memberId,config.memberToken,
+      onEvent={event,payload->handle(event,payload)},
+      onConnected={transport?.send("netplay:universal-ready",JSONObject().put("system",config.system).put("fingerprint",config.fingerprint).put("coreVersion",config.coreVersion));onStatus(config.system.uppercase()+" channel connected - adaptive sync active")},
+      onDisconnected={onStatus("Game channel paused; auto-reconnecting...")},
+      onError={onStatus("Emulator realtime: "+it)},
+      onQuality={quality->onQuality(quality);onDelayUpdate?.invoke(quality.recommendedDelay)},
+    )
+    transport?.connect()
   }
-
-  private var socket: Socket? = null
-  private var qualityMonitor: NetplayQualityMonitor? = null
-
-  fun connect() {
-    val options = IO.Options().apply {
-      path = "/api/netplay"
-      transports = arrayOf("websocket", "polling")
-      upgrade = true
-      reconnection = true
-      timeout = 20_000
-      reconnectionAttempts = Integer.MAX_VALUE
-      reconnectionDelay = 1_000
-      reconnectionDelayMax = 8_000
-      randomizationFactor = 0.35
-      auth = hashMapOf(
-        "roomId" to config.roomId.toString(),
-        "memberId" to config.memberId.toString(),
-        "memberToken" to config.memberToken,
-        "clientKind" to "universal-player",
-      )
-    }
-    val connectedSocket = IO.socket(config.serverUrl, options)
-    qualityMonitor = NetplayQualityMonitor(connectedSocket, onQuality, "netplay:quality-probe", "netplay:quality-pong")
-    socket = connectedSocket.apply {
-      on(Socket.EVENT_CONNECT) {
-        emit("netplay:universal-ready", JSONObject()
-          .put("system", config.system)
-          .put("fingerprint", config.fingerprint)
-          .put("coreVersion", config.coreVersion))
-        qualityMonitor?.resume()
-        onStatus("${config.system.uppercase()} channel connected - adaptive sync active")
-      }
-      on("netplay:universal-session-bootstrap") { args ->
-        val payload = args.firstOrNull() as? JSONObject ?: return@on
-        val inputDelay = payload.optLong("inputDelay", 3L)
-        onDelayUpdate?.invoke(inputDelay)
-        val ids = payload.playerMemberIds()
-        if (ids.size in MIN_ACTIVE_PLAYERS..8) onBootstrap(ids)
-        else onStatus("Invalid player list, waiting for valid session")
-      }
-      on("netplay:universal-waiting") { args ->
-        val payload = args.firstOrNull() as? JSONObject
-        val connected = payload?.optInt("connectedCount", 0) ?: 0
-        val required = payload?.optInt("requiredCount", 0) ?: 0
-        val msg = if (required > 0) "Waiting $connected/$required players - open same file"
-        else payload?.optString("message")?.ifBlank { "Waiting for every active player to verify the same game." } ?: "Waiting for every active player to verify the same game."
-        onStatus(msg)
-      }
-      on("netplay:session-start-refused") { args ->
-        val payload = args.firstOrNull() as? JSONObject
-        onStatus(payload?.optString("message")?.ifBlank { "The emulator session was refused." } ?: "The emulator session was refused.")
-      }
-      on("netplay:universal-session-go") { args ->
-        val payload = args.firstOrNull() as? JSONObject ?: return@on
-        val startAt = payload.optLong("startAt", -1L)
-        val inputDelay = payload.optLong("inputDelay", 3L)
-        onDelayUpdate?.invoke(inputDelay)
-        val ids = payload.playerMemberIds()
-        if (startAt > 0L && ids.size in MIN_ACTIVE_PLAYERS..8) onSessionGo(startAt, ids)
-        else if (startAt > 0L) onStatus("Invalid player count, start ignored")
-      }
-      on("netplay:delay-update") { args ->
-        val payload = args.firstOrNull() as? JSONObject ?: return@on
-        val delay = payload.optLong("delay", -1L)
-        if (delay in 2..45) {
-          onDelayUpdate?.invoke(delay)
-          onStatus("Network adapting: buffer ${delay} frames")
-        }
-      }
-      on("netplay:frame-rejected") { args ->
-        val payload = args.firstOrNull() as? JSONObject ?: return@on
-        if (payload.optString("reason", "") == "frame too far ahead") {
-          onStatus("Sync: device ahead, slowing down")
-        }
-      }
-      on("netplay:desync-detected") { args ->
-        val payload = args.firstOrNull() as? JSONObject ?: return@on
-        onStatus(payload.optString("message", "Desync detected - resyncing"))
-      }
-      on("netplay:universal-state-request") { onStateRequest() }
-      on("netplay:universal-input") { args ->
-        val payload = args.firstOrNull() as? JSONObject ?: return@on
-        val remoteMemberId = payload.optInt("memberId", 0)
-        val frame = payload.optLong("frame", -1L)
-        val mask = payload.optInt("mask", -1)
-        val analogX = payload.optInt("analogX", 0).coerceIn(-127, 127)
-        val analogY = payload.optInt("analogY", 0).coerceIn(-127, 127)
-        if (remoteMemberId > 0 && frame >= 0L && mask in 0..0xffff) onRemoteInput(remoteMemberId, frame, mask, analogX, analogY)
-      }
-      on("netplay:universal-state") { args ->
-        val payload = args.firstOrNull() as? JSONObject ?: return@on
-        val state = payload.optString("snapshot", "")
-        val syncId = payload.optLong("syncId", -1L)
-        val encoding = payload.optString("encoding", "")
-        if (state.isNotBlank() && syncId >= 0L && (encoding == "gzip-base64" || encoding == "base64")) onRemoteState(state, syncId, encoding)
-      }
-      on("netplay:chat") { args ->
-        val payload = args.firstOrNull() as? JSONObject ?: return@on
-        val text = payload.optString("text", "").trim()
-        if (text.isNotEmpty()) onChat(payload.optString("displayName", "Player"), text)
-      }
-      on(Socket.EVENT_CONNECT_ERROR) { onStatus("Emulator channel reconnecting - adaptive recovery") }
-      on(Socket.EVENT_DISCONNECT) { qualityMonitor?.pause(); onStatus("Game channel paused; auto-reconnecting...") }
-      connect()
+  private fun handle(event:String,p:JSONObject){
+    when(event){
+      "netplay:joined"->{val ids=p.optJSONArray("onlineMemberIds").toIntList();if(ids.size>=2)onBootstrap(ids)}
+      "netplay:session-start"->{if(p.optString("system")==config.system){val ids=p.optJSONArray("playerMemberIds").toIntList();val start=p.optLong("startAt",-1L);if(start>0L&&ids.size>=2)onSessionGo(start,ids)}}
+      "netplay:session-start-refused"->onStatus(p.optString("message","The emulator session was refused."))
+      "netplay:delay-update"->{val d=p.optLong("delay",-1L);if(d in 2..45)onDelayUpdate?.invoke(d)}
+      "netplay:universal-state-request"->onStateRequest()
+      "netplay:universal-input"->{val id=p.optInt("memberId",0);val frame=p.optLong("frame",-1);val mask=p.optInt("mask",-1);if(id>0&&frame>=0&&mask in 0..0xffff)onRemoteInput(id,frame,mask,p.optInt("analogX",0).coerceIn(-127,127),p.optInt("analogY",0).coerceIn(-127,127))}
+      "netplay:universal-state"->{val state=p.optString("snapshot","");val sync=p.optLong("syncId",-1);val enc=p.optString("encoding","");if(state.isNotBlank()&&sync>=0&&(enc=="gzip-base64"||enc=="base64"))onRemoteState(state,sync,enc)}
+      "netplay:chat"->{val text=p.optString("text","").trim();if(text.isNotEmpty())onChat(p.optString("displayName","Player"),text)}
+      "netplay:desync-detected"->onStatus(p.optString("message","Desync detected - resyncing"))
+      "netplay:frame-rejected"->onStatus("Sync: device ahead, slowing down")
     }
   }
-
-  fun sendInputFrame(frame: Long, mask: Int, analogX: Int = 0, analogY: Int = 0) {
-    if (frame < 0L || mask !in 0..0xffff || analogX !in -127..127 || analogY !in -127..127 || socket?.connected() != true) return
-    socket?.emit("netplay:universal-input", JSONObject().put("frame", frame).put("mask", mask).put("analogX", analogX).put("analogY", analogY))
+  fun sendInputFrame(frame:Long,mask:Int,analogX:Int=0,analogY:Int=0){if(frame>=0&&mask in 0..0xffff&&analogX in -127..127&&analogY in -127..127)transport?.send("netplay:universal-input",JSONObject().put("frame",frame).put("mask",mask).put("analogX",analogX).put("analogY",analogY))}
+  fun sendState(encodedState:String,syncId:Long,encoding:String){if(encodedState.isNotBlank()&&syncId>=0)transport?.send("netplay:universal-state",JSONObject().put("snapshot",encodedState).put("syncId",syncId).put("encoding",encoding))}
+  fun requestState(minimumSyncId:Long=-1L){transport?.send("netplay:universal-state-request",JSONObject().put("minimumSyncId",minimumSyncId))}
+  fun acknowledgeState(syncId:Long){if(syncId>=0)transport?.send("netplay:universal-sync-ack",JSONObject().put("syncId",syncId))}
+  fun setSessionReady(isReady:Boolean){
+    transport?.send("netplay:session-ready",JSONObject().put("isReady",isReady).put("fingerprint",config.fingerprint).put("coreVersion",config.coreVersion))
   }
-
-  fun sendState(encodedState: String, syncId: Long, encoding: String) {
-    if (encodedState.isBlank() || syncId < 0L) return
-    socket?.emit("netplay:universal-state", JSONObject().put("snapshot", encodedState).put("syncId", syncId).put("encoding", encoding))
+  fun requestSessionStart(){
+    transport?.send("netplay:session-start-request",JSONObject().put("system",config.system))
   }
+  fun sendChat(text:String){val safe=text.trim().take(400);if(safe.isNotEmpty())transport?.send("netplay:chat",JSONObject().put("text",safe))}
+  fun requestDelayIncrease(delay:Long,reason:String){if(delay in 2..45)transport?.send("netplay:delay-request",JSONObject().put("delay",delay).put("reason",reason))}
+  fun reportDesync(frame:Long,predictedFrames:Int){transport?.send("netplay:desync-report",JSONObject().put("frame",frame).put("predictedFrames",predictedFrames))}
+  fun close(){transport?.close();transport=null}
+}
 
-  fun requestState(minimumSyncId: Long = -1L) {
-    socket?.emit("netplay:universal-state-request", JSONObject().put("minimumSyncId", minimumSyncId))
-  }
-
-  fun acknowledgeState(syncId: Long) {
-    if (syncId >= 0L) socket?.emit("netplay:universal-sync-ack", JSONObject().put("syncId", syncId))
-  }
-
-  fun sendChat(text: String) {
-    val safeText = text.trim().take(400)
-    if (safeText.isNotEmpty()) socket?.emit("netplay:chat", JSONObject().put("text", safeText))
-  }
-
-  fun requestDelayIncrease(delay: Long, reason: String) {
-    if (delay in 2..45) {
-      socket?.emit("netplay:delay-request", JSONObject().put("delay", delay).put("reason", reason))
-    }
-  }
-
-  fun reportDesync(frame: Long, predictedFrames: Int) {
-    socket?.emit("netplay:desync-report", JSONObject().put("frame", frame).put("predictedFrames", predictedFrames))
-  }
-
-  fun close() {
-    qualityMonitor?.close()
-    qualityMonitor = null
-    socket?.off()
-    socket?.disconnect()
-    socket = null
-  }
-
-  private fun JSONObject.playerMemberIds(): List<Int> {
-    val values = optJSONArray("playerMemberIds") ?: return emptyList()
-    return buildList {
-      for (index in 0 until values.length()) {
-        val memberId = values.optInt(index, 0)
-        if (memberId > 0) add(memberId)
-      }
-    }.distinct()
-  }
+private fun org.json.JSONArray?.toIntList():List<Int>{
+  if(this==null)return emptyList()
+  return buildList{for(i in 0 until length()){val id=optInt(i,0);if(id>0)add(id)}}.distinct()
 }

@@ -6,39 +6,49 @@ const root = resolve(__dirname, "..");
 const read = (file: string) => readFileSync(resolve(root, file), "utf8");
 
 describe("NetPlay and voice reliability safeguards", () => {
-  it("uses reliable input delivery without replaying stale controls", () => {
-    const server = read("server/netplay.ts");
+  it("uses the Cloudflare Durable Object WebSocket transport for emulator input/state", () => {
+    const worker = read("cloudflare-netplay/src/index.ts");
     const ps1 = read("modules/moudie-emulator/android/src/main/java/expo/modules/moudieemulator/Ps1NetplayClient.kt");
     const universal = read("modules/moudie-emulator/android/src/main/java/expo/modules/moudieemulator/UniversalNetplayClient.kt");
-    expect(server).toContain('socket.to(channel).emit("netplay:ps1-input"');
-    expect(server).toContain('socket.to(channel).emit("netplay:universal-input"');
-    expect(server).not.toContain('socket.to(channel).volatile.emit("netplay:ps1-input"');
-    expect(server).not.toContain('socket.to(channel).volatile.emit("netplay:universal-input"');
-    expect(server).toContain("delay < 2 || delay > 45");
-    expect(ps1).toContain('socket?.emit("netplay:ps1-input"');
-    expect(universal).toContain('socket?.emit("netplay:universal-input"');
-    expect(ps1).toContain("socket?.connected() == true");
-    expect(universal).toContain("socket?.connected() != true");
-    expect(ps1).toContain("delay in 2..45");
-    expect(universal).toContain("delay in 2..45");
+    const transport = read("modules/moudie-emulator/android/src/main/java/expo/modules/moudieemulator/CloudflareNetplayWebSocket.kt");
+    expect(worker).toContain('this.ctx.acceptWebSocket(server)');
+    expect(worker).toContain('async webSocketMessage');
+    expect(ps1).toContain('CloudflareNetplayWebSocket');
+    expect(universal).toContain('CloudflareNetplayWebSocket');
+    expect(ps1).toContain('transport?.send("netplay:ps1-input"');
+    expect(universal).toContain('transport?.send("netplay:universal-input"');
+    expect(transport).toContain('/ws/room/');
+    expect(transport).toContain('netplay:quality-probe');
+    expect(ps1).not.toContain('IO.socket(');
+    expect(universal).not.toContain('IO.socket(');
   });
 
-  it("resets frame tracking when a verified session starts", () => {
-    const server = read("server/netplay.ts");
-    expect((server.match(/getFrameTracker\(session\.roomId\)\.delete\(session\.memberId\)/g) ?? []).length).toBe(2);
+  it("keeps bounded adaptive delay and frame/state relay semantics", () => {
+    const quality = read("modules/moudie-emulator/android/src/main/java/expo/modules/moudieemulator/NetplayQualityMonitor.kt");
+    const worker = read("cloudflare-netplay/src/index.ts");
+    expect(quality).toContain("MAX_INPUT_DELAY_FRAMES");
+    expect(quality).toContain("frames.coerceIn(2L, MAX_INPUT_DELAY_FRAMES)");
+    expect(worker).toContain('inputDelay:3');
+    expect(worker).toContain('netplay:session-start');
   });
 
-  it("restricts signaling and guarantees a voice path (LiveKit or built-in mesh)", () => {
-    const server = read("server/netplay.ts");
-    const voice = read("components/room-voice-chat.native.tsx");
-    expect(server).toContain("VOICE_SIGNAL_KINDS");
-    expect(server).toContain("JSON.stringify(signal).length > 32_000");
-    expect(voice).toContain("LiveKitRoom");
-    expect(voice).toContain("serverUrl={mediaToken.url}");
-    expect(voice).toContain("BuiltInVoiceControls");
+  it("uses built-in WebRTC voice signaling without requiring LiveKit credentials", () => {
+    const worker = read("cloudflare-netplay/src/index.ts");
+    const voice = read("components/room-voice-chat-reliable.native.tsx");
+    const manifest = read("android/app/src/main/AndroidManifest.xml");
+    expect(worker).toContain('voice:signal');
+    expect(worker).toContain('netplay:voice-status');
     expect(voice).toContain("RTCPeerConnection");
-    expect(voice).toContain("netplay:signal");
+    expect(voice).toContain("mediaDevices.getUserMedia");
+    expect(voice).toContain("voice:signal");
     expect(voice).toContain("netplay:voice-status");
-    expect(voice).not.toContain("audio={true}");
+    expect(voice).not.toContain("LiveKitRoom");
+    expect(voice).not.toContain('voiceChannelRoom');
+    expect(voice).not.toContain('voiceChannelTeam');
+    expect(voice).toContain('onChatPress');
+    expect(voice).toContain('track.enabled=enabled');
+    expect(voice).toContain('EXPO_PUBLIC_TURN_URL');
+    expect(voice).toContain('stun:stun.cloudflare.com:3478');
+    expect(manifest).not.toContain("manusmoudienetplay");
   });
 });

@@ -1,0 +1,30 @@
+name: Cloudflare NetPlay Worker
+
+on:
+  push:
+    paths:
+      - 'cloudflare-netplay/**'
+      - '.github/workflows/cloudflare-netplay.yml'
+  pull_request:
+    paths:
+      - 'cloudflare-netplay/**'
+      - '.github/workflows/cloudflare-netplay.yml'
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate Wrangler deployment graph
+        run: npx --yes wrangler@latest deploy --dry-run --config cloudflare-netplay/wrangler.jsonc
+      - name: Verify required Worker files
+        run: |
+          test -s cloudflare-netplay/wrangler.jsonc
+          test -s cloudflare-netplay/src/index.ts
+          grep -q 'NetplayRoom' cloudflare-netplay/src/index.ts
+          grep -q 'RoomDirectory' cloudflare-netplay/src/index.ts
+          grep -q 'new_sqlite_classes' cloudflare-netplay/wrangler.jsonc

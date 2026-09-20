@@ -30,6 +30,7 @@ type Props = {
   remoteOnline?: boolean;
   memberId?: number;
   members?: { id: number; displayName: string; role: "host" | "player" | "spectator" }[];
+  onChatPress?: () => void;
 };
 
 export const RoomVoiceChat = forwardRef<RoomVoiceChatHandle, Props>(function RoomVoiceChat(_props, ref) {
