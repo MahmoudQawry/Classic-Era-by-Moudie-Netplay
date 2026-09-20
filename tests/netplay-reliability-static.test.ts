@@ -42,5 +42,10 @@ describe("NetPlay and voice reliability safeguards", () => {
     expect(voice).toContain("voice:signal");
     expect(voice).toContain("netplay:voice-status");
     expect(voice).not.toContain("LiveKitRoom");
+    expect(voice).not.toContain('voiceChannelRoom');
+    expect(voice).not.toContain('voiceChannelTeam');
+    expect(voice).toContain('onChatPress');
+    expect(voice).toContain('track.enabled=enabled');
+    expect(voice).toContain('EXPO_PUBLIC_TURN_URL');
   });
 });
