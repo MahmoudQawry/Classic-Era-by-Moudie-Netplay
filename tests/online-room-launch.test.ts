@@ -30,7 +30,9 @@ describe("online room launch safeguards", () => {
     const ps1Client = readProjectFile("modules/moudie-emulator/android/src/main/java/expo/modules/moudieemulator/Ps1NetplayClient.kt");
     const universalClient = readProjectFile("modules/moudie-emulator/android/src/main/java/expo/modules/moudieemulator/UniversalNetplayClient.kt");
     const library = readProjectFile("app/library/[system].tsx");
-    const oauth = readProjectFile("constants/oauth.ts");\n    const roomSnapshot = readProjectFile("lib/use-realtime-room-snapshot.ts");\n    const manifest = readProjectFile("android/app/src/main/AndroidManifest.xml");
+    const oauth = readProjectFile("constants/oauth.ts");
+    const roomSnapshot = readProjectFile("lib/use-realtime-room-snapshot.ts");
+    const manifest = readProjectFile("android/app/src/main/AndroidManifest.xml");
 
     expect(hud).toContain("$systemId.$orientation.hud.$controlId");
     expect(hud).toContain("fun resizeBy(delta: Float)");
@@ -86,7 +88,11 @@ describe("online room launch safeguards", () => {
     expect(famicom).toContain("retroView.setOnTouchListener");
     expect(library).not.toContain("CHOOSE FILE & CONFIGURE");
     expect(famicomRoom).toContain('nativePlayerRef.current?.requestState("netplay")');
-    expect(oauth).toContain("const NATIVE_API_FALLBACK_URL = NATIVE_NETPLAY_SERVICE_URL");\n    expect(roomSnapshot).toContain("RETRY_DELAYS_MS");\n    expect(roomSnapshot).toContain("setInterval(() => void refetch(), refreshInterval)");\n    expect(manifest).not.toContain("manusmoudienetplay");\n    expect(roomSnapshot).toContain("RETRY_DELAYS_MS");
+    expect(oauth).toContain("const NATIVE_API_FALLBACK_URL = NATIVE_NETPLAY_SERVICE_URL");
+    expect(roomSnapshot).toContain("RETRY_DELAYS_MS");
+    expect(roomSnapshot).toContain("setInterval(() => void refetch(), refreshInterval)");
+    expect(manifest).not.toContain("manusmoudienetplay");
+    expect(roomSnapshot).toContain("RETRY_DELAYS_MS");
     expect(ps1).toContain('RENDERMODE_CONTINUOUSLY');
     // Cloudflare Durable Object transport: persistent WebSocket with bounded adaptive delay.
     const transport = readProjectFile("modules/moudie-emulator/android/src/main/java/expo/modules/moudieemulator/CloudflareNetplayWebSocket.kt");
