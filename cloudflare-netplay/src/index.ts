@@ -14,7 +14,7 @@ const SYSTEMS = new Set<System>(["psp","nes","sega","ps1","n64","ps2"]);
 function json(data:unknown, init:ResponseInit={}) { return new Response(JSON.stringify(data), { ...init, headers: { "content-type":"application/json; charset=utf-8", ...(init.headers||{}) } }); }
 function ok(data:unknown) { return json({ result:{ data:{ json:data } } }); }
 function fail(message:string,status=400) { return json({ error:{ json:{ message } } }, {status}); }
-async function input(request:Request) { const body = await request.json(); return body?.json ?? body; }
+async function input(request:Request) { if(request.method==="GET"){const raw=new URL(request.url).searchParams.get("input");if(!raw)return {};const parsed=JSON.parse(raw);return parsed?.json ?? parsed;} const body=await request.json();return body?.json ?? body; }
 async function sha(value:string) { const d=await crypto.subtle.digest("SHA-256",enc.encode(value)); return Array.from(new Uint8Array(d),b=>b.toString(16).padStart(2,"0")).join(""); }
 function limits(system:System) { return system==="n64" ? {maxPlayers:4,maxSpectators:8} : {maxPlayers:2,maxSpectators:8}; }
 function code() { const b=crypto.getRandomValues(new Uint8Array(6)); return Array.from(b,x=>ALPHABET[x%ALPHABET.length]).join(""); }
@@ -102,7 +102,7 @@ export default {
       if(p==="rooms.joinPublic"){const x=await input(request);return ok(await roomIdFor(env,Number(x.roomId)).join(String(x.displayName).trim(),x.joinAs==="spectator"?"spectator":"player"));}
       if(p==="rooms.snapshot"){const x=await input(request);return ok(await roomIdFor(env,Number(x.roomId)).snapshot(Number(x.memberId),String(x.memberToken)));}
       if(p==="rooms.setReady"){const x=await input(request);return ok(await roomIdFor(env,Number(x.roomId)).ready(x));}
-      if(p==="rooms.publicList"){const x=await input(request);return ok(await directory(env).list(Number(x.limit||30)));}
+      if(p==="rooms.publicList"){const x=await input(request);return ok(await directory(env).list(Number(x.limit||30)));}\n      if(p==="rooms.mediaToken"){return ok({configured:false,message:"الصوت الجماعي يحتاج ربط Cloudflare Realtime بعد نشر Worker الغرف."});}
       return fail("خدمة الغرف لا تعرف هذا الإجراء.",404);
     } catch(err){return fail(err instanceof Error?err.message:"حدث خطأ غير معروف.",400);}
   }
