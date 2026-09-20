@@ -6,12 +6,15 @@ declare module "cloudflare:workers" {
   }
 }
 
+interface WorkerSocket extends WebSocket {
+  serializeAttachment(value: unknown): void;
+  deserializeAttachment(): unknown;
+}
 interface DurableObjectState {
   storage: { sql: SqlStorage };
-  acceptWebSocket(socket: WebSocket): void;
-  getWebSockets(): WebSocket[];
+  acceptWebSocket(socket: WorkerSocket): void;
+  getWebSockets(): WorkerSocket[];
 }
-
 interface DurableObjectNamespace<T = unknown> {
   getByName(name: string): T & {
     create(...args: any[]): Promise<any>;
@@ -21,26 +24,10 @@ interface DurableObjectNamespace<T = unknown> {
     socket(...args: any[]): Promise<Response>;
   };
 }
-
 interface SqlStorage {
-  exec(query: string, ...bindings: any[]): {
-    one(): any;
-    toArray(): any[];
-  };
+  exec(query: string, ...bindings: any[]): { one(): any; toArray(): any[]; };
 }
-
-interface WebSocket {
-  serializeAttachment?(value: unknown): void;
-  deserializeAttachment?(): unknown;
-}
-
-interface ResponseInit {
-  webSocket?: WebSocket;
-}
-
-interface WebSocketPair { readonly 0: WebSocket; readonly 1: WebSocket; }
+interface ResponseInit { webSocket?: WebSocket; }
+interface WebSocketPair { readonly 0: WorkerSocket; readonly 1: WorkerSocket; }
 declare const WebSocketPair: { new (): WebSocketPair };
-
-interface ExportedHandler<Env = unknown> {
-  fetch(request: Request, env: Env, ctx?: unknown): Promise<Response> | Response;
-}
+interface ExportedHandler<Env = unknown> { fetch(request: Request, env: Env, ctx?: unknown): Promise<Response> | Response; }
