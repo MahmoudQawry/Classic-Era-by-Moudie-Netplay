@@ -50,7 +50,9 @@ export const RoomVoiceChat=forwardRef<RoomVoiceChatHandle,Props>(function RoomVo
 
   const send=(event:string,payload:unknown)=>socketRef.current?.emit?.(event,payload);
 
-  const ensureAudioSession=()=>{try{InCallManager.start({media:"video",auto:true});}catch{}};\n\n  const applySpeakerMute=(enabled:boolean)=>{
+  const ensureAudioSession=()=>{try{InCallManager.start({media:"video",auto:true});}catch{}};
+
+  const applySpeakerMute=(enabled:boolean)=>{
     for(const tracks of remoteTracks.current.values()) tracks.forEach(track=>{track.enabled=enabled;});
   };
 
@@ -85,7 +87,8 @@ export const RoomVoiceChat=forwardRef<RoomVoiceChatHandle,Props>(function RoomVo
     pc.addEventListener("icecandidate",(event:any)=>{
       if(event.candidate)send("voice:signal",{targetMemberId:remoteId,type:"ice",candidate:event.candidate});
     });
-    pc.addEventListener("track",(event:any)=>{\n      ensureAudioSession();
+    pc.addEventListener("track",(event:any)=>{
+      ensureAudioSession();
       const tracks=(event.streams?.[0]?.getAudioTracks?.()||[]).filter(Boolean) as MediaStreamTrack[];
       remoteTracks.current.set(remoteId,tracks);
       applySpeakerMute(speakerRef.current);
