@@ -55,7 +55,7 @@ export class RollbackBuffer<TState, TInput> {
   receiveRemoteInput(frame: number, input: TInput): { corrected: boolean; rollbackFrom: number | null } {
     const normalized = this.normalizeFrame(frame);
     const previous = this.inputs.get(normalized);
-    const corrected = Boolean(previous?.predicted) && !this.sameInput(previous.input, input);
+    const corrected = previous?.predicted === true && !this.sameInput(previous.input, input);
     this.inputs.set(normalized, { frame: normalized, input, predicted: false });
 
     if (!corrected) return { corrected: false, rollbackFrom: null };
