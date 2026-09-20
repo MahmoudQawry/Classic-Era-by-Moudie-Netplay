@@ -34,7 +34,8 @@ describe("NetPlay and voice reliability safeguards", () => {
 
   it("uses built-in WebRTC voice signaling without requiring LiveKit credentials", () => {
     const worker = read("cloudflare-netplay/src/index.ts");
-    const voice = read("components/room-voice-chat-reliable.native.tsx");\n    const manifest = read("android/app/src/main/AndroidManifest.xml");
+    const voice = read("components/room-voice-chat-reliable.native.tsx");
+    const manifest = read("android/app/src/main/AndroidManifest.xml");
     expect(worker).toContain('voice:signal');
     expect(worker).toContain('netplay:voice-status');
     expect(voice).toContain("RTCPeerConnection");
@@ -46,6 +47,8 @@ describe("NetPlay and voice reliability safeguards", () => {
     expect(voice).not.toContain('voiceChannelTeam');
     expect(voice).toContain('onChatPress');
     expect(voice).toContain('track.enabled=enabled');
-    expect(voice).toContain('EXPO_PUBLIC_TURN_URL');\n    expect(voice).toContain('stun:stun.cloudflare.com:3478');\n    expect(manifest).not.toContain("manusmoudienetplay");
+    expect(voice).toContain('EXPO_PUBLIC_TURN_URL');
+    expect(voice).toContain('stun:stun.cloudflare.com:3478');
+    expect(manifest).not.toContain("manusmoudienetplay");
   });
 });
