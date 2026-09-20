@@ -40,7 +40,8 @@ export default function PS1Screen() {
   const socketRef = useRef<ReturnType<typeof createNetplaySocket> | null>(null);
   const launchGameRef = useRef<(withNetplay?: boolean, settingsMode?: boolean, synchronizedStart?: boolean) => Promise<void>>(async () => undefined);
   const voiceChatRef = useRef<RoomVoiceChatHandle | null>(null);
-  const [roomConnected, setRoomConnected] = useState(false);\n  const [showChat, setShowChat] = useState(false);
+  const [roomConnected, setRoomConnected] = useState(false);
+  const [showChat, setShowChat] = useState(false);
   const [mediaToken, setMediaToken] = useState<MediaToken | null>(null);
   const mediaTokenMutation = trpc.rooms.mediaToken.useMutation();
   const [remoteOnline, setRemoteOnline] = useState(false);
