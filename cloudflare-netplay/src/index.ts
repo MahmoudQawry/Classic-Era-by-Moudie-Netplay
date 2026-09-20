@@ -1,3 +1,4 @@
+/// <reference types="@cloudflare/workers-types" />
 import { DurableObject } from "cloudflare:workers";
 
 type System = "psp" | "nes" | "sega" | "ps1" | "n64" | "ps2";
