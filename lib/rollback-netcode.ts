@@ -42,11 +42,14 @@ export class RollbackBuffer<TState, TInput> {
 
   predict(frame: number, input: TInput) {
     const normalized = this.normalizeFrame(frame);
-    if (!this.inputs.has(normalized)) {
-      this.inputs.set(normalized, { frame: normalized, input, predicted: true });
+    const existing = this.inputs.get(normalized);
+    if (!existing) {
+      const predicted = { frame: normalized, input, predicted: true } satisfies RollbackInput<TInput>;
+      this.inputs.set(normalized, predicted);
       this.statsValue.predictions += 1;
+      return predicted;
     }
-    return this.inputs.get(normalized)!;
+    return existing;
   }
 
   receiveRemoteInput(frame: number, input: TInput): { corrected: boolean; rollbackFrom: number | null } {
