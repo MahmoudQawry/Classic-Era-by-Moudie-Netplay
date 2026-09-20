@@ -2,7 +2,7 @@ import { AudioSession, LiveKitRoom, registerGlobals, useConnectionState, useLoca
 import { ConnectionState } from "livekit-client";
 import InCallManager from "react-native-incall-manager";
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
-import { useEffect, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useState } from "react";
 import { useLanguage } from "@/lib/language";
 
 registerGlobals();
@@ -15,6 +15,8 @@ type Props = {
   mediaToken?: MediaToken | null;
   teamMediaToken?: MediaToken | null;
   memberRole?: VoiceMember["role"];
+  isHost?: boolean;
+  remoteOnline?: boolean;
   socket?: unknown;
   memberId?: number;
   members?: VoiceMember[];
@@ -148,10 +150,18 @@ function UnavailableVoice({ message }: { message?: string }) {
   return <View style={styles.card}><Text style={styles.title}>🎙️ {t("voice")}</Text><Text style={styles.status}>{message || "LiveKit is not configured on the realtime service."}</Text></View>;
 }
 
-export const RoomVoiceChat = ({ mediaToken, teamMediaToken, memberId, members, socket, memberRole }: Props) => {
+export const RoomVoiceChat = forwardRef<RoomVoiceChatHandle, Props>(({ mediaToken, teamMediaToken, memberId, members, socket, memberRole }, ref) => {
   const [channel, setChannel] = useState<VoiceChannel>("room");
   const [microphoneEnabled, setMicrophoneEnabled] = useState(false);
   const [speakerEnabled, setSpeakerEnabled] = useState(true);
+  useImperativeHandle(ref, () => ({
+    setMicrophoneEnabled: async (enabled) => setMicrophoneEnabled(enabled),
+    setSpeakerEnabled: async (enabled) => {
+      setSpeakerEnabled(enabled);
+      InCallManager.setForceSpeakerphoneOn(enabled);
+    },
+    setVoiceChannel: (next) => setChannel(next),
+  }), []);
 
   if (Platform.OS === "web") return null;
   const activeToken = channel === "team" ? teamMediaToken : mediaToken;
@@ -211,7 +221,9 @@ export const RoomVoiceChat = ({ mediaToken, teamMediaToken, memberId, members, s
       />
     </View>
   </>;
-};
+});
+
+RoomVoiceChat.displayName = "RoomVoiceChat";
 
 const styles = StyleSheet.create({
   channelOverlay: { position: "relative" },
