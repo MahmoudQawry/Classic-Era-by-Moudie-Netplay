@@ -37,7 +37,8 @@ export const RoomVoiceChat=forwardRef<RoomVoiceChatHandle,Props>(function RoomVo
   const [microphoneEnabled,setMicrophoneEnabled]=useState(false);
   const [speakerEnabled,setSpeakerEnabled]=useState(true);
   const [connectedPeers,setConnectedPeers]=useState(0);
-  const [status,setStatus]=useState("VOICE READY");\n  const [channelConnected,setChannelConnected]=useState(Boolean(socket?.connected));
+  const [status,setStatus]=useState("VOICE READY");
+  const [channelConnected,setChannelConnected]=useState(Boolean(socket?.connected));
   const peers=useRef(new Map<number,PeerEntry>());
   const localStream=useRef<MediaStream|null>(null);
   const remoteTracks=useRef(new Map<number,MediaStreamTrack[]>());
