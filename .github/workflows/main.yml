@@ -93,6 +93,10 @@ jobs:
             echo "WARNING: No realtime service URL is configured. This APK is valid for local emulator testing, but online rooms require a reachable reserved NetPlay service."
           else
             echo "Realtime service origin configured."
+            PRIMARY="${EXPO_PUBLIC_NETPLAY_SERVICE_URL:-${EXPO_PUBLIC_API_BASE_URL}}"
+            echo "Checking configured realtime service health: ${PRIMARY}/api/health"
+            curl --fail --silent --show-error --max-time 10 "${PRIMARY}/api/health" | grep -q '"ok":true'
+            echo "Configured realtime service health check passed."
           fi
 
       - name: 🧪 اختبار خادم الغرف محلياً قبل بناء Android
