@@ -29,6 +29,13 @@
       "when": 1787193600000,
       "tag": "0003_public_lobby_visibility",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1789878972382,
+      "tag": "0004_moudie_six_systems",
+      "breakpoints": true
     }
   ]
 }
