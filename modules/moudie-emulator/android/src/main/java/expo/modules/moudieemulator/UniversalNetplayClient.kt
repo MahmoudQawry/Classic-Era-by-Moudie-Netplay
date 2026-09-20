@@ -49,6 +49,12 @@ class UniversalNetplayClient(
   fun sendState(encodedState:String,syncId:Long,encoding:String){if(encodedState.isNotBlank()&&syncId>=0)transport?.send("netplay:universal-state",JSONObject().put("snapshot",encodedState).put("syncId",syncId).put("encoding",encoding))}
   fun requestState(minimumSyncId:Long=-1L){transport?.send("netplay:universal-state-request",JSONObject().put("minimumSyncId",minimumSyncId))}
   fun acknowledgeState(syncId:Long){if(syncId>=0)transport?.send("netplay:universal-sync-ack",JSONObject().put("syncId",syncId))}
+  fun setSessionReady(isReady:Boolean){
+    transport?.send("netplay:session-ready",JSONObject().put("isReady",isReady).put("fingerprint",config.fingerprint).put("coreVersion",config.coreVersion))
+  }
+  fun requestSessionStart(){
+    transport?.send("netplay:session-start-request",JSONObject().put("system",config.system))
+  }
   fun sendChat(text:String){val safe=text.trim().take(400);if(safe.isNotEmpty())transport?.send("netplay:chat",JSONObject().put("text",safe))}
   fun requestDelayIncrease(delay:Long,reason:String){if(delay in 2..45)transport?.send("netplay:delay-request",JSONObject().put("delay",delay).put("reason",reason))}
   fun reportDesync(frame:Long,predictedFrames:Int){transport?.send("netplay:desync-report",JSONObject().put("frame",frame).put("predictedFrames",predictedFrames))}
