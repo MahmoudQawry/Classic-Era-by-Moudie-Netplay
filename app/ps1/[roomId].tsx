@@ -12,6 +12,7 @@ import { haptic } from "@/lib/haptics";
 import { createNetplaySocket } from "@/lib/netplay-socket";
 import { setRealtimeRoomReady } from "@/lib/realtime-room-service";
 import { getRoomCredential, type RoomCredential } from "@/lib/room-storage";
+import { trpc } from "@/lib/trpc";
 import { useRealtimeRoomSnapshot } from "@/lib/use-realtime-room-snapshot";
 import MoudieEmulatorModule from "@/modules/moudie-emulator/src/MoudieEmulatorModule";
 
@@ -21,6 +22,7 @@ const SUPPORTED_EXTENSIONS = [".bin", ".iso", ".chd", ".pbp"] as const;
 const PS1_NETPLAY_CORE_VERSION = "pcsx-rearmed-0.13.2-lockstep-v2-adaptive";
 type BiosStatus = Record<string, { required: boolean; available: boolean; files?: string[]; message: string }>;
 type RoomVoiceChatHandle = { setMicrophoneEnabled: (enabled: boolean) => Promise<void>; setSpeakerEnabled?: (enabled: boolean) => Promise<void> };
+type MediaToken = { configured: boolean; url?: string; roomName?: string; token?: string; canPublish?: boolean; message?: string; teamMediaToken?: MediaToken | null };
 
 function isPs1GameFile(name: string) {
   const normalized = name.trim().toLowerCase();
@@ -39,6 +41,8 @@ export default function PS1Screen() {
   const launchGameRef = useRef<(withNetplay?: boolean, settingsMode?: boolean, synchronizedStart?: boolean) => Promise<void>>(async () => undefined);
   const voiceChatRef = useRef<RoomVoiceChatHandle | null>(null);
   const [roomConnected, setRoomConnected] = useState(false);
+  const [mediaToken, setMediaToken] = useState<MediaToken | null>(null);
+  const mediaTokenMutation = trpc.rooms.mediaToken.useMutation();
   const [remoteOnline, setRemoteOnline] = useState(false);
   const [game, setGame] = useState<{ name: string; uri: string; fingerprint: string } | null>(null);
   const [gameReady, setGameReady] = useState(false);
@@ -80,6 +84,22 @@ export default function PS1Screen() {
   useEffect(() => {
     if (Number.isFinite(numericRoomId)) getRoomCredential(numericRoomId).then(setCredential);
   }, [numericRoomId]);
+
+  useEffect(() => {
+    if (!credential || Platform.OS === "web") return;
+    let cancelled = false;
+    const refresh = async () => {
+      try {
+        const next = await mediaTokenMutation.mutateAsync({ roomId: numericRoomId, memberId: credential.memberId, memberToken: credential.memberToken });
+        if (!cancelled) setMediaToken(next);
+      } catch {
+        if (!cancelled) setMediaToken({ configured: false, message: t("voiceSetupFailed") });
+      }
+    };
+    void refresh();
+    const timer = setInterval(() => { void refresh(); }, 15 * 60 * 1000);
+    return () => { cancelled = true; clearInterval(timer); };
+  }, [credential, mediaTokenMutation, numericRoomId, t]);
 
   useEffect(() => {
     if (!credential || Platform.OS === "web") return;
@@ -274,7 +294,7 @@ export default function PS1Screen() {
 
         {Platform.OS !== "web" && <>
           <RoomChat socket={roomConnected ? socketRef.current : null} title={`PS1 · ${t("roomChat")}`} />
-          <RoomVoiceChat ref={voiceChatRef} socket={roomConnected ? socketRef.current : null} isHost={assignedPlayer === 1} remoteOnline={remoteOnline} memberId={credential?.memberId} members={snapshotQuery.data?.members ?? []} />
+          <RoomVoiceChat mediaToken={mediaToken} teamMediaToken={mediaToken?.teamMediaToken} ref={voiceChatRef} socket={roomConnected ? socketRef.current : null} isHost={assignedPlayer === 1} remoteOnline={remoteOnline} memberId={credential?.memberId} members={snapshotQuery.data?.members ?? []} />
         </>}
 
         <View style={styles.statusCard}>
