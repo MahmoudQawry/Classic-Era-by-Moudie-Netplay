@@ -1,0 +1,20 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "classic-era-moudie-netplay",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-20",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  "durable_objects": {
+    "bindings": [
+      { "name": "ROOMS", "class_name": "NetplayRoom" },
+      { "name": "DIRECTORY", "class_name": "RoomDirectory" }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["NetplayRoom", "RoomDirectory"]
+    }
+  ]
+}
