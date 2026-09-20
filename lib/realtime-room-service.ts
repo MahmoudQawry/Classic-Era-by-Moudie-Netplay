@@ -39,12 +39,53 @@ async function readTrpcResponse<T>(response: Response, baseUrl: string): Promise
   throw new Error("خدمة الغرف أعادت استجابة غير مكتملة.");
 }
 
-// Mutations are never replayed to a second relay: replaying a create/join mutation can duplicate a room or consume a second seat.
+async function probeRelay(baseUrl: string): Promise<boolean> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 4_000);
+  try {
+    const response = await fetch(`${baseUrl}/api/health`, {
+      method: "GET",
+      headers: { accept: "application/json" },
+      signal: controller.signal,
+    });
+    if (!response.ok) return false;
+    const text = (await response.text()).trim();
+    if (!text) return false;
+    try {
+      const body = JSON.parse(text) as { ok?: boolean };
+      return body.ok === true;
+    } catch {
+      return false;
+    }
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function selectMutationRelay(urls: string[]): Promise<string | null> {
+  for (const baseUrl of urls) {
+    if (await probeRelay(baseUrl)) return baseUrl;
+  }
+  return null;
+}
+
+/**
+ * GET requests may safely fail over between relays.
+ * Mutations are sent to one healthy relay only, so a room/join operation is
+ * never replayed just because another region is unhealthy.
+ *
+ * This is important when an old/stale primary deployment returns HTTP 404:
+ * the client now skips it and uses the first healthy configured relay.
+ */
 async function request<T>(procedure: string, input: unknown, method: "GET" | "POST"): Promise<T> {
   const urls = relayUrls();
   if (urls.length === 0) throw new Error("لم يتم إعداد خادم الغرف في هذا الإصدار من التطبيق.");
   let lastError: unknown = null;
-  const candidates = method === "GET" ? urls : [urls[0]].filter(Boolean);
+  const selectedRelay = method === "POST" ? await selectMutationRelay(urls) : null;
+  const candidates = method === "GET" ? urls : [selectedRelay ?? urls[0]].filter(Boolean);
+
   for (const baseUrl of candidates) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -52,20 +93,24 @@ async function request<T>(procedure: string, input: unknown, method: "GET" | "PO
       const response = await fetch(buildUrl(baseUrl, procedure, input, method), method === "POST"
         ? { method, headers: { "content-type": "application/json", accept: "application/json" }, body: JSON.stringify({ json: input }), signal: controller.signal }
         : { method, headers: { accept: "application/json" }, signal: controller.signal });
+
       if (method === "GET" && (response.status >= 500 || response.status === 408 || response.status === 429)) {
-        lastError = new Error(`relay ${baseUrl} returned HTTP ${response.status}`); continue;
+        lastError = new Error(`relay ${baseUrl} returned HTTP ${response.status}`);
+        continue;
       }
       return await readTrpcResponse<T>(response, baseUrl);
     } catch (error) {
       lastError = error;
-      if (method === "POST") break;
-    } finally { clearTimeout(timer); }
+    } finally {
+      clearTimeout(timer);
+    }
   }
+
   if (lastError instanceof Error) {
     if (lastError.name === "AbortError") throw new Error("انتهت مهلة الاتصال بخادم الغرف. تحقق من الإنترنت أو إعداد خادم NetPlay.");
     throw lastError;
   }
-  throw new Error("لم يتم العثور على خادم غرف متاح حالياً.");
+  throw new Error("لم يتم العثور على خادم غرف متاح حالياً. تأكد من تشغيل /api/health على خادم NetPlay.");
 }
 
 export function createRealtimeRoom(input: { name: string; system: RealtimeSystem; hostName: string; visibility?: "public" | "private" }) { return request<RealtimeCredential & { joinCode: string }>("rooms.create", input, "POST"); }
