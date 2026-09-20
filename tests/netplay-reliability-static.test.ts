@@ -46,6 +46,6 @@ describe("NetPlay and voice reliability safeguards", () => {
     expect(voice).not.toContain('voiceChannelTeam');
     expect(voice).toContain('onChatPress');
     expect(voice).toContain('track.enabled=enabled');
-    expect(voice).toContain('EXPO_PUBLIC_TURN_URL');
+    expect(voice).toContain('EXPO_PUBLIC_TURN_URL');\n    expect(voice).toContain('stun:stun.cloudflare.com:3478');
   });
 });
