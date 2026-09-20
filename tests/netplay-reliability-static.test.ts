@@ -23,6 +23,20 @@ describe("NetPlay and voice reliability safeguards", () => {
     expect(universal).not.toContain('IO.socket(');
   });
 
+
+  it("prevents the native voice joined-event race and exposes channel failures", () => {
+    const voice = read("components/room-voice-chat-reliable.native.tsx");
+    const socket = read("lib/netplay-socket.ts");
+    const ps1 = read("app/ps1/[roomId].tsx");
+    expect(voice).toContain("if(socket?.connected)onConnect();");
+    expect(voice).toContain("connectPeers(members.map((m)=>m.id))");
+    expect(voice).toContain('socket?.on?.("connect",onConnect)');
+    expect(voice).toContain('socket?.on?.("connect_error",onConnectError)');
+    expect(socket).toContain('dispatch("connect_error"');
+    expect(ps1).toContain("onChatPress");
+    expect(ps1).toContain("showChat");
+  });
+
   it("keeps bounded adaptive delay and frame/state relay semantics", () => {
     const quality = read("modules/moudie-emulator/android/src/main/java/expo/modules/moudieemulator/NetplayQualityMonitor.kt");
     const worker = read("cloudflare-netplay/src/index.ts");

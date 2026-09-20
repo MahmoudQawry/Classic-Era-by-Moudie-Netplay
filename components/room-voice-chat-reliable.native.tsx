@@ -38,6 +38,7 @@ export const RoomVoiceChat=forwardRef<RoomVoiceChatHandle,Props>(function RoomVo
   const [speakerEnabled,setSpeakerEnabled]=useState(true);
   const [connectedPeers,setConnectedPeers]=useState(0);
   const [status,setStatus]=useState("VOICE READY");
+  const [channelConnected,setChannelConnected]=useState(Boolean(socket?.connected));
   const peers=useRef(new Map<number,PeerEntry>());
   const localStream=useRef<MediaStream|null>(null);
   const remoteTracks=useRef(new Map<number,MediaStreamTrack[]>());
@@ -50,7 +51,7 @@ export const RoomVoiceChat=forwardRef<RoomVoiceChatHandle,Props>(function RoomVo
 
   const send=(event:string,payload:unknown)=>socketRef.current?.emit?.(event,payload);
 
-  const ensureAudioSession=()=>{try{InCallManager.start({media:"video",auto:true});}catch{}};
+  const ensureAudioSession=()=>{try{InCallManager.start({media:"audio",auto:true});}catch{}};
 
   const applySpeakerMute=(enabled:boolean)=>{
     for(const tracks of remoteTracks.current.values()) tracks.forEach(track=>{track.enabled=enabled;});
@@ -180,20 +181,39 @@ export const RoomVoiceChat=forwardRef<RoomVoiceChatHandle,Props>(function RoomVo
   useEffect(()=>{
     if(Platform.OS==="web")return;
     const onSignal=(p:any)=>void handleSignal(p);
-    const onJoined=(p:any)=>{
-      const online=Array.isArray(p?.onlineMemberIds)?p.onlineMemberIds.map(Number).filter((id:number)=>id&&id!==memberId):[];
-      for(const id of online)if(memberId && memberId<id)void createPeer(id,true);
+    const connectPeers=(ids:number[])=>{
+      const online=ids.map(Number).filter((id:number)=>id>0&&id!==memberId);
+      for(const id of online)if(memberId&&memberId<id)void createPeer(id,true);
+      setChannelConnected(true);
+      setStatus(online.length?"VOICE CONNECTING":"VOICE READY");
     };
+    const onConnect=()=>connectPeers(members.map((m)=>m.id));
+    const onConnectError=(error:any)=>{setChannelConnected(false);setStatus(error?.message||"VOICE CHANNEL UNAVAILABLE");};
+    const onDisconnect=()=>{setChannelConnected(false);for(const [id] of peers.current)closePeer(id);setStatus("VOICE CHANNEL DISCONNECTED");};
+    const onJoined=(p:any)=>connectPeers(Array.isArray(p?.onlineMemberIds)?p.onlineMemberIds:members.map((m)=>m.id));
     const onPresence=(p:any)=>{
       const id=Number(p?.memberId);
       if(!id||id===memberId)return;
-      if(p?.online && memberId && memberId<id)void createPeer(id,true);
-      if(!p?.online)closePeer(id);
+      if(p?.online){if(memberId&&memberId<id)void createPeer(id,true);}
+      else closePeer(id);
     };
+    socket?.on?.("connect",onConnect);
+    socket?.on?.("connect_error",onConnectError);
+    socket?.on?.("disconnect",onDisconnect);
+    socket?.on?.("error",onConnectError);
     socket?.on?.("voice:signal",onSignal);
     socket?.on?.("netplay:joined",onJoined);
     socket?.on?.("netplay:presence",onPresence);
-    return()=>{socket?.off?.("voice:signal",onSignal);socket?.off?.("netplay:joined",onJoined);socket?.off?.("netplay:presence",onPresence);};
+    if(socket?.connected)onConnect();
+    return()=>{
+      socket?.off?.("connect",onConnect);
+      socket?.off?.("connect_error",onConnectError);
+      socket?.off?.("disconnect",onDisconnect);
+      socket?.off?.("error",onConnectError);
+      socket?.off?.("voice:signal",onSignal);
+      socket?.off?.("netplay:joined",onJoined);
+      socket?.off?.("netplay:presence",onPresence);
+    };
   },[socket,memberId,members]);
 
   useEffect(()=>()=>{for(const [id] of peers.current)closePeer(id);localStream.current?.getTracks().forEach(t=>t.stop());try{InCallManager.stop();}catch{}},[]);
@@ -201,7 +221,7 @@ export const RoomVoiceChat=forwardRef<RoomVoiceChatHandle,Props>(function RoomVo
   if(Platform.OS==="web")return null;
   return <View style={styles.card}>
     <View style={styles.heading}><Text style={styles.title}>🎙️ {t("voice")}</Text><Text style={styles.online}>{connectedPeers} PEERS</Text></View>
-    <Text style={styles.status}>{status}</Text>
+    <Text style={styles.status}>{channelConnected ? status : `CHANNEL OFFLINE · ${status}`}</Text>
     <View style={styles.row}>
       <Pressable onPress={()=>void enableMic(!microphoneEnabled)} style={[styles.action,microphoneEnabled&&styles.active]}><Text style={styles.actionText}>{microphoneEnabled?t("micOn"):t("micOff")}</Text></Pressable>
       <Pressable onPress={onChatPress} style={styles.action}><Text style={styles.actionText}>CHAT</Text></Pressable>
