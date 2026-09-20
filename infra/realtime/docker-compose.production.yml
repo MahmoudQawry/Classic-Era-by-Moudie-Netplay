@@ -1,0 +1,117 @@
+services:
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: moudie_netplay
+      MYSQL_USER: moudie
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    network_mode: host
+    command: ["redis-server", "--bind", "127.0.0.1", "--protected-mode", "yes", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD}"]
+    volumes:
+      - redis-data:/data
+
+  api:
+    build:
+      context: ../..
+      dockerfile: Dockerfile.netplay
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: mysql://moudie:${MYSQL_PASSWORD}@mysql:3306/moudie_netplay
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
+      LIVEKIT_URL: wss://${LIVEKIT_DOMAIN}
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET}
+      REALTIME_REGION: ${REALTIME_REGION:-me-central-1}
+      REALTIME_RELEASE: ${REALTIME_RELEASE:-moudie-netplay-1}
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      livekit:
+        condition: service_started
+    command: ["sh", "-lc", "pnpm drizzle-kit migrate && node dist/index.js"]
+
+  livekit:
+    image: livekit/livekit-server:v1.13.7
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      LIVEKIT_CONFIG: |
+        port: 7880
+        bind_addresses:
+          - 127.0.0.1
+        log_level: info
+        rtc:
+          tcp_port: 7881
+          port_range_start: 50000
+          port_range_end: 60000
+          use_external_ip: true
+          allow_tcp_fallback: true
+          tcp_fallback_rtt_threshold: 250
+          allow_udp_unstable_fallback: true
+        redis:
+          address: 127.0.0.1:6379
+          password: ${REDIS_PASSWORD}
+        keys:
+          ${LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET}
+        turn_servers:
+          - host: ${TURN_DOMAIN}
+            port: 443
+            protocol: udp
+            secret: ${TURN_SHARED_SECRET}
+          - host: ${TURN_DOMAIN}
+            port: 3478
+            protocol: tcp
+            secret: ${TURN_SHARED_SECRET}
+    depends_on:
+      redis:
+        condition: service_started
+
+  coturn:
+    image: coturn/coturn:4.7.0-r0
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      TURN_DOMAIN: ${TURN_DOMAIN}
+      PUBLIC_IP: ${PUBLIC_IP}
+      TURN_SHARED_SECRET: ${TURN_SHARED_SECRET}
+    command: ["turnserver", "-p", "3478", "--fingerprint", "--lt-cred-mech", "--use-auth-secret", "--static-auth-secret", "${TURN_SHARED_SECRET}", "--realm", "${TURN_DOMAIN}", "--server-name", "${TURN_DOMAIN}", "--listening-ip", "0.0.0.0", "--external-ip", "${PUBLIC_IP}", "--min-port", "49160", "--max-port", "49260", "--no-loopback-peers", "--no-multicast-peers", "--stale-nonce", "600", "--no-cli", "--no-tlsv1", "--no-tlsv1_1", "--log-file", "stdout", "--simple-log"]
+
+  caddy:
+    image: caddy:2.10.2-alpine
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      API_DOMAIN: ${API_DOMAIN}
+      LIVEKIT_DOMAIN: ${LIVEKIT_DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      api:
+        condition: service_started
+      livekit:
+        condition: service_started
+
+volumes:
+  mysql-data:
+  redis-data:
+  caddy-data:
+  caddy-config:
