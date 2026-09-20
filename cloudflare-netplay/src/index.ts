@@ -102,7 +102,8 @@ export default {
       if(p==="rooms.joinPublic"){const x=await input(request);return ok(await roomIdFor(env,Number(x.roomId)).join(String(x.displayName).trim(),x.joinAs==="spectator"?"spectator":"player"));}
       if(p==="rooms.snapshot"){const x=await input(request);return ok(await roomIdFor(env,Number(x.roomId)).snapshot(Number(x.memberId),String(x.memberToken)));}
       if(p==="rooms.setReady"){const x=await input(request);return ok(await roomIdFor(env,Number(x.roomId)).ready(x));}
-      if(p==="rooms.publicList"){const x=await input(request);return ok(await directory(env).list(Number(x.limit||30)));}\n      if(p==="rooms.mediaToken"){return ok({configured:false,message:"الصوت الجماعي يحتاج ربط Cloudflare Realtime بعد نشر Worker الغرف."});}
+      if(p==="rooms.publicList"){const x=await input(request);return ok(await directory(env).list(Number(x.limit||30)));}
+      if(p==="rooms.mediaToken"){return ok({configured:false,message:"الصوت الجماعي يحتاج ربط Cloudflare Realtime بعد نشر Worker الغرف."});}
       return fail("خدمة الغرف لا تعرف هذا الإجراء.",404);
     } catch(err){return fail(err instanceof Error?err.message:"حدث خطأ غير معروف.",400);}
   }
