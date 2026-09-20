@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calculateAdaptiveDelay, classifyNetworkQuality, rollbackWindowForQuality } from "@/lib/netplay-sync";
+import { calculateAdaptiveDelay, classifyNetworkQuality, rollbackWindowForQuality } from "../lib/netplay-sync";
 
 describe("NetPlay network quality policy", () => {
   it("classifies latency, jitter and loss together", () => {
