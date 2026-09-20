@@ -90,14 +90,14 @@ jobs:
       - name: 🌐 فحص إعدادات الخدمة
         run: |
           if [ -z "${EXPO_PUBLIC_NETPLAY_SERVICE_URL}" ] && [ -z "${EXPO_PUBLIC_NETPLAY_SERVICE_URLS}" ] && [ -z "${EXPO_PUBLIC_API_BASE_URL}" ]; then
-            echo "WARNING: No realtime service URL is configured. This APK is valid for local emulator testing, but online rooms require a reachable reserved NetPlay service."
-          else
-            echo "Realtime service origin configured."
-            PRIMARY="${EXPO_PUBLIC_NETPLAY_SERVICE_URL:-${EXPO_PUBLIC_API_BASE_URL:-${EXPO_PUBLIC_NETPLAY_SERVICE_URLS%%,*}}}"
-            echo "Checking configured realtime service health: ${PRIMARY}/api/health"
-            curl --fail --silent --show-error --max-time 10 "${PRIMARY}/api/health" | grep -q '"ok":true'
-            echo "Configured realtime service health check passed."
+            echo "ERROR: No realtime service URL is configured. Refusing to produce an online-play APK without a live NetPlay service."
+            exit 1
           fi
+          echo "Realtime service origin configured."
+          PRIMARY="${EXPO_PUBLIC_NETPLAY_SERVICE_URL:-${EXPO_PUBLIC_API_BASE_URL:-${EXPO_PUBLIC_NETPLAY_SERVICE_URLS%%,*}}}"
+          echo "Checking configured realtime service health: ${PRIMARY}/api/health"
+          curl --fail --silent --show-error --max-time 10 "${PRIMARY}/api/health" | grep -q '"ok":true'
+          echo "Configured realtime service health check passed."
 
       - name: 🧪 اختبار خادم الغرف محلياً قبل بناء Android
         run: |
