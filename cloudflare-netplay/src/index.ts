@@ -102,10 +102,11 @@ export class NetplayRoom extends DurableObject<Env> {
       if(msg?.event==="netplay:chat"){
         const text=String(msg.payload?.text||"").trim().slice(0,500);
         if(!text) return;
-        this.broadcast({
+        const packet=JSON.stringify({
           event:"netplay:chat",
           payload:{id:crypto.randomUUID(),memberId:member.id,displayName:member.displayName,text,sentAt:Date.now()}
         });
+        for(const ws of this.ctx.getWebSockets()) if(ws.readyState===WebSocket.OPEN) ws.send(packet);
         return;
       }
 
