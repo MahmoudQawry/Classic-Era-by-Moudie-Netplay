@@ -86,7 +86,7 @@ describe("online room launch safeguards", () => {
     expect(famicom).toContain("retroView.setOnTouchListener");
     expect(library).not.toContain("CHOOSE FILE & CONFIGURE");
     expect(famicomRoom).toContain('nativePlayerRef.current?.requestState("netplay")');
-    expect(oauth).toContain("const NATIVE_API_FALLBACK_URL = NATIVE_NETPLAY_SERVICE_URL");\n    expect(roomSnapshot).toContain("RETRY_DELAYS_MS");\n    expect(roomSnapshot).toContain("setInterval(() => void refetch(), refreshInterval)");\n    expect(manifest).not.toContain("manusmoudienetplay");
+    expect(oauth).toContain("const NATIVE_API_FALLBACK_URL = NATIVE_NETPLAY_SERVICE_URL");\n    expect(roomSnapshot).toContain("RETRY_DELAYS_MS");\n    expect(roomSnapshot).toContain("setInterval(() => void refetch(), refreshInterval)");\n    expect(manifest).not.toContain("manusmoudienetplay");\n    expect(roomSnapshot).toContain("RETRY_DELAYS_MS");
     expect(ps1).toContain('RENDERMODE_CONTINUOUSLY');
     // Cloudflare Durable Object transport: persistent WebSocket with bounded adaptive delay.
     const transport = readProjectFile("modules/moudie-emulator/android/src/main/java/expo/modules/moudieemulator/CloudflareNetplayWebSocket.kt");
