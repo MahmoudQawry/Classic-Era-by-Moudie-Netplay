@@ -60,7 +60,8 @@ dependencies {
   // Core binaries are added only after per-system compatibility and license review.
   implementation "androidx.activity:activity-ktx:1.10.1"
   implementation "com.github.swordfish90:libretrodroid:0.13.2"
-  implementation "com.squareup.okhttp3:okhttp:4.12.0"\n  implementation ("io.socket:socket.io-client:2.1.1") {
+  implementation "com.squareup.okhttp3:okhttp:4.12.0"
+  implementation ("io.socket:socket.io-client:2.1.1") {
     exclude group: "org.json", module: "json"
   }
 }
