@@ -20,8 +20,11 @@ describe("realtime room service transport hardening", () => {
   });
 
   it("keeps read-only queries failover-safe without replaying room mutations", () => {
-    expect(source).toContain('const candidates = method === "GET" ? urls : [urls[0]].filter(Boolean);');
-    expect(source).toContain("Mutations are");
+    expect(source).toContain("async function probeRelay(baseUrl: string): Promise<boolean>");
+    expect(source).toContain("async function selectMutationRelay(urls: string[]): Promise<string | null>");
+    expect(source).toContain('const candidates = method === "GET" ? urls : [selectedRelay as string];');
+    expect(source).toContain("Mutations are sent to one healthy relay only");
     expect(source).toContain("can duplicate a room or consume a second seat");
+    expect(source).toContain("لا يوجد خادم NetPlay صحي حالياً");
   });
 });
