@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { RollbackBuffer, shouldRollback, targetFrame } from "@/lib/rollback-netcode";
+import { RollbackBuffer, shouldRollback, targetFrame } from "../lib/rollback-netcode";
 
 describe("RollbackBuffer", () => {
   it("predicts remote input and requests rollback when the real input differs", () => {
