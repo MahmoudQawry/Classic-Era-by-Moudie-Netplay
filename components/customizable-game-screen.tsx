@@ -2,7 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useEffect, useRef, useState } from "react";
 import { PanResponder, Pressable, StyleSheet, Text, View, useWindowDimensions, type LayoutChangeEvent } from "react-native";
 
-type SystemId = "famicom" | "ps1" | "psp" | "sega";
+type SystemId = "famicom" | "ps1" | "psp" | "sega" | "n64" | "ps2";
 type Orientation = "portrait" | "landscape";
 type Frame = { x: number; y: number; width: number; height: number };
 
@@ -18,6 +18,8 @@ const defaults: Record<SystemId, Record<Orientation, Frame>> = {
   ps1: { portrait: { x: 4, y: 3, width: 92, height: 43 }, landscape: { x: 24, y: 15, width: 52, height: 70 } },
   psp: { portrait: { x: 4, y: 3, width: 92, height: 43 }, landscape: { x: 24, y: 15, width: 52, height: 70 } },
   sega: { portrait: { x: 4, y: 3, width: 92, height: 43 }, landscape: { x: 24, y: 15, width: 52, height: 70 } },
+  n64: { portrait: { x: 4, y: 3, width: 92, height: 43 }, landscape: { x: 24, y: 15, width: 52, height: 70 } },
+  ps2: { portrait: { x: 4, y: 3, width: 92, height: 43 }, landscape: { x: 24, y: 15, width: 52, height: 70 } },
 };
 
 function clampFrame(frame: Frame): Frame {
