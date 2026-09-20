@@ -67,17 +67,88 @@ export class NetplayRoom extends DurableObject<Env> {
   }
   async socket(request:Request) {
     if(request.headers.get("Upgrade")?.toLowerCase()!=="websocket") return new Response("Expected WebSocket",{status:426});
-    const pair=new WebSocketPair(); const client=pair[0], server=pair[1]; this.ctx.acceptWebSocket(server);
-    server.addEventListener("message",async e=>{
-      try {
-        const msg=JSON.parse(String(e.data));
-        if(msg?.event==="auth"){ const m=await this.auth(Number(msg.payload?.memberId),String(msg.payload?.memberToken||"")); server.serializeAttachment({memberId:m.id}); const active=this.members().filter(x=>x.role!=="spectator"); const assignedPlayer=m.role==="spectator"?null:(active.findIndex(x=>x.id===m.id)+1); const onlineMemberIds=this.ctx.getWebSockets().map(ws=>{const a=ws.deserializeAttachment() as any;return a?.memberId;}).filter((x):x is number=>typeof x==="number"); server.send(JSON.stringify({event:"connect",payload:{ok:true,memberId:m.id}})); server.send(JSON.stringify({event:"netplay:joined",payload:{memberId:m.id,assignedPlayer,onlineMemberIds}})); this.broadcast({event:"netplay:presence",payload:{memberId:m.id,displayName:m.displayName,online:true}},server); return; }
-        const a=server.deserializeAttachment() as any; if(!a?.memberId) return; this.broadcast(msg,server);
-      } catch(err) { server.send(JSON.stringify({event:"error",payload:{message:err instanceof Error?err.message:"WebSocket error"}})); }
-    });
-    server.addEventListener("close",()=>{const a=server.deserializeAttachment() as any;if(a?.memberId)this.broadcast({event:"netplay:presence",payload:{memberId:a.memberId,online:false}},server);});
+    const pair=new WebSocketPair(); const client=pair[0], server=pair[1];
+    this.ctx.acceptWebSocket(server);
+    server.serializeAttachment({memberId:null});
     return new Response(null,{status:101,webSocket:client});
   }
+
+  async webSocketMessage(server:WebSocket,message:ArrayBuffer|string) {
+    try {
+      const msg=JSON.parse(typeof message==="string"?message:new TextDecoder().decode(message));
+      if(msg?.event==="auth"){
+        const memberId=Number(msg.payload?.memberId);
+        const memberToken=String(msg.payload?.memberToken||"");
+        const m=await this.auth(memberId,memberToken);
+        server.serializeAttachment({memberId:m.id});
+        const active=this.members().filter(x=>x.role!=="spectator");
+        const assignedPlayer=m.role==="spectator"?null:(active.findIndex(x=>x.id===m.id)+1);
+        const onlineMemberIds=this.ctx.getWebSockets().map(ws=>{
+          const a=ws.deserializeAttachment() as any;
+          return a?.memberId;
+        }).filter((x):x is number=>typeof x==="number");
+        server.send(JSON.stringify({event:"connect",payload:{ok:true,memberId:m.id}}));
+        server.send(JSON.stringify({event:"netplay:joined",payload:{memberId:m.id,assignedPlayer,onlineMemberIds}}));
+        this.broadcast({event:"netplay:presence",payload:{memberId:m.id,displayName:m.displayName,role:m.role,online:true}},server);
+        return;
+      }
+
+      const attachment=server.deserializeAttachment() as any;
+      const memberId=Number(attachment?.memberId);
+      if(!Number.isSafeInteger(memberId)) return;
+      const member=this.members().find(x=>x.id===memberId);
+      if(!member) return;
+
+      if(msg?.event==="netplay:chat"){
+        const text=String(msg.payload?.text||"").trim().slice(0,500);
+        if(!text) return;
+        this.broadcast({
+          event:"netplay:chat",
+          payload:{id:crypto.randomUUID(),memberId:member.id,displayName:member.displayName,text,sentAt:Date.now()}
+        });
+        return;
+      }
+
+      if(msg?.event==="netplay:voice-status"){
+        this.broadcast({
+          event:"netplay:voice-status",
+          payload:{memberId:member.id,...(msg.payload||{})}
+        });
+        return;
+      }
+
+      if(msg?.event==="voice:signal"){
+        const targetMemberId=Number(msg.payload?.targetMemberId);
+        if(!Number.isSafeInteger(targetMemberId) || targetMemberId===member.id) return;
+        const packet={event:"voice:signal",payload:{...msg.payload,fromMemberId:member.id}};
+        for(const ws of this.ctx.getWebSockets()){
+          const a=ws.deserializeAttachment() as any;
+          if(Number(a?.memberId)===targetMemberId && ws.readyState===WebSocket.OPEN) ws.send(JSON.stringify(packet));
+        }
+        return;
+      }
+
+      this.broadcast(msg,server);
+    } catch(err) {
+      try { server.send(JSON.stringify({event:"error",payload:{message:err instanceof Error?err.message:"WebSocket error"}})); } catch {}
+    }
+  }
+
+  async webSocketClose(server:WebSocket) {
+    const attachment=server.deserializeAttachment() as any;
+    const memberId=Number(attachment?.memberId);
+    if(Number.isSafeInteger(memberId)){
+      const member=this.members().find(x=>x.id===memberId);
+      this.broadcast({event:"netplay:presence",payload:{memberId,displayName:member?.displayName||"",role:member?.role||"player",online:false}},server);
+    }
+  }
+
+  async webSocketError(server:WebSocket) {
+    const attachment=server.deserializeAttachment() as any;
+    const memberId=Number(attachment?.memberId);
+    if(Number.isSafeInteger(memberId)) this.broadcast({event:"netplay:presence",payload:{memberId,online:false}},server);
+  }
+
   private broadcast(message:unknown,except?:WebSocket){const s=JSON.stringify(message);for(const ws of this.ctx.getWebSockets())if(ws!==except&&ws.readyState===WebSocket.OPEN)ws.send(s);}
 }
 
