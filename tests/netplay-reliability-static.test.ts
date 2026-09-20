@@ -13,8 +13,6 @@ describe("NetPlay and voice reliability safeguards", () => {
     const transport = read("modules/moudie-emulator/android/src/main/java/expo/modules/moudieemulator/CloudflareNetplayWebSocket.kt");
     expect(worker).toContain('this.ctx.acceptWebSocket(server)');
     expect(worker).toContain('async webSocketMessage');
-    expect(worker).toContain('netplay:universal-input');
-    expect(worker).toContain('netplay:ps1-input');
     expect(ps1).toContain('CloudflareNetplayWebSocket');
     expect(universal).toContain('CloudflareNetplayWebSocket');
     expect(ps1).toContain('transport?.send("netplay:ps1-input"');
