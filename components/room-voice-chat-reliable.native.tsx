@@ -123,7 +123,7 @@ export const RoomVoiceChat=forwardRef<RoomVoiceChatHandle,Props>(function RoomVo
       const entry=peers.current.get(from);
       if(entry){for(const candidate of entry.pendingIce){await peer.addIceCandidate(candidate).catch(()=>undefined);}entry.pendingIce=[];}
     }else if(payload.type==="ice"){
-      const candidate=new RTCIceCandidate(payload.candidate);
+      const candidate=new (RTCIceCandidate as any)(payload.candidate);
       if(peer.remoteDescription)await peer.addIceCandidate(candidate).catch(()=>undefined);
       else peers.current.get(from)?.pendingIce.push(candidate);
     }
