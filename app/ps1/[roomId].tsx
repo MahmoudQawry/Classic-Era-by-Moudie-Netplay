@@ -105,8 +105,8 @@ export default function PS1Screen() {
     if (!credential || Platform.OS === "web") return;
     const socket = createNetplaySocket({ roomId: numericRoomId, memberId: credential.memberId, memberToken: credential.memberToken });
     socketRef.current = socket;
-    const connected = () => { setRoomConnected(true); setStatus(t("p1NetplayChannelConnected")); };
-    const disconnected = () => { setRoomConnected(false); setRemoteOnline(false); setStatus(t("p1NetplayChannelDisconnected")); };
+    const connected = () => { setRoomConnected(true); setStatus("NETPLAY CHANNEL CONNECTED"); };
+    const disconnected = () => { setRoomConnected(false); setRemoteOnline(false); setStatus("NETPLAY CHANNEL DISCONNECTED"); };
     const joined = (payload: { onlineMemberIds?: number[] }) => setRemoteOnline(Boolean(payload.onlineMemberIds?.some((id) => id !== credential.memberId)));
     const presence = (payload: { memberId?: number; online?: boolean }) => {
       if (payload.memberId !== credential.memberId) setRemoteOnline(Boolean(payload.online));
