@@ -88,7 +88,7 @@ export default {
   async fetch(request:Request,env:Env):Promise<Response>{
     const url=new URL(request.url);
     if(url.pathname==="/api/health") return json({ok:true,service:"classic-era-moudie-netplay",runtime:"cloudflare-workers-durable-objects"});
-    const ws=url.pathname.match(/^\/ws\/room\/(\\d+)$/); if(ws) return roomIdFor(env,Number(ws[1])).socket(request);
+    const ws=url.pathname.match(/^\/ws\/room\/(\d+)$/); if(ws) return roomIdFor(env,Number(ws[1])).socket(request);
     if(!url.pathname.startsWith("/api/trpc/rooms.")) return json({error:{message:"Not found"}},{status:404});
     const p=url.pathname.slice("/api/trpc/".length);
     try {
