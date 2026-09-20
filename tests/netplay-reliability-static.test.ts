@@ -34,7 +34,7 @@ describe("NetPlay and voice reliability safeguards", () => {
 
   it("uses built-in WebRTC voice signaling without requiring LiveKit credentials", () => {
     const worker = read("cloudflare-netplay/src/index.ts");
-    const voice = read("components/room-voice-chat-reliable.native.tsx");
+    const voice = read("components/room-voice-chat-reliable.native.tsx");\n    const manifest = read("android/app/src/main/AndroidManifest.xml");
     expect(worker).toContain('voice:signal');
     expect(worker).toContain('netplay:voice-status');
     expect(voice).toContain("RTCPeerConnection");
