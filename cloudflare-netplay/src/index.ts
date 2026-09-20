@@ -110,7 +110,7 @@ export class NetplayRoom extends DurableObject<Env> {
       }
 
       if(msg?.event==="netplay:quality-probe"){
-        this.broadcast({event:"netplay:quality-pong",payload:{sequence:Number(msg.payload?.sequence)||0}});
+        server.send(JSON.stringify({event:"netplay:quality-pong",payload:{sequence:Number(msg.payload?.sequence)||0}}));
         return;
       }
 
@@ -142,7 +142,8 @@ export class NetplayRoom extends DurableObject<Env> {
         const startAt=Date.now()+3000;
         const playerMemberIds=players.map(x=>x.id);
         const payload={system,startAt,playerMemberIds,inputDelay:3};
-        this.broadcast({event:"netplay:session-start",payload});
+        const packet=JSON.stringify({event:"netplay:session-start",payload});
+        for(const ws of this.ctx.getWebSockets()) if(ws.readyState===WebSocket.OPEN) ws.send(packet);
         return;
       }
 
