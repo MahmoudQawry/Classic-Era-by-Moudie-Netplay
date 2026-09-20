@@ -71,7 +71,7 @@ export class NetplayRoom extends DurableObject<Env> {
     server.addEventListener("message",async e=>{
       try {
         const msg=JSON.parse(String(e.data));
-        if(msg?.event==="auth"){ const m=await this.auth(Number(msg.payload?.memberId),String(msg.payload?.memberToken||"")); server.serializeAttachment({memberId:m.id}); server.send(JSON.stringify({event:"connect",payload:{ok:true,memberId:m.id}})); this.broadcast({event:"netplay:presence",payload:{memberId:m.id,displayName:m.displayName,online:true}},server); return; }
+        if(msg?.event==="auth"){ const m=await this.auth(Number(msg.payload?.memberId),String(msg.payload?.memberToken||"")); server.serializeAttachment({memberId:m.id}); const active=this.members().filter(x=>x.role!=="spectator"); const assignedPlayer=m.role==="spectator"?null:(active.findIndex(x=>x.id===m.id)+1); const onlineMemberIds=this.ctx.getWebSockets().map(ws=>{const a=ws.deserializeAttachment() as any;return a?.memberId;}).filter((x):x is number=>typeof x==="number"); server.send(JSON.stringify({event:"connect",payload:{ok:true,memberId:m.id}})); server.send(JSON.stringify({event:"netplay:joined",payload:{memberId:m.id,assignedPlayer,onlineMemberIds}})); this.broadcast({event:"netplay:presence",payload:{memberId:m.id,displayName:m.displayName,online:true}},server); return; }
         const a=server.deserializeAttachment() as any; if(!a?.memberId) return; this.broadcast(msg,server);
       } catch(err) { server.send(JSON.stringify({event:"error",payload:{message:err instanceof Error?err.message:"WebSocket error"}})); }
     });
