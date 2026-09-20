@@ -94,7 +94,7 @@ describe("online room launch safeguards", () => {
     expect(universalClient).toContain("CloudflareNetplayWebSocket");
     expect(transport).toContain('pingInterval(15,TimeUnit.SECONDS)');
     expect(transport).toContain('netplay:quality-probe');
-    expect(transport).toContain('recommendedDelay');
+    expect(transport).toContain("coerceIn(2L,45L)");
     expect(universalClient).toContain('"netplay:universal-ready"');
     expect(ps1Client).toContain('"netplay:ps1-ready"');
     expect(ps1Room).toContain("prepareFastLaunch(\"ps1\"");
