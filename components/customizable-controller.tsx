@@ -48,8 +48,8 @@ const profiles: Record<SystemId, { controls: ControlId[]; accent: string; labels
   },
   ps2: {
     accent: "#72A7FF",
-    controls: ["UP","DOWN","LEFT","RIGHT","TRIANGLE","CROSS","SQUARE","O","L1","R1","L2","R2","START","SELECT"],
-    labels: { UP:"▲", DOWN:"▼", LEFT:"◀", RIGHT:"▶", TRIANGLE:"△", CROSS:"×", SQUARE:"□", O:"○", L1:"L1", R1:"R1", L2:"L2", R2:"R2", START:"START", SELECT:"SELECT" },
+    controls: ["UP","DOWN","LEFT","RIGHT","TRIANGLE","X","SQUARE","O","L1","R1","L2","R2","START","SELECT"],
+    labels: { UP:"▲", DOWN:"▼", LEFT:"◀", RIGHT:"▶", TRIANGLE:"△", X:"×", SQUARE:"□", O:"○", L1:"L1", R1:"R1", L2:"L2", R2:"R2", START:"START", SELECT:"SELECT" },
     defaults: { UP:{x:13,y:54,size:54}, DOWN:{x:13,y:73,size:54}, LEFT:{x:3,y:64,size:54}, RIGHT:{x:23,y:64,size:54}, TRIANGLE:{x:78,y:52,size:50}, CROSS:{x:78,y:72,size:50}, SQUARE:{x:68,y:62,size:50}, O:{x:88,y:62,size:50}, L1:{x:5,y:37,size:42}, R1:{x:82,y:37,size:42}, L2:{x:5,y:28,size:42}, R2:{x:82,y:28,size:42}, START:{x:52,y:89,size:40}, SELECT:{x:37,y:89,size:40} },
   },
   sega: {
