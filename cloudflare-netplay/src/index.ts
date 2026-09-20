@@ -25,7 +25,7 @@ export class RoomDirectory extends DurableObject<Env> {
   constructor(ctx:DurableObjectState, env:Env) { super(ctx,env); this.sql=ctx.storage.sql; this.sql.exec("CREATE TABLE IF NOT EXISTS rooms (id INTEGER PRIMARY KEY, join_code TEXT UNIQUE, name TEXT, system TEXT, visibility TEXT, status TEXT, max_players INTEGER, max_spectators INTEGER, updated_at INTEGER)"); }
   async register(room:Room) { this.sql.exec("INSERT OR REPLACE INTO rooms VALUES(?,?,?,?,?,?,?,?,?)",room.id,room.joinCode,room.name,room.system,room.visibility,room.status,room.maxPlayers,room.maxSpectators,room.updatedAt); return true; }
   async update(room:Room) { this.sql.exec("UPDATE rooms SET name=?,system=?,visibility=?,status=?,max_players=?,max_spectators=?,updated_at=? WHERE id=?",room.name,room.system,room.visibility,room.status,room.maxPlayers,room.maxSpectators,room.updatedAt,room.id); return true; }
-  async findByCode(joinCode:string) { const r=this.sql.exec("SELECT id FROM rooms WHERE join_code=?",joinCode).one() as any; return r ? Number(r.id) : null; }
+  async findByCode(joinCode:string) { const r=this.sql.exec("SELECT id FROM rooms WHERE join_code=?",joinCode).toArray()[0] as any; return r ? Number(r.id) : null; }
   async list(limit:number) { return this.sql.exec("SELECT id,name,system,max_players,max_spectators,status,updated_at FROM rooms WHERE visibility='public' AND status<>'closed' ORDER BY updated_at DESC LIMIT ?",Math.min(50,Math.max(1,limit))).toArray().map((r:any)=>({id:Number(r.id),name:String(r.name),system:r.system,maxPlayers:Number(r.max_players),maxSpectators:Number(r.max_spectators),status:r.status,activePlayers:0,spectators:0,readyPlayers:0,updatedAt:new Date(Number(r.updated_at)).toISOString()})); }
 }
 
@@ -36,7 +36,7 @@ export class NetplayRoom extends DurableObject<Env> {
     this.sql.exec("CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY,value TEXT NOT NULL)");
     this.sql.exec("CREATE TABLE IF NOT EXISTS members (id INTEGER PRIMARY KEY,display_name TEXT NOT NULL,role TEXT NOT NULL,is_ready INTEGER NOT NULL DEFAULT 0,game_fingerprint TEXT,core_version TEXT,token_hash TEXT NOT NULL)");
   }
-  private room():Room|null { const r=this.sql.exec("SELECT value FROM meta WHERE key='room'").one() as any; return r?.value ? JSON.parse(String(r.value)) : null; }
+  private room():Room|null { const r=this.sql.exec("SELECT value FROM meta WHERE key='room'").toArray()[0] as any; return r?.value ? JSON.parse(String(r.value)) : null; }
   private save(room:Room) { this.sql.exec("INSERT OR REPLACE INTO meta(key,value) VALUES('room',?)",JSON.stringify(room)); }
   private members():Member[] { return this.sql.exec("SELECT id,display_name,role,is_ready,game_fingerprint,core_version,token_hash FROM members ORDER BY id").toArray().map((r:any)=>({id:Number(r.id),displayName:String(r.display_name),role:r.role,isReady:Boolean(r.is_ready),gameFingerprint:r.game_fingerprint?String(r.game_fingerprint):null,coreVersion:r.core_version?String(r.core_version):null,tokenHash:String(r.token_hash)})); }
   async create(room:Room, hostName:string, hostToken:string) {
