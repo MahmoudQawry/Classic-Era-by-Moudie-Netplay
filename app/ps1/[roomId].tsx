@@ -40,7 +40,7 @@ export default function PS1Screen() {
   const socketRef = useRef<ReturnType<typeof createNetplaySocket> | null>(null);
   const launchGameRef = useRef<(withNetplay?: boolean, settingsMode?: boolean, synchronizedStart?: boolean) => Promise<void>>(async () => undefined);
   const voiceChatRef = useRef<RoomVoiceChatHandle | null>(null);
-  const [roomConnected, setRoomConnected] = useState(false);
+  const [roomConnected, setRoomConnected] = useState(false);\n  const [showChat, setShowChat] = useState(false);
   const [mediaToken, setMediaToken] = useState<MediaToken | null>(null);
   const mediaTokenMutation = trpc.rooms.mediaToken.useMutation();
   const [remoteOnline, setRemoteOnline] = useState(false);
@@ -105,8 +105,8 @@ export default function PS1Screen() {
     if (!credential || Platform.OS === "web") return;
     const socket = createNetplaySocket({ roomId: numericRoomId, memberId: credential.memberId, memberToken: credential.memberToken });
     socketRef.current = socket;
-    const connected = () => setRoomConnected(true);
-    const disconnected = () => { setRoomConnected(false); setRemoteOnline(false); };
+    const connected = () => { setRoomConnected(true); setStatus("NETPLAY CHANNEL CONNECTED"); };
+    const disconnected = () => { setRoomConnected(false); setRemoteOnline(false); setStatus("NETPLAY CHANNEL DISCONNECTED"); };
     const joined = (payload: { onlineMemberIds?: number[] }) => setRemoteOnline(Boolean(payload.onlineMemberIds?.some((id) => id !== credential.memberId)));
     const presence = (payload: { memberId?: number; online?: boolean }) => {
       if (payload.memberId !== credential.memberId) setRemoteOnline(Boolean(payload.online));
@@ -293,8 +293,8 @@ export default function PS1Screen() {
         </View>}
 
         {Platform.OS !== "web" && <>
-          <RoomChat socket={roomConnected ? socketRef.current : null} title={`PS1 · ${t("roomChat")}`} />
-          <RoomVoiceChat mediaToken={mediaToken} teamMediaToken={mediaToken?.teamMediaToken} ref={voiceChatRef} socket={roomConnected ? socketRef.current : null} isHost={assignedPlayer === 1} remoteOnline={remoteOnline} memberId={credential?.memberId} members={snapshotQuery.data?.members ?? []} />
+          <RoomVoiceChat mediaToken={mediaToken} teamMediaToken={mediaToken?.teamMediaToken} ref={voiceChatRef} socket={roomConnected ? socketRef.current : null} isHost={assignedPlayer === 1} remoteOnline={remoteOnline} memberId={credential?.memberId} members={snapshotQuery.data?.members ?? []} onChatPress={() => setShowChat((visible) => !visible)} />
+          {showChat && <RoomChat socket={roomConnected ? socketRef.current : null} title={`PS1 · ${t("roomChat")}`} />}
         </>}
 
         <View style={styles.statusCard}>
