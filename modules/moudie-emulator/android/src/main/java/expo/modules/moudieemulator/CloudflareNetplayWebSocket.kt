@@ -68,8 +68,10 @@ class CloudflareNetplayWebSocket(
               lastRtt=rtt
               smoothedRtt=smoothedRtt?.let{it*0.7+rtt.toDouble()*0.3}?:rtt.toDouble()
               smoothedJitter=smoothedJitter?.let{it*0.7+jitter.toDouble()*0.3}?:jitter.toDouble()
-              val delay=((smoothedRtt?:rtt)+(smoothedJitter?:jitter)*1.5+16.0)/16.667
-              onQuality(NetplayQuality(rttMs=(smoothedRtt?:rtt).toLong(),jitterMs=(smoothedJitter?:jitter).toLong(),probeLossPercent=0,grade="CONNECTED",recommendedDelay=delay.toLong().coerceIn(2L,45L)))
+              val measuredRttMs=smoothedRtt?:rtt.toDouble()
+              val measuredJitterMs=smoothedJitter?:jitter.toDouble()
+              val delay=(measuredRttMs+(measuredJitterMs*1.5)+16.0)/16.667
+              onQuality(NetplayQuality(rttMs=measuredRttMs.toLong(),jitterMs=measuredJitterMs.toLong(),probeLossPercent=0,grade="CONNECTED",recommendedDelay=delay.toLong().coerceIn(2L,45L)))
             }
           }
           if(event.isNotBlank())handler.post{onEvent(event,payload)}
