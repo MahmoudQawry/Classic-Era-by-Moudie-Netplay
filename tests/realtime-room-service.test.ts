@@ -24,7 +24,7 @@ describe("realtime room service transport hardening", () => {
     expect(source).toContain("async function selectMutationRelay(urls: string[]): Promise<string | null>");
     expect(source).toContain('const candidates = method === "GET" ? urls : [selectedRelay as string];');
     expect(source).toContain("Mutations are sent to one healthy relay only");
-    expect(source).toContain("can duplicate a room or consume a second seat");
+    expect(source).toContain("never replayed");
     expect(source).toContain("لا يوجد خادم NetPlay صحي حالياً");
   });
 });
