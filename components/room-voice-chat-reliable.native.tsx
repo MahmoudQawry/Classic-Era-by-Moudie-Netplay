@@ -1,4 +1,5 @@
 import { RTCPeerConnection, RTCIceCandidate, RTCSessionDescription, mediaDevices, registerGlobals, type MediaStream, type MediaStreamTrack } from "@livekit/react-native-webrtc";
+import InCallManager from "react-native-incall-manager";
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { useLanguage } from "@/lib/language";
@@ -22,7 +23,14 @@ type Props = {
 
 type PeerEntry={pc:RTCPeerConnection; pendingIce:RTCIceCandidate[]};
 
-const ICE_CONFIG={iceServers:[{urls:"stun:stun.l.google.com:19302"},{urls:"stun:stun.cloudflare.com:3478"}]};
+const TURN_URL=process.env.EXPO_PUBLIC_TURN_URL?.trim();
+const TURN_USERNAME=process.env.EXPO_PUBLIC_TURN_USERNAME?.trim();
+const TURN_CREDENTIAL=process.env.EXPO_PUBLIC_TURN_CREDENTIAL?.trim();
+const ICE_CONFIG={iceServers:[
+  {urls:"stun:stun.l.google.com:19302"},
+  {urls:"stun:stun.cloudflare.com:3478"},
+  ...(TURN_URL&&TURN_USERNAME&&TURN_CREDENTIAL?[{urls:TURN_URL,username:TURN_USERNAME,credential:TURN_CREDENTIAL}]:[]),
+]};
 
 export const RoomVoiceChat=forwardRef<RoomVoiceChatHandle,Props>(function RoomVoiceChat({memberId,members=[],socket,onChatPress},ref){
   const {t}=useLanguage();
@@ -42,7 +50,7 @@ export const RoomVoiceChat=forwardRef<RoomVoiceChatHandle,Props>(function RoomVo
 
   const send=(event:string,payload:unknown)=>socketRef.current?.emit?.(event,payload);
 
-  const applySpeakerMute=(enabled:boolean)=>{
+  const ensureAudioSession=()=>{try{InCallManager.start({media:"video",auto:true});}catch{}};\n\n  const applySpeakerMute=(enabled:boolean)=>{
     for(const tracks of remoteTracks.current.values()) tracks.forEach(track=>{track.enabled=enabled;});
   };
 
@@ -77,7 +85,7 @@ export const RoomVoiceChat=forwardRef<RoomVoiceChatHandle,Props>(function RoomVo
     pc.addEventListener("icecandidate",(event:any)=>{
       if(event.candidate)send("voice:signal",{targetMemberId:remoteId,type:"ice",candidate:event.candidate});
     });
-    pc.addEventListener("track",(event:any)=>{
+    pc.addEventListener("track",(event:any)=>{\n      ensureAudioSession();
       const tracks=(event.streams?.[0]?.getAudioTracks?.()||[]).filter(Boolean) as MediaStreamTrack[];
       remoteTracks.current.set(remoteId,tracks);
       applySpeakerMute(speakerRef.current);
@@ -185,7 +193,7 @@ export const RoomVoiceChat=forwardRef<RoomVoiceChatHandle,Props>(function RoomVo
     return()=>{socket?.off?.("voice:signal",onSignal);socket?.off?.("netplay:joined",onJoined);socket?.off?.("netplay:presence",onPresence);};
   },[socket,memberId,members]);
 
-  useEffect(()=>()=>{for(const [id] of peers.current)closePeer(id);localStream.current?.getTracks().forEach(t=>t.stop());},[]);
+  useEffect(()=>()=>{for(const [id] of peers.current)closePeer(id);localStream.current?.getTracks().forEach(t=>t.stop());try{InCallManager.stop();}catch{}},[]);
 
   if(Platform.OS==="web")return null;
   return <View style={styles.card}>
