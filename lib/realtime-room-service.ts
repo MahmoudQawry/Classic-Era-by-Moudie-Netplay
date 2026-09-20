@@ -84,7 +84,10 @@ async function request<T>(procedure: string, input: unknown, method: "GET" | "PO
   if (urls.length === 0) throw new Error("لم يتم إعداد خادم الغرف في هذا الإصدار من التطبيق.");
   let lastError: unknown = null;
   const selectedRelay = method === "POST" ? await selectMutationRelay(urls) : null;
-  const candidates = method === "GET" ? urls : [selectedRelay ?? urls[0]].filter(Boolean);
+  if (method === "POST" && !selectedRelay) {
+    throw new Error("لا يوجد خادم NetPlay صحي حالياً. يجب أن يعيد /api/health استجابة سليمة قبل إنشاء أو دخول الغرفة.");
+  }
+  const candidates = method === "GET" ? urls : [selectedRelay as string];
 
   for (const baseUrl of candidates) {
     const controller = new AbortController();
