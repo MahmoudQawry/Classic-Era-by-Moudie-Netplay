@@ -12,11 +12,13 @@ import { haptic } from "@/lib/haptics";
 import { createNetplaySocket } from "@/lib/netplay-socket";
 import { setRealtimeRoomReady } from "@/lib/realtime-room-service";
 import { getRoomCredential, type RoomCredential } from "@/lib/room-storage";
+import { trpc } from "@/lib/trpc";
 import { useRealtimeRoomSnapshot } from "@/lib/use-realtime-room-snapshot";
 import MoudieEmulatorModule from "@/modules/moudie-emulator/src/MoudieEmulatorModule";
 
 const PSP_EXTENSIONS = [".iso", ".cso", ".chd", ".pbp"];
 const PSP_NETPLAY_CORE_VERSION = "ppsspp-libretro-lockstep-v2-adaptive";
+type MediaToken = { configured: boolean; url?: string; roomName?: string; token?: string; canPublish?: boolean; message?: string; teamMediaToken?: MediaToken | null };
 
 type RoomGame = { name: string; uri: string; fingerprint: string };
 type PlayerSeat = 1 | 2 | 3 | 4;
@@ -33,6 +35,8 @@ export default function PSPRoomScreen() {
   const voiceChatRef = useRef<RoomVoiceChatHandle | null>(null);
   const launchGameRef = useRef<(withNetplay?: boolean, settingsMode?: boolean, synchronizedStart?: boolean) => Promise<void>>(async () => undefined);
   const [roomConnected, setRoomConnected] = useState(false);
+  const [mediaToken, setMediaToken] = useState<MediaToken | null>(null);
+  const mediaTokenMutation = trpc.rooms.mediaToken.useMutation();
   const [remoteOnline, setRemoteOnline] = useState(false);
   const [assignedPlayer, setAssignedPlayer] = useState<PlayerSeat | null>(null);
   const [game, setGame] = useState<RoomGame | null>(null);
@@ -54,6 +58,22 @@ export default function PSPRoomScreen() {
     });
     return () => subscription.remove();
   }, []);
+  useEffect(() => {
+    if (!credential || Platform.OS === "web") return;
+    let cancelled = false;
+    const refresh = async () => {
+      try {
+        const next = await mediaTokenMutation.mutateAsync({ roomId: numericRoomId, memberId: credential.memberId, memberToken: credential.memberToken });
+        if (!cancelled) setMediaToken(next);
+      } catch {
+        if (!cancelled) setMediaToken({ configured: false, message: t("voiceSetupFailed") });
+      }
+    };
+    void refresh();
+    const timer = setInterval(() => { void refresh(); }, 15 * 60 * 1000);
+    return () => { cancelled = true; clearInterval(timer); };
+  }, [credential, mediaTokenMutation, numericRoomId, t]);
+
   useEffect(() => {
     if (!credential || Platform.OS === "web") return;
     const socket = createNetplaySocket({ roomId: numericRoomId, memberId: credential.memberId, memberToken: credential.memberToken });
@@ -139,7 +159,7 @@ export default function PSPRoomScreen() {
         {canStart && <Pressable onPress={requestSynchronizedStart} style={({ pressed }) => [styles.launch, pressed && styles.disabled]}><Text style={styles.launchText}>{t("pspStartSession")}</Text></Pressable>}
         {startRequested && <Text style={styles.wait}>{t("pspWaitingVerify")}</Text>}
         <View style={styles.note}><Text style={styles.noteTitle}>{t("pspRoomControls")}</Text><Text style={styles.noteText}>{t("pspRoomControlsText")}</Text></View>
-        {Platform.OS !== "web" && <><RoomChat socket={roomConnected ? socketRef.current : null} title={`PSP · ${t("roomChat")}`} /><RoomVoiceChat ref={voiceChatRef} socket={roomConnected ? socketRef.current : null} isHost={Boolean(host)} remoteOnline={remoteOnline} memberId={credential?.memberId} members={snapshotQuery.data?.members ?? []} /></>}
+        {Platform.OS !== "web" && <><RoomChat socket={roomConnected ? socketRef.current : null} title={`PSP · ${t("roomChat")}`} /><RoomVoiceChat mediaToken={mediaToken} teamMediaToken={mediaToken?.teamMediaToken} ref={voiceChatRef} socket={roomConnected ? socketRef.current : null} isHost={Boolean(host)} remoteOnline={remoteOnline} memberId={credential?.memberId} members={snapshotQuery.data?.members ?? []} /></>}
       </ScrollView>
     </ScreenContainer>
   );
