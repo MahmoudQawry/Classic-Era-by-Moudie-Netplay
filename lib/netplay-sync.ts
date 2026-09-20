@@ -1,24 +1,17 @@
-/** 
- * adaptive: authoritative checkpoint interval
- * Reduced from 2500ms to 1500ms for faster divergence correction
- * while allowing inputs to keep flowing between checkpoints.
- */
+import { RollbackBuffer, targetFrame } from "./rollback-netcode";
+
 export const NETPLAY_SYNC_INTERVAL_MS = 1500;
-
-/**
- * adaptive: max frames before forcing a state sync
- * If one device gets too far ahead, force resync
- */
 export const NETPLAY_MAX_DESYNC_FRAMES = 10;
+export const NETPLAY_ROLLBACK_HISTORY_FRAMES = 120;
+export const NETPLAY_MAX_ROLLBACK_FRAMES = 12;
 
-/**
- * adaptive: jitter buffer sizes based on network quality
- */
 export const JITTER_BUFFER_SIZES = {
   STABLE: 2,
   FAIR: 4,
   UNSTABLE: 6,
 } as const;
+
+export { RollbackBuffer, targetFrame };
 
 export function normalizeSyncId(value: unknown): number | null {
   const parsed = Number(value);
@@ -29,20 +22,30 @@ export function shouldApplyAuthoritativeState(lastApplied: number, incoming: num
   return incoming > lastApplied;
 }
 
-// adaptive: calculate if desync is severe enough to force resync
 export function isDesyncSevere(predictedFrames: number, frameDrift: number): boolean {
   return predictedFrames > 20 || Math.abs(frameDrift) > 100;
 }
 
-// Calculate adaptive frame delay based on network conditions
+export type NetworkQuality = "excellent" | "good" | "poor" | "lost";
+
+export function classifyNetworkQuality(rttMs: number, jitterMs: number, packetLossPct: number): NetworkQuality {
+  if (![rttMs, jitterMs, packetLossPct].every(Number.isFinite)) return "lost";
+  if (packetLossPct >= 8 || rttMs >= 300) return "lost";
+  if (packetLossPct >= 3 || rttMs >= 180 || jitterMs >= 50) return "poor";
+  if (packetLossPct >= 1 || rttMs >= 90 || jitterMs >= 20) return "good";
+  return "excellent";
+}
+
 export function calculateAdaptiveDelay(rttMs: number, jitterMs: number, currentDelay: number): number {
-  let targetDelay = currentDelay;
-  
-  if (rttMs > 150 || jitterMs > 35) {
-    targetDelay = Math.min(8, currentDelay + 1);
-  } else if (rttMs < 60 && jitterMs < 15 && currentDelay > 2) {
-    targetDelay = Math.max(2, currentDelay - 1);
-  }
-  
+  let targetDelay = Math.max(2, Math.min(8, Math.trunc(currentDelay)));
+  if (rttMs > 150 || jitterMs > 35) targetDelay = Math.min(8, targetDelay + 1);
+  else if (rttMs < 60 && jitterMs < 15 && targetDelay > 2) targetDelay = Math.max(2, targetDelay - 1);
   return targetDelay;
+}
+
+export function rollbackWindowForQuality(quality: NetworkQuality): number {
+  if (quality === "excellent") return 6;
+  if (quality === "good") return 8;
+  if (quality === "poor") return NETPLAY_MAX_ROLLBACK_FRAMES;
+  return NETPLAY_MAX_ROLLBACK_FRAMES;
 }

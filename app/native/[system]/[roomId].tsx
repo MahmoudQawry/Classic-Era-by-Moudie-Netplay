@@ -38,7 +38,7 @@ export default function NativeRoomScreen() {
   const [starting, setStarting] = useState(false);
   const [picking, setPicking] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
-  const [mediaToken, setMediaToken] = useState<{ configured: boolean; url?: string; roomName?: string; token?: string; canPublish?: boolean; message?: string } | null>(null);
+  const [mediaToken, setMediaToken] = useState<{ configured: boolean; url?: string; roomName?: string; token?: string; canPublish?: boolean; message?: string; teamMediaToken?: any } | null>(null);
   const statusText = status === null ? t(meta.statusKey) : status;
   const socketRef = useRef<ReturnType<typeof createNetplaySocket> | null>(null);
   const voiceChatRef = useRef<RoomVoiceChatHandle | null>(null);
@@ -123,7 +123,7 @@ export default function NativeRoomScreen() {
     <View style={styles.status}><Text style={styles.statusTitle}>{t("fcNetplayStatus")}</Text><Text style={styles.statusText}>{statusText}</Text></View>
     {game && connected && assignedPlayer && <Pressable onPress={markReady} disabled={ready} style={({ pressed }) => [styles.ready, (pressed || ready) && styles.disabled]}><Text style={styles.readyText}>{ready ? t("fcReadyConfirmed") : t("pspReady2")}</Text></Pressable>}
     {canStart && <Pressable onPress={requestStart} style={({ pressed }) => [styles.start, pressed && styles.disabled]}><Text style={styles.startText}>{t("segStartSession")}</Text></Pressable>}
-    {Platform.OS !== "web" && <><RoomChat socket={connected ? socketRef.current : null} title={`${meta.title} · ${t("roomChat")}`} /><RoomVoiceChat ref={voiceChatRef} mediaToken={mediaToken} socket={connected ? socketRef.current : null} memberRole={snapshotQuery.data?.members.find((member) => member.id === credential?.memberId)?.role} memberId={credential?.memberId} members={snapshotQuery.data?.members ?? []} /></>}
+    {Platform.OS !== "web" && <><RoomChat socket={connected ? socketRef.current : null} title={`${meta.title} · ${t("roomChat")}`} /><RoomVoiceChat ref={voiceChatRef} mediaToken={mediaToken} teamMediaToken={mediaToken?.teamMediaToken} socket={connected ? socketRef.current : null} memberRole={snapshotQuery.data?.members.find((member) => member.id === credential?.memberId)?.role} memberId={credential?.memberId} members={snapshotQuery.data?.members ?? []} /></>}
   </ScrollView></ScreenContainer>;
 }
 

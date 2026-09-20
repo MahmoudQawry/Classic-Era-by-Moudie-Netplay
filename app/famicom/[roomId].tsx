@@ -23,6 +23,7 @@ import { shouldApplyAuthoritativeState } from "@/lib/netplay-sync";
 import { setRealtimeRoomReady } from "@/lib/realtime-room-service";
 import { getRoomCredential, type RoomCredential } from "@/lib/room-storage";
 import { useRealtimeRoomSnapshot } from "@/lib/use-realtime-room-snapshot";
+import { trpc } from "@/lib/trpc";
 import MoudieEmulatorModule from "@/modules/moudie-emulator/src/MoudieEmulatorModule";
 import { useFpsMeter } from "@/hooks/use-fps-meter";
 
@@ -54,6 +55,7 @@ type PeerInstance = {
 
 type ButtonName = "UP" | "DOWN" | "LEFT" | "RIGHT" | "A" | "B" | "START" | "SELECT";
 type RoomVoiceChatHandle = { setMicrophoneEnabled: (enabled: boolean) => Promise<void>; setSpeakerEnabled: (enabled: boolean) => Promise<void> };
+type MediaToken = { configured: boolean; url?: string; roomName?: string; token?: string; canPublish?: boolean; message?: string; teamMediaToken?: MediaToken | null };
 type ScreenLayout = { x: number; y: number; scale: number };
 
 export default function FamicomScreen() {
@@ -81,6 +83,8 @@ export default function FamicomScreen() {
   const lastFamicomSyncRef = useRef(-1);
   const netplaySyncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [credential, setCredential] = useState<RoomCredential | null | undefined>(undefined);
+  const [mediaToken, setMediaToken] = useState<MediaToken | null>(null);
+  const mediaTokenMutation = trpc.rooms.mediaToken.useMutation();
   const [romName, setRomName] = useState<string | null>(null);
   const [romBase64, setRomBase64] = useState<string | null>(null);
   const [fingerprint, setFingerprint] = useState<string | null>(null);
@@ -614,7 +618,7 @@ export default function FamicomScreen() {
         {gameReady && remoteVerified && (Platform.OS === "web" ? !isHost : assignedPlayer === 2) && <Text style={styles.waitText}>{t("fcVerifiedWait")}</Text>}</>}
 
         {!focusMode && Platform.OS !== "web" && romName && <View style={styles.chatCard}><Text style={styles.chatTitle}>{t("roomChat")}</Text><View style={styles.chatMessages}>{chatMessages.length ? chatMessages.slice(-4).map((message) => <Text key={message.id} style={styles.chatMessage}><Text style={styles.chatSender}>{message.displayName}: </Text>{message.text}</Text>) : <Text style={styles.chatEmpty}>{roomConnected ? t("fcChatHint") : t("connectChat")}</Text>}</View><View style={styles.chatComposer}><TextInput value={chatDraft} onChangeText={setChatDraft} editable={roomConnected} placeholder={t("writeMessage")} placeholderTextColor="#71839A" style={styles.chatInput} textAlign="left" returnKeyType="send" onSubmitEditing={sendChat} /><Pressable onPress={sendChat} disabled={!roomConnected || !chatDraft.trim()} style={({ pressed }) => [styles.chatSend, (pressed || !roomConnected || !chatDraft.trim()) && styles.chatSendDisabled]}><Text style={styles.chatSendText}>{t("send")}</Text></Pressable></View></View>}
-        {!focusMode && Platform.OS !== "web" && romName && <RoomVoiceChat ref={voiceChatRef} socket={roomConnected ? socketRef.current : null} isHost={assignedPlayer === 1} remoteOnline={remoteOnline} memberId={credential?.memberId} members={snapshot?.members ?? []} />}
+        {!focusMode && Platform.OS !== "web" && romName && <RoomVoiceChat mediaToken={mediaToken} teamMediaToken={mediaToken?.teamMediaToken} ref={voiceChatRef} socket={roomConnected ? socketRef.current : null} isHost={assignedPlayer === 1} remoteOnline={remoteOnline} memberId={credential?.memberId} members={snapshot?.members ?? []} />}
 
         {!focusMode && romName && <View style={[styles.controls, !controlsEnabled && styles.controlsMuted]}><View style={styles.controllerHeader}><Text style={styles.controlLabel}>{localNativeGameActive ? `${t("fcLocalControls")} · ${t("rmPlayerShort")} ${assignedPlayer ?? 1}` : gameActive ? `${t("fcControls")} · ${t("rmPlayerShort")} ${Platform.OS === "web" ? (isHost ? 1 : 2) : assignedPlayer ?? 1}` : t("fcControlsAfterStart")}</Text>{!gameActive && <Pressable onPress={() => setFocusControlEditor((value) => !value)} style={styles.editorButton}><Text style={styles.editorButtonText}>{focusControlEditor ? t("fcSaveControls") : t("fcConfigureControls")}</Text></Pressable>}</View><CustomizableController system="famicom" editable={focusControlEditor && !gameActive} onButtonChange={(button, isDown) => { if (button === "UP" || button === "DOWN" || button === "LEFT" || button === "RIGHT" || button === "A" || button === "B" || button === "START" || button === "SELECT") setLocalButton(button, isDown); }} /><Pressable onPress={() => Platform.OS === "web" ? browserRef.current?.nes.reset() : nativePlayerRef.current?.reset()} style={({ pressed }) => [styles.resetButton, pressed && styles.pressed]}><Text style={styles.resetText}>{t("fcResetGame")}</Text></Pressable></View>}
         {!focusMode && <View style={styles.warning}><Text style={styles.warningTitle}>{t("fcHowToPlay")}</Text><Text style={styles.warningText}>{Platform.OS === "web" ? t("fcHowWeb") : t("fcHowNative")}</Text></View>}
