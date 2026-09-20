@@ -23,7 +23,8 @@ export default function RoomScreen() {
   const [credential, setCredential] = useState<RoomCredential | null | undefined>(undefined);
   const [mediaToken, setMediaToken] = useState<MediaToken | null>(null);
   const socketRef = useRef<ReturnType<typeof createNetplaySocket> | null>(null);
-  const [roomConnected, setRoomConnected] = useState(false);\n  const [showChat, setShowChat] = useState(false);
+  const [roomConnected, setRoomConnected] = useState(false);
+  const [showChat, setShowChat] = useState(false);
 
   useEffect(() => { if (Number.isFinite(roomId)) getRoomCredential(roomId).then(setCredential); }, [roomId]);
   const mediaTokenMutation = trpc.rooms.mediaToken.useMutation();
