@@ -21,6 +21,7 @@ export type RoomVoiceChatHandle = {
 
 type Props = {
   mediaToken?: MediaToken | null;
+  teamMediaToken?: MediaToken | null;
   memberRole?: "host" | "player" | "spectator";
   // Kept in the shared public API so TypeScript can type-check the same JSX on
   // native and web. The browser fallback intentionally does not open LiveKit.
