@@ -88,22 +88,15 @@ describe("online room launch safeguards", () => {
     expect(famicomRoom).toContain('nativePlayerRef.current?.requestState("netplay")');
     expect(oauth).toContain("const NATIVE_API_FALLBACK_URL = NATIVE_NETPLAY_SERVICE_URL");
     expect(ps1).toContain('RENDERMODE_CONTINUOUSLY');
-    // Persistent mobile recovery: WebSocket first, polling fallback, and no
-    // finite attempt counter that can abandon an active room after an outage.
-    expect(ps1Client).toMatch(/reconnectionAttempts = (12|20|30|50|Integer\.MAX_VALUE)/);
-    expect(ps1Client).toMatch(/reconnectionDelayMax = (2_000|3_000|4_000|8_000)/);
-    expect(ps1Client).toContain('transports = arrayOf("websocket", "polling")');
-    expect(ps1Client).toContain('NetplayQualityMonitor');
-    expect(universalClient).toMatch(/reconnectionAttempts = (12|20|30|50|Integer\.MAX_VALUE)/);
-    expect(universalClient).toMatch(/reconnectionDelayMax = (2_000|3_000|4_000|8_000)/);
-    expect(universalClient).toContain('transports = arrayOf("websocket", "polling")');
-    expect(universalClient).toContain('NetplayQualityMonitor');
-    expect(universalClient).toContain('path = "/api/netplay"');
-    expect(universalClient).toContain('"clientKind" to "universal-player"');
+    // Cloudflare Durable Object transport: persistent WebSocket with bounded adaptive delay.
+    const transport = readProjectFile("modules/moudie-emulator/android/src/main/java/expo/modules/moudieemulator/CloudflareNetplayWebSocket.kt");
+    expect(ps1Client).toContain("CloudflareNetplayWebSocket");
+    expect(universalClient).toContain("CloudflareNetplayWebSocket");
+    expect(transport).toContain('pingInterval(15,TimeUnit.SECONDS)');
+    expect(transport).toContain('netplay:quality-probe');
+    expect(transport).toContain('recommendedDelay');
     expect(universalClient).toContain('"netplay:universal-ready"');
-    expect(universalClient).toContain('"netplay:universal-session-bootstrap"');
-    expect(universalClient).toContain('"netplay:universal-session-go"');
-    expect(universalClient).toContain('"netplay:quality-probe"');
+    expect(ps1Client).toContain('"netplay:ps1-ready"');
     expect(ps1Room).toContain("prepareFastLaunch(\"ps1\"");
     expect(nativeRoom).toContain("prepareFastLaunch(system as EmulatorSystem");
   });
