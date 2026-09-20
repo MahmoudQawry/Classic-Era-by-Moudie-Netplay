@@ -27,14 +27,15 @@ export function getRoomRelayUrl(roomId: number): string {
 function socketOptions(credentials: NetplayCredentials) {
   return {
     path: "/api/netplay",
-    transports: ["websocket", "polling"] as ("websocket" | "polling")[],
-    upgrade: true,
+    // Gameplay should never silently fall back to long-polling: that adds queueing and jitter.
+    transports: ["websocket"] as ("websocket")[],
+    upgrade: false,
     auth: credentials,
-    timeout: 20_000,
+    timeout: 10_000,
     reconnection: true,
     reconnectionAttempts: Infinity,
-    reconnectionDelay: 1_000,
-    reconnectionDelayMax: 8_000,
+    reconnectionDelay: 500,
+    reconnectionDelayMax: 5_000,
     randomizationFactor: 0.35,
     forceNew: false,
     autoConnect: true,
