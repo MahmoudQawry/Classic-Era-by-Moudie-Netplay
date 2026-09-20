@@ -109,6 +109,45 @@ export class NetplayRoom extends DurableObject<Env> {
         return;
       }
 
+      if(msg?.event==="netplay:quality-probe"){
+        this.broadcast({event:"netplay:quality-pong",payload:{sequence:Number(msg.payload?.sequence)||0}});
+        return;
+      }
+
+      if(msg?.event==="netplay:session-ready"){
+        const isReady=Boolean(msg.payload?.isReady);
+        const fingerprint=String(msg.payload?.fingerprint||"");
+        const coreVersion=String(msg.payload?.coreVersion||"");
+        this.sql.exec("UPDATE members SET is_ready=?,game_fingerprint=?,core_version=? WHERE id=?",isReady?1:0,fingerprint||null,coreVersion||null,member.id);
+        this.broadcast({event:"netplay:session-ready",payload:{memberId:member.id,isReady,fingerprint,coreVersion}});
+        return;
+      }
+
+      if(msg?.event==="netplay:session-start-request"){
+        if(member.role!=="host") return;
+        const system=String(msg.payload?.system||"");
+        const ms=this.members();
+        const players=ms.filter(x=>x.role!=="spectator");
+        const readyPlayers=players.filter(x=>x.isReady);
+        if(players.length<2 || readyPlayers.length!==players.length){
+          server.send(JSON.stringify({event:"netplay:session-start-refused",payload:{message:"كل اللاعبين النشطين يجب أن يجهزوا نفس اللعبة أولاً."}}));
+          return;
+        }
+        const fingerprints=new Set(readyPlayers.map(x=>x.gameFingerprint).filter(Boolean));
+        const cores=new Set(readyPlayers.map(x=>x.coreVersion).filter(Boolean));
+        if(fingerprints.size!==1 || cores.size!==1){
+          server.send(JSON.stringify({event:"netplay:session-start-refused",payload:{message:"ملفات اللعبة أو إصدارات الأنوية غير متطابقة."}}));
+          return;
+        }
+        const startAt=Date.now()+3000;
+        const playerMemberIds=players.map(x=>x.id);
+        const payload={system,startAt,playerMemberIds,inputDelay:3};
+        this.broadcast({event:"netplay:session-start",payload});
+        return;
+      }
+
+      if(msg?.event==="netplay:quality-probe"){ return; }
+
       if(msg?.event==="netplay:voice-status"){
         this.broadcast({
           event:"netplay:voice-status",
@@ -128,7 +167,8 @@ export class NetplayRoom extends DurableObject<Env> {
         return;
       }
 
-      this.broadcast(msg,server);
+      const forwardedPayload = msg?.payload && typeof msg.payload==="object" ? {...msg.payload,memberId:member.id} : msg?.payload;
+      this.broadcast({...msg,payload:forwardedPayload},server);
     } catch(err) {
       try { server.send(JSON.stringify({event:"error",payload:{message:err instanceof Error?err.message:"WebSocket error"}})); } catch {}
     }
