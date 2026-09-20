@@ -72,7 +72,7 @@ services:
           ${LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET}
         turn_servers:
           - host: ${TURN_DOMAIN}
-            port: 443
+            port: 3478
             protocol: udp
             secret: ${TURN_SHARED_SECRET}
           - host: ${TURN_DOMAIN}
@@ -87,10 +87,6 @@ services:
     image: coturn/coturn:4.7.0-r0
     restart: unless-stopped
     network_mode: host
-    environment:
-      TURN_DOMAIN: ${TURN_DOMAIN}
-      PUBLIC_IP: ${PUBLIC_IP}
-      TURN_SHARED_SECRET: ${TURN_SHARED_SECRET}
     command: ["turnserver", "-p", "3478", "--fingerprint", "--lt-cred-mech", "--use-auth-secret", "--static-auth-secret", "${TURN_SHARED_SECRET}", "--realm", "${TURN_DOMAIN}", "--server-name", "${TURN_DOMAIN}", "--listening-ip", "0.0.0.0", "--external-ip", "${PUBLIC_IP}", "--min-port", "49160", "--max-port", "49260", "--no-loopback-peers", "--no-multicast-peers", "--stale-nonce", "600", "--no-cli", "--no-tlsv1", "--no-tlsv1_1", "--log-file", "stdout", "--simple-log"]
 
   caddy:
