@@ -132,17 +132,15 @@ function LiveKitControls({
     sock?.emit?.("netplay:voice-status", { microphoneEnabled: isMicrophoneEnabled, speakerEnabled: enabled, voiceChannel: channel });
   };
 
-  return <Controls
-    channel={channel}
-    connectedCount={Math.max(0, participants.length - 1)}
-    microphoneEnabled={isMicrophoneEnabled}
-    speakerEnabled={speakerEnabled}
-    members={members}
-    localMemberId={localMemberId}
-    onMic={mic}
-    onSpeaker={speaker}
-    onChannel={() => undefined}
-  />;
+  void mediaToken;
+  void members;
+  void localMemberId;
+  void participants;
+  void state;
+  void speakerEnabled;
+  void mic;
+  void onSpeakerState;
+  return null;
 }
 
 function UnavailableVoice({ message }: { message?: string }) {
