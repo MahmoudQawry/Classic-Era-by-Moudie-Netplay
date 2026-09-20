@@ -69,7 +69,7 @@ export class NetplayRoom extends DurableObject<Env> {
     if(request.headers.get("Upgrade")?.toLowerCase()!=="websocket") return new Response("Expected WebSocket",{status:426});
     const pair=new WebSocketPair(); const client=pair[0], server=pair[1];
     this.ctx.acceptWebSocket(server);
-    server.serializeAttachment({memberId:null});
+    (server as any).serializeAttachment({memberId:null});
     return new Response(null,{status:101,webSocket:client});
   }
 
@@ -80,11 +80,11 @@ export class NetplayRoom extends DurableObject<Env> {
         const memberId=Number(msg.payload?.memberId);
         const memberToken=String(msg.payload?.memberToken||"");
         const m=await this.auth(memberId,memberToken);
-        server.serializeAttachment({memberId:m.id});
+        (server as any).serializeAttachment({memberId:m.id});
         const active=this.members().filter(x=>x.role!=="spectator");
         const assignedPlayer=m.role==="spectator"?null:(active.findIndex(x=>x.id===m.id)+1);
         const onlineMemberIds=this.ctx.getWebSockets().map(ws=>{
-          const a=ws.deserializeAttachment() as any;
+          const a=(ws as any).deserializeAttachment() as any;
           return a?.memberId;
         }).filter((x):x is number=>typeof x==="number");
         server.send(JSON.stringify({event:"connect",payload:{ok:true,memberId:m.id}}));
@@ -93,7 +93,7 @@ export class NetplayRoom extends DurableObject<Env> {
         return;
       }
 
-      const attachment=server.deserializeAttachment() as any;
+      const attachment=(server as any).deserializeAttachment() as any;
       const memberId=Number(attachment?.memberId);
       if(!Number.isSafeInteger(memberId)) return;
       const member=this.members().find(x=>x.id===memberId);
@@ -161,7 +161,7 @@ export class NetplayRoom extends DurableObject<Env> {
         if(!Number.isSafeInteger(targetMemberId) || targetMemberId===member.id) return;
         const packet={event:"voice:signal",payload:{...msg.payload,fromMemberId:member.id}};
         for(const ws of this.ctx.getWebSockets()){
-          const a=ws.deserializeAttachment() as any;
+          const a=(ws as any).deserializeAttachment() as any;
           if(Number(a?.memberId)===targetMemberId && ws.readyState===WebSocket.OPEN) ws.send(JSON.stringify(packet));
         }
         return;
@@ -175,7 +175,7 @@ export class NetplayRoom extends DurableObject<Env> {
   }
 
   async webSocketClose(server:WebSocket) {
-    const attachment=server.deserializeAttachment() as any;
+    const attachment=(server as any).deserializeAttachment() as any;
     const memberId=Number(attachment?.memberId);
     if(Number.isSafeInteger(memberId)){
       const member=this.members().find(x=>x.id===memberId);
@@ -184,7 +184,7 @@ export class NetplayRoom extends DurableObject<Env> {
   }
 
   async webSocketError(server:WebSocket) {
-    const attachment=server.deserializeAttachment() as any;
+    const attachment=(server as any).deserializeAttachment() as any;
     const memberId=Number(attachment?.memberId);
     if(Number.isSafeInteger(memberId)) this.broadcast({event:"netplay:presence",payload:{memberId,online:false}},server);
   }
