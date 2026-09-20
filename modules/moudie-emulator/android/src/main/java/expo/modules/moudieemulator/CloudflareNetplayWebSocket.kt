@@ -69,7 +69,7 @@ class CloudflareNetplayWebSocket(
               smoothedRtt=smoothedRtt?.let{it*0.7+rtt*0.3}?:rtt.toDouble()
               smoothedJitter=smoothedJitter?.let{it*0.7+jitter*0.3}?:jitter.toDouble()
               val delay=((smoothedRtt?:rtt)+(smoothedJitter?:jitter)*1.5+16.0)/16.667
-              onQuality(NetplayQuality((smoothedRtt?:rtt).toLong(),(smoothedJitter?:jitter).toLong(),0,"CONNECTED",delay.toLong().coerceIn(2L,45L)))
+              onQuality(NetplayQuality(rttMs=(smoothedRtt?:rtt).toLong(),jitterMs=(smoothedJitter?:jitter).toLong(),probeLossPercent=0,grade="CONNECTED",recommendedDelay=delay.toLong().coerceIn(2L,45L)))
             }
           }
           if(event.isNotBlank())handler.post{onEvent(event,payload)}
