@@ -89,7 +89,7 @@ export const RoomVoiceChat=forwardRef<RoomVoiceChatHandle,Props>(function RoomVo
       try{(pc as any).addTransceiver("audio",{direction:"recvonly"});}catch{}
     }
     if(initiator){
-      const offer=await pc.createOffer({offerToReceiveAudio:true,offerToReceiveVideo:false} as any);
+      const offer=await pc.createOffer();
       await pc.setLocalDescription(offer);
       send("voice:signal",{targetMemberId:remoteId,channel:channelRef.current,type:"offer",description:offer});
     }
@@ -100,7 +100,7 @@ export const RoomVoiceChat=forwardRef<RoomVoiceChatHandle,Props>(function RoomVo
     const entry=peers.current.get(remoteId);
     if(!entry)return;
     await attachLocalTrack(entry.pc);
-    const offer=await entry.pc.createOffer({offerToReceiveAudio:true,offerToReceiveVideo:false} as any);
+    const offer=await entry.pc.createOffer();
     await entry.pc.setLocalDescription(offer);
     send("voice:signal",{targetMemberId:remoteId,channel:channelRef.current,type:"offer",description:offer});
   };
@@ -115,7 +115,7 @@ export const RoomVoiceChat=forwardRef<RoomVoiceChatHandle,Props>(function RoomVo
       await peer.setRemoteDescription(new (RTCSessionDescription as any)(payload.description));
       const entry=peers.current.get(from);
       if(entry){for(const candidate of entry.pendingIce){await peer.addIceCandidate(candidate).catch(()=>undefined);}entry.pendingIce=[];}
-      const answer=await peer.createAnswer({offerToReceiveAudio:true,offerToReceiveVideo:false} as any);
+      const answer=await peer.createAnswer();
       await peer.setLocalDescription(answer);
       send("voice:signal",{targetMemberId:from,channel:channelRef.current,type:"answer",description:answer});
     }else if(payload.type==="answer"){
