@@ -183,9 +183,8 @@ export class NetplayRoom extends DurableObject<Env> {
         const started=await this.tryStartSession();
         if(!started){
           const players=this.members().filter(x=>x.role!=="spectator");
-          const acks=this.sessionAcks();
           server.send(JSON.stringify({event:"netplay:session-start-pending",payload:{
-            waitingFor:players.filter(x=>!x.isReady || !acks.has(x.id)).map(x=>x.id)
+            waitingFor:players.filter(x=>!x.isReady).map(x=>x.id)
           }}));
         }
         return;
