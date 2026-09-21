@@ -19,6 +19,8 @@ import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint
 import com.facebook.react.defaults.DefaultReactNativeHost
 
 import expo.modules.ApplicationLifecycleDispatcher
+import com.livekit.reactnative.LiveKitReactNative
+import com.livekit.reactnative.audio.AudioType
 import expo.modules.ReactNativeHostWrapper
 
 class MainApplication : Application(), ReactApplication {
@@ -62,6 +64,9 @@ class MainApplication : Application(), ReactApplication {
     } catch (e: IllegalArgumentException) {
       ReleaseLevel.STABLE
     }
+    // Initialize LiveKit before React Native so Android audio routing and WebRTC
+    // are ready before any room component attempts to connect.
+    LiveKitReactNative.setup(this, AudioType.CommunicationAudioType())
     loadReactNative(this)
     ApplicationLifecycleDispatcher.onApplicationCreate(this)
   }
