@@ -71,7 +71,8 @@ export class NetplayRoom extends DurableObject<Env> {
     if(!room || room.system!==requested.system) return false;
     const startAt=Date.now()+3000;
     const playerMemberIds=players.map(x=>x.id);
-    const payload={system:requested.system,startAt,playerMemberIds,inputDelay:3};
+    const inputDelay=Number(this.metaValue("session-input-delay")||"3");
+    const payload={system:requested.system,startAt,playerMemberIds,inputDelay:Number.isInteger(inputDelay)&&inputDelay>=2&&inputDelay<=8?inputDelay:3};
     this.setMeta("session-start-request","");
     this.setMeta("session-started-at",String(startAt));
     const packet=JSON.stringify({event:"netplay:session-start",payload});
@@ -120,7 +121,7 @@ export class NetplayRoom extends DurableObject<Env> {
         const memberId=Number(msg.payload?.memberId);
         const memberToken=String(msg.payload?.memberToken||"");
         const m=await this.auth(memberId,memberToken);
-        (server as any).serializeAttachment({memberId:m.id});
+        (server as any).serializeAttachment({memberId:m.id,lastInputFrame:-1});
         const active=this.members().filter(x=>x.role!=="spectator");
         const assignedPlayer=m.role==="spectator"?null:(active.findIndex(x=>x.id===m.id)+1);
         const onlineMemberIds=this.ctx.getWebSockets().map(ws=>{
@@ -155,6 +156,52 @@ export class NetplayRoom extends DurableObject<Env> {
         return;
       }
 
+      if(msg?.event==="netplay:delay-request"){
+        if(member.role==="spectator") return;
+        const delay=Number(msg.payload?.delay);
+        const reason=String(msg.payload?.reason||"");
+        if(!Number.isInteger(delay)||delay<2||delay>8) return;
+        const current=Number(this.metaValue("session-input-delay")||"3");
+        if(delay>current || (delay<current && reason==="stable")){
+          this.setMeta("session-input-delay",String(delay));
+          this.broadcast({event:"netplay:delay-update",payload:{delay,requestedBy:member.id}});
+        }
+        return;
+      }
+
+      if(msg?.event==="netplay:desync-report"){
+        if(member.role==="spectator") return;
+        const frame=Number(msg.payload?.frame);
+        const predicted=Number(msg.payload?.predictedFrames);
+        if(!Number.isSafeInteger(frame)||!Number.isSafeInteger(predicted)||predicted<=20) return;
+        this.broadcast({event:"netplay:desync-detected",payload:{
+          reporterId:member.id,
+          frame,
+          predictedFrames:predicted,
+          message:"Desync detected - resynchronizing shared state."
+        }});
+        return;
+      }
+
+      if(msg?.event==="netplay:universal-input"){
+        if(member.role==="spectator") return;
+        const frame=Number(msg.payload?.frame);
+        const mask=Number(msg.payload?.mask);
+        const analogX=Number(msg.payload?.analogX||0);
+        const analogY=Number(msg.payload?.analogY||0);
+        if(!Number.isSafeInteger(frame)||frame<0||!Number.isInteger(mask)||mask<0||mask>0xffff||!Number.isInteger(analogX)||analogX<-127||analogX>127||!Number.isInteger(analogY)||analogY<-127||analogY>127) return;
+        const attachment=(server as any).deserializeAttachment() as {memberId?:number;lastInputFrame?:number}|null;
+        const lastFrame=Number.isSafeInteger(attachment?.lastInputFrame)?Number(attachment?.lastInputFrame):-1;
+        if(frame>lastFrame+30){
+          server.send(JSON.stringify({event:"netplay:frame-rejected",payload:{frame,reason:"too far ahead",lastFrame}}));
+          return;
+        }
+        if(frame<lastFrame-10) return;
+        (server as any).serializeAttachment({memberId:member.id,lastInputFrame:Math.max(lastFrame,frame)});
+        this.broadcast({event:"netplay:universal-input",payload:{memberId:member.id,frame,mask,analogX,analogY}},server);
+        return;
+      }
+
       if(msg?.event==="netplay:session-ready"){
         const isReady=Boolean(msg.payload?.isReady);
         const system=String(msg.payload?.system||"");
@@ -166,6 +213,7 @@ export class NetplayRoom extends DurableObject<Env> {
           const previousSignature=this.metaValue("session-signature");
           if(previousSignature && previousSignature!==signature) this.clearSessionAcks();
           this.setMeta("session-signature",signature);
+          this.setMeta("session-input-delay","3");
         } else {
           const acks=this.sessionAcks(); acks.delete(member.id); this.setSessionAcks(acks);
         }
