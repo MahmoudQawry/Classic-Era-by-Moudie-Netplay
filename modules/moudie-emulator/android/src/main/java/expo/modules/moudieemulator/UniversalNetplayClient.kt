@@ -52,7 +52,7 @@ class UniversalNetplayClient(
   fun requestState(minimumSyncId:Long=-1L){transport?.send("netplay:universal-state-request",JSONObject().put("minimumSyncId",minimumSyncId))}
   fun acknowledgeState(syncId:Long){if(syncId>=0)transport?.send("netplay:universal-sync-ack",JSONObject().put("syncId",syncId))}
   fun setSessionReady(isReady:Boolean){
-    transport?.send("netplay:session-ready",JSONObject().put("isReady",isReady).put("fingerprint",config.fingerprint).put("coreVersion",config.coreVersion))
+    transport?.send("netplay:session-ready",JSONObject().put("isReady",isReady).put("system",config.system).put("fingerprint",config.fingerprint).put("coreVersion",config.coreVersion))
   }
   fun requestSessionStart(){
     transport?.send("netplay:session-start-request",JSONObject().put("system",config.system))
