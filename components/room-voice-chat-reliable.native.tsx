@@ -164,6 +164,7 @@ export const RoomVoiceChat=forwardRef<RoomVoiceChatHandle,Props>(function RoomVo
   const enableMic=async(enabled:boolean)=>{
     if(enabled){
       try{
+        ensureAudioSession();
         if(!localStream.current){
           localStream.current=await mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:false} as any);
         }
