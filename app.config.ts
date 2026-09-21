@@ -6,8 +6,8 @@ const rawBundleId = "com.app.moudienetplay";
 const bundleId = rawBundleId
   .replace(/[-_]/g, ".")
   .replace(/[^a-zA-Z0-9.]/g, "")
-  .replace(/.+/g, ".")
-  .replace(/^.+|.+$/g, "")
+  .replace(/\.+/g, ".")
+  .replace(/^\.+|\.+$/g, "")
   .toLowerCase()
   .split(".")
   .map((segment) => (/^[a-zA-Z]/.test(segment) ? segment : "x" + segment))
