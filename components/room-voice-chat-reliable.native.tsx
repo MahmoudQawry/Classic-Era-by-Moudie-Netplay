@@ -54,6 +54,7 @@ export const RoomVoiceChat=forwardRef<RoomVoiceChatHandle,Props>(function RoomVo
   const ensureAudioSession=()=>{
     try{
       InCallManager.start({media:"audio",auto:true});
+      InCallManager.setForceSpeakerphoneOn(speakerRef.current);
       InCallManager.setSpeakerphoneOn(speakerRef.current);
     }catch{}
   };
@@ -95,10 +96,25 @@ export const RoomVoiceChat=forwardRef<RoomVoiceChatHandle,Props>(function RoomVo
     });
     pc.addEventListener("track",(event:any)=>{
       ensureAudioSession();
-      const tracks=(event.streams?.[0]?.getAudioTracks?.()||[]).filter(Boolean) as MediaStreamTrack[];
-      remoteTracks.current.set(remoteId,tracks);
-      applySpeakerMute(speakerRef.current);
-      setStatus("VOICE CONNECTED");
+      const streamTracks=(event.streams?.[0]?.getAudioTracks?.()||[]).filter(Boolean) as MediaStreamTrack[];
+      const fallbackTrack=event.track?.kind==="audio" ? [event.track as MediaStreamTrack] : [];
+      const tracks=streamTracks.length ? streamTracks : fallbackTrack;
+      if(tracks.length){
+        remoteTracks.current.set(remoteId,tracks);
+        applySpeakerMute(speakerRef.current);
+        setStatus("VOICE CONNECTED");
+      }
+    });
+    pc.addEventListener("iceconnectionstatechange",()=>{
+      const state=pc.iceConnectionState;
+      if(state==="connected" || state==="completed") setStatus("VOICE CONNECTED");
+      if(state==="checking") setStatus("VOICE CONNECTING");
+      if(state==="failed"){
+        closePeer(remoteId);
+        if(socketRef.current?.connected && memberId && memberId<remoteId){
+          setTimeout(()=>{ if(socketRef.current?.connected) void createPeer(remoteId,true).catch(()=>setStatus("VOICE CONNECTION RETRYING")); },750);
+        }
+      }
     });
     pc.addEventListener("connectionstatechange",()=>{
       const state=pc.connectionState;
@@ -188,7 +204,7 @@ export const RoomVoiceChat=forwardRef<RoomVoiceChatHandle,Props>(function RoomVo
   const toggleSpeaker=async(enabled:boolean)=>{
     setSpeakerEnabled(enabled);
     speakerRef.current=enabled;
-    try{InCallManager.start({media:"audio",auto:true});InCallManager.setSpeakerphoneOn(enabled);}catch{}
+    try{InCallManager.start({media:"audio",auto:true});InCallManager.setForceSpeakerphoneOn(enabled);InCallManager.setSpeakerphoneOn(enabled);}catch{}
     applySpeakerMute(enabled);
     send("netplay:voice-status",{microphoneEnabled:micRef.current,speakerEnabled:enabled});
     setStatus(enabled?"SPEAKER ON":"SPEAKER MUTED");
@@ -219,10 +235,28 @@ export const RoomVoiceChat=forwardRef<RoomVoiceChatHandle,Props>(function RoomVo
       }
       if(!p?.online)closePeer(id);
     };
+    const onDisconnect=()=>{
+      for(const [id] of peers.current)closePeer(id);
+      setStatus("VOICE RECONNECTING");
+    };
     socket?.on?.("voice:signal",onSignal);
     socket?.on?.("netplay:joined",onJoined);
     socket?.on?.("netplay:presence",onPresence);
-    return()=>{socket?.off?.("voice:signal",onSignal);socket?.off?.("netplay:joined",onJoined);socket?.off?.("netplay:presence",onPresence);};
+    socket?.on?.("disconnect",onDisconnect);
+    return()=>{socket?.off?.("voice:signal",onSignal);socket?.off?.("netplay:joined",onJoined);socket?.off?.("netplay:presence",onPresence);socket?.off?.("disconnect",onDisconnect);};
+  },[socket,memberId,members]);
+
+  // Reconcile peers from the room member list too, closing late-listener/reconnect races.
+  useEffect(()=>{
+    if(Platform.OS==="web" || !memberId || !socket?.connected)return;
+    for(const member of members){
+      const remoteId=Number(member.id);
+      if(!remoteId || remoteId===memberId || memberId>remoteId)continue;
+      const existing=peers.current.get(remoteId);
+      if(existing?.pc.connectionState==="connected" || existing?.pc.connectionState==="connecting")continue;
+      if(existing)closePeer(remoteId);
+      void createPeer(remoteId,true).catch(()=>setStatus("VOICE CONNECTION RETRYING"));
+    }
   },[socket,memberId,members]);
 
   useEffect(()=>()=>{for(const [id] of peers.current)closePeer(id);makingOffer.current.clear();localStream.current?.getTracks().forEach(t=>t.stop());try{InCallManager.stop();}catch{}},[]);

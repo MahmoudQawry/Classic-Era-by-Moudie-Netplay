@@ -486,7 +486,7 @@ export function registerNetplayServer(server: HttpServer) {
       socket.to(channel).emit("netplay:state-request", { fromMemberId: session.memberId });
     });
 
-    socket.on("netplay:signal", (payload: SignalPayload) => {
+    const relayVoiceSignal = (payload: SignalPayload) => {
       if (!signalLimiter.allow(`${session.roomId}:${session.memberId}`)) return;
       if (!payload || typeof payload.signal !== "object" || payload.signal === null) return;
       const signal = payload.signal as Record<string, unknown>;
@@ -499,13 +499,23 @@ export function registerNetplayServer(server: HttpServer) {
         for (const peer of io.sockets.adapter.rooms.get(channel) ?? []) {
           const peerSocket = io.sockets.sockets.get(peer);
           const peerSession = peerSocket?.data.session as NetplaySession | undefined;
-          if (peerSession?.memberId === target) peerSocket?.emit("netplay:signal", event);
+          if (peerSession?.memberId === target) peerSocket?.emit("voice:signal", { ...event, targetMemberId: target });
         }
       } else {
-        socket.to(channel).emit("netplay:signal", event);
+        socket.to(channel).emit("voice:signal", event);
       }
+    };
+    socket.on("netplay:signal", relayVoiceSignal);
+    socket.on("voice:signal", (payload: any) => {
+      const normalized = payload && typeof payload === "object" ? payload : {};
+      const signal = normalized.signal ?? {
+        kind: typeof normalized.type === "string" ? `voice-${normalized.type}` : undefined,
+        description: normalized.description,
+        candidate: normalized.candidate,
+      };
+      if (!signal?.kind) return;
+      relayVoiceSignal({ targetMemberId: normalized.targetMemberId, signal });
     });
-
     // adaptive voice with team/room filtering
     socket.on("netplay:voice-status", (payload: VoiceStatusPayload) => {
       // Speaking heartbeats arrive a few times per second; coalesce them so one
