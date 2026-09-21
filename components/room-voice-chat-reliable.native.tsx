@@ -41,7 +41,7 @@ type Props = {
  * the Express backend.
  */
 export const RoomVoiceChat = forwardRef<RoomVoiceChatHandle, Props>(function RoomVoiceChat(
-  { memberRole, mediaToken, teamMediaToken, onChatPress },
+  { memberId, members = [], memberRole, mediaToken, teamMediaToken, onChatPress },
   ref,
 ) {
   const { t } = useLanguage();
