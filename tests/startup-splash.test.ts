@@ -17,7 +17,7 @@ describe("Android startup splash safeguards", () => {
     const activity = readProjectFile("android/app/src/main/java/com/app/moudienetplay/MainActivity.kt");
     const manifest = readProjectFile("android/app/src/main/AndroidManifest.xml");
     const config = readProjectFile("app.config.ts");
-    const workflow = readProjectFile(".github/workflows/main.yml");
+    const workflow = readProjectFile(.github/workflows/android-clean-build.yml");
     const restoreScript = readProjectFile("scripts/restore-plain-android-startup.py");
     expect(activity).not.toContain("SplashScreenManager.registerOnActivity(this)");
     expect(activity).not.toContain("SplashScreenManager.hide()");
