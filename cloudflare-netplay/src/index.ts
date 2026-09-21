@@ -38,6 +38,48 @@ export class NetplayRoom extends DurableObject<Env> {
   }
   private room():Room|null { const r=this.sql.exec("SELECT value FROM meta WHERE key='room'").toArray()[0] as any; return r?.value ? JSON.parse(String(r.value)) : null; }
   private save(room:Room) { this.sql.exec("INSERT OR REPLACE INTO meta(key,value) VALUES('room',?)",JSON.stringify(room)); }
+  private metaValue(key:string):string|null {
+    const row=this.sql.exec("SELECT value FROM meta WHERE key=?",key).toArray()[0] as any;
+    return row?.value == null ? null : String(row.value);
+  }
+  private setMeta(key:string,value:string) {
+    this.sql.exec("INSERT OR REPLACE INTO meta(key,value) VALUES(?,?)",key,value);
+  }
+  private sessionAcks():Set<number> {
+    try {
+      const parsed=JSON.parse(this.metaValue("session-acks")||"[]");
+      return new Set<number>(Array.isArray(parsed)?parsed.map(Number).filter((id:number)=>Number.isSafeInteger(id)&&id>0):[]);
+    } catch { return new Set<number>(); }
+  }
+  private setSessionAcks(acks:Set<number>) {
+    this.setMeta("session-acks",JSON.stringify([...acks]));
+  }
+  private clearSessionAcks() { this.setSessionAcks(new Set<number>()); }
+  private async tryStartSession() {
+    const raw=this.metaValue("session-start-request");
+    if(!raw) return false;
+    let requested:{system:string};
+    try { requested=JSON.parse(raw) as {system:string}; } catch { this.setMeta("session-start-request",""); return false; }
+    const ms=this.members();
+    const players=ms.filter(x=>x.role!=="spectator");
+    const readyPlayers=players.filter(x=>x.isReady);
+    if(players.length<2 || readyPlayers.length!==players.length) return false;
+    const fingerprints=new Set(readyPlayers.map(x=>x.gameFingerprint).filter(Boolean));
+    const cores=new Set(readyPlayers.map(x=>x.coreVersion).filter(Boolean));
+    if(fingerprints.size!==1 || cores.size!==1) return false;
+    const room=this.room();
+    if(!room || room.system!==requested.system) return false;
+    const acks=this.sessionAcks();
+    if(!players.every(x=>acks.has(x.id))) return false;
+    const startAt=Date.now()+1500;
+    const playerMemberIds=players.map(x=>x.id);
+    const payload={system:requested.system,startAt,playerMemberIds,inputDelay:3};
+    this.setMeta("session-start-request","");
+    this.setMeta("session-started-at",String(startAt));
+    const packet=JSON.stringify({event:"netplay:session-start",payload});
+    for(const ws of this.ctx.getWebSockets()) if(ws.readyState===WebSocket.OPEN) ws.send(packet);
+    return true;
+  }
   private members():Member[] { return this.sql.exec("SELECT id,display_name,role,is_ready,game_fingerprint,core_version,token_hash FROM members ORDER BY id").toArray().map((r:any)=>({id:Number(r.id),displayName:String(r.display_name),role:r.role,isReady:Boolean(r.is_ready),gameFingerprint:r.game_fingerprint?String(r.game_fingerprint):null,coreVersion:r.core_version?String(r.core_version):null,tokenHash:String(r.token_hash)})); }
   async create(room:Room, hostName:string, hostToken:string) {
     if(this.room()) throw new Error("الغرفة موجودة بالفعل.");
@@ -117,35 +159,59 @@ export class NetplayRoom extends DurableObject<Env> {
 
       if(msg?.event==="netplay:session-ready"){
         const isReady=Boolean(msg.payload?.isReady);
+        const system=String(msg.payload?.system||"");
         const fingerprint=String(msg.payload?.fingerprint||"");
         const coreVersion=String(msg.payload?.coreVersion||"");
-        this.sql.exec("UPDATE members SET is_ready=?,game_fingerprint=?,core_version=? WHERE id=?",isReady?1:0,fingerprint||null,coreVersion||null,member.id);
-        this.broadcast({event:"netplay:session-ready",payload:{memberId:member.id,isReady,fingerprint,coreVersion}});
+        if(isReady && (!SYSTEMS.has(system as System) || !/^[a-f0-9]{64}$/i.test(fingerprint) || !coreVersion.trim())) return;
+        if(isReady){
+          const signature=system+"|"+fingerprint.toLowerCase()+"|"+coreVersion.trim();
+          const previousSignature=this.metaValue("session-signature");
+          if(previousSignature && previousSignature!==signature) this.clearSessionAcks();
+          this.setMeta("session-signature",signature);
+        } else {
+          const acks=this.sessionAcks(); acks.delete(member.id); this.setSessionAcks(acks);
+        }
+        this.sql.exec("UPDATE members SET is_ready=?,game_fingerprint=?,core_version=? WHERE id=?",isReady?1:0,isReady?fingerprint.toLowerCase():null,isReady?coreVersion.trim():null,member.id);
+        this.broadcast({event:"netplay:session-ready",payload:{memberId:member.id,isReady,system,fingerprint,coreVersion}});
+        if(isReady) await this.tryStartSession();
         return;
       }
 
       if(msg?.event==="netplay:session-start-request"){
         if(member.role!=="host") return;
         const system=String(msg.payload?.system||"");
-        const ms=this.members();
-        const players=ms.filter(x=>x.role!=="spectator");
-        const readyPlayers=players.filter(x=>x.isReady);
-        if(players.length<2 || readyPlayers.length!==players.length){
-          server.send(JSON.stringify({event:"netplay:session-start-refused",payload:{message:"كل اللاعبين النشطين يجب أن يجهزوا نفس اللعبة أولاً."}}));
-          return;
+        if(!SYSTEMS.has(system as System)) return;
+        this.setMeta("session-start-request",JSON.stringify({system}));
+        const started=await this.tryStartSession();
+        if(!started){
+          const players=this.members().filter(x=>x.role!=="spectator");
+          const acks=this.sessionAcks();
+          server.send(JSON.stringify({event:"netplay:session-start-pending",payload:{
+            waitingFor:players.filter(x=>!x.isReady || !acks.has(x.id)).map(x=>x.id)
+          }}));
         }
-        const fingerprints=new Set(readyPlayers.map(x=>x.gameFingerprint).filter(Boolean));
-        const cores=new Set(readyPlayers.map(x=>x.coreVersion).filter(Boolean));
-        if(fingerprints.size!==1 || cores.size!==1){
-          server.send(JSON.stringify({event:"netplay:session-start-refused",payload:{message:"ملفات اللعبة أو إصدارات الأنوية غير متطابقة."}}));
-          return;
-        }
-        const startAt=Date.now()+3000;
-        const playerMemberIds=players.map(x=>x.id);
-        const payload={system,startAt,playerMemberIds,inputDelay:3};
-        const packet=JSON.stringify({event:"netplay:session-start",payload});
-        for(const ws of this.ctx.getWebSockets()) if(ws.readyState===WebSocket.OPEN) ws.send(packet);
         return;
+      }
+
+      if(msg?.event==="netplay:universal-sync-ack"){
+        const syncId=Number(msg.payload?.syncId);
+        if(syncId!==0) return;
+        const acks=this.sessionAcks();
+        acks.add(member.id);
+        this.setSessionAcks(acks);
+        this.broadcast({event:"netplay:universal-sync-ack",payload:{memberId:member.id,syncId:0}});
+        await this.tryStartSession();
+        return;
+      }
+
+      if(msg?.event==="netplay:universal-state"){
+        const syncId=Number(msg.payload?.syncId);
+        if(syncId===0 && member.role==="host"){
+          const acks=this.sessionAcks();
+          acks.add(member.id);
+          this.setSessionAcks(acks);
+          await this.tryStartSession();
+        }
       }
 
       if(msg?.event==="netplay:quality-probe"){ return; }
@@ -180,6 +246,9 @@ export class NetplayRoom extends DurableObject<Env> {
     const attachment=(server as any).deserializeAttachment() as any;
     const memberId=Number(attachment?.memberId);
     if(Number.isSafeInteger(memberId)){
+      const acks=this.sessionAcks();
+      acks.delete(memberId);
+      this.setSessionAcks(acks);
       const member=this.members().find(x=>x.id===memberId);
       this.broadcast({event:"netplay:presence",payload:{memberId,displayName:member?.displayName||"",role:member?.role||"player",online:false}},server);
     }
