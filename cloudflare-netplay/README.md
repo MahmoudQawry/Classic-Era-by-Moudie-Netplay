@@ -1,23 +1,24 @@
-# Cloudflare NetPlay Worker
+# Cloudflare NetPlay Worker (experimental)
 
-This directory is the Cloudflare-native room/signaling service for Classic Era.
+This directory contains an experimental Cloudflare Durable Objects implementation of room/signaling state.
 
-## Current architecture
-- Cloudflare Worker: HTTPS API and WebSocket entry point.
-- Durable Object: one persistent SQLite-backed state machine per room.
-- Directory Durable Object: join-code and public-room index.
-- Standard WebSocket transport: the mobile app keeps its existing NetPlay event API through a small compatibility facade.
+## Production authority
 
-## Cloudflare Workers Builds
-Build command:
-`cd cloudflare-netplay && true`
+**This worker is not the production room authority for the current repair.** The Android client now uses the main Express + tRPC + MySQL backend for room CRUD and Socket.IO for realtime NetPlay. That prevents two independent systems from owning the same room/session state.
 
-Deploy command:
+The production topology is:
+
+- **Express + tRPC + MySQL:** accounts, rooms, membership, readiness and persistent room state.
+- **Socket.IO:** room presence, chat, game input, synchronization and WebRTC signaling.
+- **LiveKit:** group voice media (room channel and player/team channel).
+- **Android native emulator:** actual game execution and local save/load state.
+
+Cloudflare remains a candidate for a later realtime migration if load/latency tests justify moving the Socket.IO session plane. If that happens, a session must have exactly one realtime authority; the Express and Cloudflare implementations must not both accept the same session simultaneously.
+
+## Cloudflare-only development
+
+The Worker can still be built/deployed independently for architecture experiments:
+
 `npx wrangler deploy --config cloudflare-netplay/wrangler.jsonc`
 
-After deployment, the health endpoint must return JSON containing `ok: true`.
-
-## Important
-The Worker does not contain provider credentials or a fabricated public server URL. The mobile build must receive the real `workers.dev` URL through `EXPO_PUBLIC_NETPLAY_SERVICE_URL` or `EXPO_PUBLIC_API_BASE_URL` before an online APK is considered final.
-
-Voice is intentionally not falsely marked as configured by this first Worker. Cloudflare Realtime can provide managed SFU/TURN, but it requires a separate account-side Realtime configuration and short-lived credentials; that is the next deployment stage.
+It must not be selected by the mobile app merely because a `workers.dev` URL exists.
