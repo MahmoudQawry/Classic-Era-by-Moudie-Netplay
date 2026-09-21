@@ -12,8 +12,8 @@ const env = {
   ownerId: process.env.EXPO_PUBLIC_OWNER_OPEN_ID ?? "",
   ownerName: process.env.EXPO_PUBLIC_OWNER_NAME ?? "",
   apiBaseUrl: process.env.EXPO_PUBLIC_API_BASE_URL ?? "",
-  netplayServiceUrl: process.env.EXPO_PUBLIC_NETPLAY_SERVICE_URL ?? "https://classic-era-by-moudie-netplay.moudienetplay.workers.dev",
-  netplayServiceUrls: process.env.EXPO_PUBLIC_NETPLAY_SERVICE_URLS ?? "https://classic-era-by-moudie-netplay.moudienetplay.workers.dev",
+  netplayServiceUrl: process.env.EXPO_PUBLIC_NETPLAY_SERVICE_URL ?? "",
+  netplayServiceUrls: process.env.EXPO_PUBLIC_NETPLAY_SERVICE_URLS ?? "",
   deepLinkScheme: schemeFromBundleId,
 };
 
@@ -21,8 +21,8 @@ const configuredRelayUrls = env.netplayServiceUrls.split(",").map((url) => url.t
 const NATIVE_NETPLAY_SERVICE_URL = (env.netplayServiceUrl || configuredRelayUrls[0] || env.apiBaseUrl || "").replace(/\/$/, "");
 const NATIVE_NETPLAY_SERVICE_URLS = Array.from(new Set([NATIVE_NETPLAY_SERVICE_URL, ...configuredRelayUrls, env.apiBaseUrl.replace(/\/$/, "")].filter(Boolean)));
 
-// Kept as the stable native fallback contract used by the existing launch safeguards.
-const NATIVE_API_FALLBACK_URL = NATIVE_NETPLAY_SERVICE_URL;
+// The primary room/API authority is the main Express backend. Dedicated realtime URLs are opt-in.
+const NATIVE_API_FALLBACK_URL = API_BASE_URL || NATIVE_NETPLAY_SERVICE_URL;
 // If a dedicated relay is absent, a configured API origin is a valid room-service fallback.
 const NATIVE_API_RUNTIME_FALLBACK_URL = (env.apiBaseUrl || NATIVE_API_FALLBACK_URL).replace(/\/$/, "");
 
