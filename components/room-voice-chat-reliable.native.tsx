@@ -39,6 +39,7 @@ export const RoomVoiceChat=forwardRef<RoomVoiceChatHandle,Props>(function RoomVo
   const [connectedPeers,setConnectedPeers]=useState(0);
   const [status,setStatus]=useState("VOICE READY");
   const peers=useRef(new Map<number,PeerEntry>());
+  const makingOffer=useRef(new Set<number>());
   const localStream=useRef<MediaStream|null>(null);
   const remoteTracks=useRef(new Map<number,MediaStreamTrack[]>());
   const socketRef=useRef(socket);
@@ -50,7 +51,12 @@ export const RoomVoiceChat=forwardRef<RoomVoiceChatHandle,Props>(function RoomVo
 
   const send=(event:string,payload:unknown)=>socketRef.current?.emit?.(event,payload);
 
-  const ensureAudioSession=()=>{try{InCallManager.start({media:"video",auto:true});}catch{}};
+  const ensureAudioSession=()=>{
+    try{
+      InCallManager.start({media:"audio",auto:true});
+      InCallManager.setSpeakerphoneOn(speakerRef.current);
+    }catch{}
+  };
 
   const applySpeakerMute=(enabled:boolean)=>{
     for(const tracks of remoteTracks.current.values()) tracks.forEach(track=>{track.enabled=enabled;});
@@ -113,11 +119,19 @@ export const RoomVoiceChat=forwardRef<RoomVoiceChatHandle,Props>(function RoomVo
 
   const renegotiate=async(remoteId:number)=>{
     const entry=peers.current.get(remoteId);
-    if(!entry)return;
-    await attachLocalTrack(entry.pc);
-    const offer=await entry.pc.createOffer();
-    await entry.pc.setLocalDescription(offer);
-    send("voice:signal",{targetMemberId:remoteId,type:"offer",description:offer});
+    if(!entry || entry.pc.signalingState!=="stable" || makingOffer.current.has(remoteId))return;
+    makingOffer.current.add(remoteId);
+    try{
+      await attachLocalTrack(entry.pc);
+      if(entry.pc.signalingState!=="stable")return;
+      const offer=await entry.pc.createOffer();
+      await entry.pc.setLocalDescription(offer);
+      if(entry.pc.localDescription) send("voice:signal",{targetMemberId:remoteId,type:"offer",description:entry.pc.localDescription});
+    }catch(error){
+      setStatus(error instanceof Error?error.message:"VOICE NEGOTIATION FAILED");
+    }finally{
+      makingOffer.current.delete(remoteId);
+    }
   };
 
   const handleSignal=async(payload:any)=>{
@@ -127,12 +141,15 @@ export const RoomVoiceChat=forwardRef<RoomVoiceChatHandle,Props>(function RoomVo
     const peer=await createPeer(from,false);
     if(!peer)return;
     if(payload.type==="offer"){
+      const polite=Boolean(memberId && memberId>from);
+      const offerCollision=makingOffer.current.has(from) || peer.signalingState!=="stable";
+      if(offerCollision && !polite)return;
       await peer.setRemoteDescription(new (RTCSessionDescription as any)(payload.description));
       const entry=peers.current.get(from);
       if(entry){for(const candidate of entry.pendingIce){await peer.addIceCandidate(candidate).catch(()=>undefined);}entry.pendingIce=[];}
       const answer=await peer.createAnswer();
       await peer.setLocalDescription(answer);
-      send("voice:signal",{targetMemberId:from,type:"answer",description:answer});
+      if(peer.localDescription)send("voice:signal",{targetMemberId:from,type:"answer",description:peer.localDescription});
     }else if(payload.type==="answer"){
       await peer.setRemoteDescription(new (RTCSessionDescription as any)(payload.description));
       const entry=peers.current.get(from);
@@ -170,6 +187,7 @@ export const RoomVoiceChat=forwardRef<RoomVoiceChatHandle,Props>(function RoomVo
   const toggleSpeaker=async(enabled:boolean)=>{
     setSpeakerEnabled(enabled);
     speakerRef.current=enabled;
+    try{InCallManager.start({media:"audio",auto:true});InCallManager.setSpeakerphoneOn(enabled);}catch{}
     applySpeakerMute(enabled);
     send("netplay:voice-status",{microphoneEnabled:micRef.current,speakerEnabled:enabled});
     setStatus(enabled?"SPEAKER ON":"SPEAKER MUTED");
@@ -182,12 +200,22 @@ export const RoomVoiceChat=forwardRef<RoomVoiceChatHandle,Props>(function RoomVo
     const onSignal=(p:any)=>void handleSignal(p);
     const onJoined=(p:any)=>{
       const online=Array.isArray(p?.onlineMemberIds)?p.onlineMemberIds.map(Number).filter((id:number)=>id&&id!==memberId):[];
-      for(const id of online)if(memberId && memberId<id)void createPeer(id,true);
+      for(const id of online){
+        if(!memberId || memberId>=id)continue;
+        const existing=peers.current.get(id);
+        if(existing?.pc.connectionState==="connected")continue;
+        if(existing)closePeer(id);
+        void createPeer(id,true).catch(()=>setStatus("VOICE CONNECTION RETRYING"));
+      }
     };
     const onPresence=(p:any)=>{
       const id=Number(p?.memberId);
       if(!id||id===memberId)return;
-      if(p?.online && memberId && memberId<id)void createPeer(id,true);
+      if(p?.online && memberId && memberId<id){
+        const existing=peers.current.get(id);
+        if(existing?.pc.connectionState!=="connected" && existing)closePeer(id);
+        void createPeer(id,true).catch(()=>setStatus("VOICE CONNECTION RETRYING"));
+      }
       if(!p?.online)closePeer(id);
     };
     socket?.on?.("voice:signal",onSignal);
@@ -196,7 +224,7 @@ export const RoomVoiceChat=forwardRef<RoomVoiceChatHandle,Props>(function RoomVo
     return()=>{socket?.off?.("voice:signal",onSignal);socket?.off?.("netplay:joined",onJoined);socket?.off?.("netplay:presence",onPresence);};
   },[socket,memberId,members]);
 
-  useEffect(()=>()=>{for(const [id] of peers.current)closePeer(id);localStream.current?.getTracks().forEach(t=>t.stop());try{InCallManager.stop();}catch{}},[]);
+  useEffect(()=>()=>{for(const [id] of peers.current)closePeer(id);makingOffer.current.clear();localStream.current?.getTracks().forEach(t=>t.stop());try{InCallManager.stop();}catch{}},[]);
 
   if(Platform.OS==="web")return null;
   return <View style={styles.card}>
