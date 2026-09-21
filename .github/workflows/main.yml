@@ -1,13 +1,12 @@
-name: Build Android APK
+name: Android Clean Build
 
 on:
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
   workflow_dispatch:
+run-name: Android Build ${{ github.run_number - 1 }}
 permissions:
-  contents: read
+  contents: write
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -151,9 +150,16 @@ jobs:
           readelf -Ws /tmp/moudie-apk-check/lib/arm64-v8a/libmoudie_play_bridge.so | grep -q 'Java_expo_modules_moudieemulator_UniversalLibretroPlayerActivity_nativeInitializePlayJavaVm'
           readelf -Ws /tmp/moudie-apk-check/lib/arm64-v8a/play_libretro_android.so | grep -q '_ZN9Framework7CJavaVM9SetJavaVMEP7_JavaVM'
           echo "Play! core contains the required CJavaVM::SetJavaVM symbol; runtime bootstrap is verified by the patched Play! source and build script."
-      - name: 📤 رفع APK المستقل
-        uses: actions/upload-artifact@v4
-        with:
-          name: classic-era-moudie-apk
-          path: android/app/build/outputs/apk/release/app-release.apk
-          if-no-files-found: error
+      - name: 📦 نشر APK كإصدار اختبار قابل للتنزيل
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          TAG="android-test-latest"
+          APK="android/app/build/outputs/apk/release/app-release.apk"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$APK" --clobber
+          else
+            gh release create "$TAG" "$APK" --title "Classic Era by Moudie — Android Build ${{ github.run_number - 1 }}" --notes "Automated verified Android APK build from commit $GITHUB_SHA." --prerelease --target "$GITHUB_SHA"
+          fi
+          echo "APK release: $(gh release view "$TAG" --json url --jq .url)" >> "$GITHUB_STEP_SUMMARY"
