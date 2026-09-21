@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
-run-name: Android Build ${{ github.run_number - 1 }}
+run-name: Android Clean Build
 permissions:
   contents: write
 jobs:
@@ -154,9 +154,10 @@ jobs:
           set -e
           TAG="android-test-latest"
           APK="android/app/build/outputs/apk/release/app-release.apk"
+          BUILD_NO=$((GITHUB_RUN_NUMBER - 1))
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "$APK" --clobber
           else
-            gh release create "$TAG" "$APK" --title "Classic Era by Moudie — Android Build ${{ github.run_number - 1 }}" --notes "Automated verified Android APK build from commit $GITHUB_SHA." --prerelease --target "$GITHUB_SHA"
+            gh release create "$TAG" "$APK" --title "Classic Era by Moudie — Android Build $BUILD_NO" --notes "Automated verified Android APK build from commit $GITHUB_SHA." --prerelease --target "$GITHUB_SHA"
           fi
           echo "APK release: $(gh release view "$TAG" --json url --jq .url)" >> "$GITHUB_STEP_SUMMARY"
