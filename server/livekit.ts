@@ -32,7 +32,7 @@ async function issueToken(runtime: LiveKitRuntime, input: {
   const token = new AccessToken(runtime.apiKey, runtime.apiSecret, {
     identity,
     name: input.displayName,
-    ttl: "2h",
+    ttl: "30m",
     metadata: JSON.stringify({
       roomId: input.roomName.split("-").pop(),
       memberId: input.memberId,
