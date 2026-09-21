@@ -6,8 +6,8 @@ const rawBundleId = "com.app.moudienetplay";
 const bundleId = rawBundleId
   .replace(/[-_]/g, ".")
   .replace(/[^a-zA-Z0-9.]/g, "")
-  .replace(/\.+/g, ".")
-  .replace(/^\.+|\.+$/g, "")
+  .replace(/.+/g, ".")
+  .replace(/^.+|.+$/g, "")
   .toLowerCase()
   .split(".")
   .map((segment) => (/^[a-zA-Z]/.test(segment) ? segment : "x" + segment))
@@ -27,7 +27,7 @@ const env = {
 const config: ExpoConfig = {
   name: env.appName,
   slug: env.appSlug,
-  version: "1.11.0",
+  version: "1.11.1",
   orientation: "default",
   icon: "./assets/images/classic-era-new-icon.png",
   scheme: env.scheme,
@@ -39,7 +39,7 @@ const config: ExpoConfig = {
     infoPlist: { ITSAppUsesNonExemptEncryption: false },
   },
   android: {
-    versionCode: 51,
+    versionCode: 52,
     adaptiveIcon: {
       backgroundColor: "#101827",
       foregroundImage: "./assets/images/classic-era-new-icon.png",
