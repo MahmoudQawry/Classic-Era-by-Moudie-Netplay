@@ -211,9 +211,11 @@ export class NetplayRoom extends DurableObject<Env> {
         if(isReady){
           const signature=system+"|"+fingerprint.toLowerCase()+"|"+coreVersion.trim();
           const previousSignature=this.metaValue("session-signature");
-          if(previousSignature && previousSignature!==signature) this.clearSessionAcks();
-          this.setMeta("session-signature",signature);
-          this.setMeta("session-input-delay","3");
+          if(previousSignature!==signature){
+            this.clearSessionAcks();
+            this.setMeta("session-signature",signature);
+            this.setMeta("session-input-delay","3");
+          }
         } else {
           const acks=this.sessionAcks(); acks.delete(member.id); this.setSessionAcks(acks);
         }
