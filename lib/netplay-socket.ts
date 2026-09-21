@@ -22,11 +22,25 @@ class CloudflareNetplaySocket {
   private listeners = new Map<string, Set<Listener>>();
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private manuallyClosed = false;
+  private lastJoinedPayload: any | null = null;
   public connected = false;
   constructor(private readonly credentials: NetplayCredentials) {}
-  on(event:string, callback:Listener) { const set=this.listeners.get(event) ?? new Set<Listener>(); set.add(callback); this.listeners.set(event,set); return this; }
+  on(event:string, callback:Listener) {
+    const set=this.listeners.get(event) ?? new Set<Listener>();
+    set.add(callback);
+    this.listeners.set(event,set);
+    if(event==="netplay:joined" && this.lastJoinedPayload!==null) {
+      queueMicrotask(()=>{ try{callback(this.lastJoinedPayload);}catch(error){console.warn("[NetPlay] replay listener error",error);} });
+    }
+    return this;
+  }
   off(event:string, callback?:Listener) { const set=this.listeners.get(event); if(!set)return this; if(callback)set.delete(callback);else set.clear(); if(set.size===0)this.listeners.delete(event); return this; }
-  private dispatch(event:string,...args:any[]) { for(const callback of this.listeners.get(event) ?? []) { try{callback(...args);}catch(error){console.warn("[NetPlay] listener error",error);} } }
+  private dispatch(event:string,...args:any[]) {
+    if(event==="netplay:joined") this.lastJoinedPayload=args[0] ?? null;
+    for(const callback of this.listeners.get(event) ?? []) {
+      try{callback(...args);}catch(error){console.warn("[NetPlay] listener error",error);}
+    }
+  }
   emit(event:string,payload?:unknown) { if(!this.ws || this.ws.readyState!==WebSocket.OPEN)return false; this.ws.send(JSON.stringify({event,payload})); return true; }
   connect() {
     this.manuallyClosed=false;
