@@ -431,7 +431,7 @@ export function registerNetplayServer(server: HttpServer) {
 
     socket.on("netplay:session-start-request", async (payload: SessionStartPayload) => {
       if (session.clientKind !== "room-ui" || session.role !== "host") return;
-      const system = payload?.system === "ps1" || payload?.system === "nes" || payload?.system === "psp" || payload?.system === "sega" ? payload.system : null;
+      const system = payload?.system === "ps1" || payload?.system === "nes" || payload?.system === "psp" || payload?.system === "sega" || payload?.system === "n64" || payload?.system === "ps2" ? payload.system : null;
       if (!system) return;
       const roomSnapshot = await db.getRoomSnapshot(session.roomId).catch(() => undefined);
       const capacity = roomSnapshot ? roomCapacityFor(roomSnapshot.room.system as NetplaySystem) : null;
