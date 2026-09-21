@@ -8,6 +8,8 @@ import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.opengl.GLSurfaceView
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.util.Base64
 import android.view.Choreographer
 import android.view.Gravity
@@ -112,6 +114,17 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
   private var consecutiveDesyncs = 0
   private var frameDriftMs = 0L
   @Volatile private var lastNetplaySyncId = -1L
+  private var pendingSessionStart: Pair<Long,List<Int>>? = null
+  private val netplayHandler = Handler(Looper.getMainLooper())
+  private val retryPendingNetplayState = object : Runnable {
+    override fun run() {
+      val pending = pendingSessionStart
+      if (pending != null && lastNetplaySyncId < 0L) {
+        netplayClient?.requestState(-1L)
+        netplayHandler.postDelayed(this, 2000L)
+      }
+    }
+  }
   private var microphoneMuted = true
   private var speakerEnabled = true
   private var analogStick: AnalogStickView? = null
@@ -202,7 +215,7 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
 
   override fun onResume() { super.onResume(); Choreographer.getInstance().postFrameCallback(frameMeter) }
   override fun onPause() { Choreographer.getInstance().removeFrameCallback(frameMeter); releaseAll(); analogStick?.releaseAxis(); super.onPause() }
-  override fun onDestroy() { stopLockstep(); netplayClient?.close(); onOverlayAction = null; super.onDestroy() }
+  override fun onDestroy() { stopLockstep(); pendingSessionStart = null; netplayHandler.removeCallbacks(retryPendingNetplayState); netplayClient?.close(); onOverlayAction = null; super.onDestroy() }
   override fun onKeyDown(k: Int, e: KeyEvent): Boolean { sendLocalKey(KeyEvent.ACTION_DOWN, k); return super.onKeyDown(k, e) }
   override fun onKeyUp(k: Int, e: KeyEvent): Boolean { sendLocalKey(KeyEvent.ACTION_UP, k); return super.onKeyUp(k, e) }
   override fun onGenericMotionEvent(e: MotionEvent?): Boolean { if (e != null) { retroView.sendMotionEvent(GLRetroView.MOTION_SOURCE_DPAD, e.getAxisValue(MotionEvent.AXIS_HAT_X), e.getAxisValue(MotionEvent.AXIS_HAT_Y), localPlayerIndex); retroView.sendMotionEvent(GLRetroView.MOTION_SOURCE_ANALOG_LEFT, e.getAxisValue(MotionEvent.AXIS_X), e.getAxisValue(MotionEvent.AXIS_Y), localPlayerIndex); retroView.sendMotionEvent(GLRetroView.MOTION_SOURCE_ANALOG_RIGHT, e.getAxisValue(MotionEvent.AXIS_Z), e.getAxisValue(MotionEvent.AXIS_RZ), localPlayerIndex) }; return super.onGenericMotionEvent(e) }
@@ -227,7 +240,17 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
     netplayClient = UniversalNetplayClient(
       UniversalNetplayConfig(serverUrl, roomId, memberId, memberToken, definition.system, fingerprint, coreVersion, localPlayerIndex),
       onBootstrap = { runOnUiThread { if (localPlayerIndex == 0) sendInitialNetplayState() else netplayClient?.requestState(-1L) } },
-      onSessionGo = { startAt, members -> runOnUiThread { startLockstep(startAt, members) } },
+      onSessionGo = { startAt, members -> runOnUiThread {
+        if (localPlayerIndex != 0 && lastNetplaySyncId < 0L) {
+          pendingSessionStart = startAt to members
+          netplayClient?.requestState(-1L)
+          netplayHandler.removeCallbacks(retryPendingNetplayState)
+          netplayHandler.postDelayed(retryPendingNetplayState, 2000L)
+          showToast("Start signal received. Waiting for the shared game state...")
+        } else {
+          startLockstep(startAt, members)
+        }
+      } },
       onStateRequest = { if (localPlayerIndex == 0) sendInitialNetplayState() },
       onRemoteInput = { remoteMemberId, frame, mask, analogX, analogY ->
         synchronized(remoteFrameMasks) { remoteFrameMasks.getOrPut(frame) { mutableMapOf() }[remoteMemberId] = mask }
@@ -288,8 +311,20 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
       runCatching { val bytes = Base64.decode(encoded, Base64.NO_WRAP); if (encoding == "gzip-base64") gunzip(bytes) else bytes }
         .onSuccess { state -> runOnUiThread {
           if (syncId <= lastNetplaySyncId) return@runOnUiThread
-          if (retroView.unserializeState(state)) { lastNetplaySyncId = syncId; netplayClient?.acknowledgeState(syncId); if (syncId == 0L) showToast("Initial state synchronized. Waiting for the shared start signal.") }
-          else showToast("A room state could not be applied. Request it again from the room.")
+          if (retroView.unserializeState(state)) {
+            lastNetplaySyncId = syncId
+            netplayClient?.acknowledgeState(syncId)
+            if (syncId == 0L) {
+              val pending = pendingSessionStart
+              if (pending != null) {
+                pendingSessionStart = null
+                netplayHandler.removeCallbacks(retryPendingNetplayState)
+                startLockstep(pending.first, pending.second)
+              } else {
+                showToast("Initial state synchronized. Waiting for the shared start signal.")
+              }
+            }
+          } else showToast("A room state could not be applied. Request it again from the room.")
         } }
         .onFailure { error -> runOnUiThread { showToast("Could not read the shared game state: ${error.message ?: "unknown error"}") } }
     }.start()
