@@ -101,7 +101,7 @@ describe("online room launch safeguards", () => {
     expect(transport).toContain('pingInterval(15,TimeUnit.SECONDS)');
     expect(transport).toContain('netplay:quality-probe');
     expect(transport).toContain("coerceIn(2L,45L)");
-    expect(universalClient).toContain('"netplay:universal-ready"');
+    expect(universalClient).toContain('"netplay:session-ready"');
     expect(ps1Client).toContain('"netplay:ps1-ready"');
     expect(ps1Room).toContain("prepareFastLaunch(\"ps1\"");
     expect(nativeRoom).toContain("prepareFastLaunch(system as EmulatorSystem");
