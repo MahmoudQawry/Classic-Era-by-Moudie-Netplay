@@ -41,15 +41,12 @@ jobs:
           code=${PIPESTATUS[0]}
           echo "$code" > ts-check.exit
           exit 0
-      - name: 📎 حفظ تشخيص TypeScript
+      - name: 📎 عرض تشخيص TypeScript في سجل البناء
         if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ts-check-diagnostics
-          path: |
-            ts-check.log
-            ts-check.exit
-          if-no-files-found: error
+        run: |
+          if [ -f ts-check.log ]; then
+            cat ts-check.log
+          fi
       - name: 🛑 رفض البناء عند فشل TypeScript
         run: test "$(cat ts-check.exit)" = "0"
       - name: 🧪 تشغيل الاختبارات
