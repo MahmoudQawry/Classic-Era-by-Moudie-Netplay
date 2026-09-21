@@ -1,10 +1,10 @@
-name: Android Clean Build
+name: Android Build Zero Counter
 
 on:
   push:
     branches: [main]
   workflow_dispatch:
-run-name: Android Clean Build
+run-name: Android Build Zero Counter
 permissions:
   contents: write
 jobs:
