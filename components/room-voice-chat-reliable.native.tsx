@@ -30,6 +30,10 @@ type Props = {
   mediaToken?: MediaToken | null;
   teamMediaToken?: MediaToken | null;
   onChatPress?: () => void;
+  // Compatibility props used by older emulator screens; voice authority is now LiveKit.
+  socket?: unknown;
+  isHost?: boolean;
+  remoteOnline?: boolean;
 };
 
 /**
