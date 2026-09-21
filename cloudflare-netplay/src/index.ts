@@ -69,9 +69,7 @@ export class NetplayRoom extends DurableObject<Env> {
     if(fingerprints.size!==1 || cores.size!==1) return false;
     const room=this.room();
     if(!room || room.system!==requested.system) return false;
-    const acks=this.sessionAcks();
-    if(!players.every(x=>acks.has(x.id))) return false;
-    const startAt=Date.now()+1500;
+    const startAt=Date.now()+3000;
     const playerMemberIds=players.map(x=>x.id);
     const payload={system:requested.system,startAt,playerMemberIds,inputDelay:3};
     this.setMeta("session-start-request","");
