@@ -117,6 +117,8 @@ jobs:
           echo "Room service failed to start or /api/health is unavailable."
           cat /tmp/moudie-server.log
           exit 1
+      - name: 🧩 إصلاح سلامة أيقونة PNG قبل Expo prebuild
+        run: python3 scripts/repair-png-crc.py assets/images/classic-era-new-icon.png
       - name: 🔧 Prebuild Android
         run: npx expo prebuild --platform android
       - name: 🛡️ استعادة مسار الإقلاع العادي
