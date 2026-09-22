@@ -37,6 +37,7 @@ class Ps1NetplayClient(
       "netplay:ps1-session-bootstrap"->{onBootstrap()}
       "netplay:ps1-session-go"->{val start=p.optLong("startAt",-1L);val ids=p.optJSONArray("playerMemberIds").toIntList();if(start>0L&&ids.size>=2)onSessionGo(start,ids)}
       "netplay:session-state"->{onStatus("PS1 session: "+p.optString("state","unknown"))}
+      "netplay:host-migrated"->onStatus("PS1 host migrated to member "+p.optInt("hostMemberId",-1)+".")
       "netplay:session-start-refused"->onStatus(p.optString("message","The room refused this session start."))
       "netplay:ps1-state-request"->onStateRequest()
       "netplay:ps1-input"->{val id=p.optInt("memberId",-1);val frame=p.optLong("frame",-1L);val mask=p.optInt("mask",-1);if(id>0&&frame>=0&&mask in 0..0xffff)onRemoteInput(id,frame,mask)}
