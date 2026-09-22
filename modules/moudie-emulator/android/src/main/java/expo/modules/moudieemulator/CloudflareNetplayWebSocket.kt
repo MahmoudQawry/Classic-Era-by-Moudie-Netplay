@@ -87,6 +87,7 @@ class CloudflareNetplayWebSocket(
       "netplay:presence",
       "netplay:session-start",
       "netplay:session-state",
+      "netplay:host-migrated",
       "netplay:session-start-refused",
       "netplay:ps1-session-bootstrap",
       "netplay:ps1-session-go",
