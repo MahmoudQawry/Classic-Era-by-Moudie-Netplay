@@ -8,7 +8,6 @@ import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { registerNetplayServer } from "../netplay";
-import { registerUniversalNetplayServer } from "../universal-netplay";
 import { isAllowedOrigin } from "./cors";
 
 function isPortAvailable(port: number): Promise<boolean> {
@@ -59,8 +58,9 @@ async function startServer() {
 
   registerStorageProxy(app);
   registerOAuthRoutes(app);
+  // Production realtime authority: one Express + Socket.IO server backed by MySQL.
+  // The former universal relay is retained as an archived migration reference but is not registered.
   registerNetplayServer(server);
-  registerUniversalNetplayServer(server);
 
   const relayRegion = process.env.REALTIME_REGION || "unknown";
   const relayRelease = process.env.REALTIME_RELEASE || "dev";
