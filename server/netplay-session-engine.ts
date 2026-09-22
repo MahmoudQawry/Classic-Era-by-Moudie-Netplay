@@ -124,6 +124,8 @@ export class NetplaySessionEngine {
     const session = this.sessions.get(roomId);
     if (!session || !session.playerMemberIds.includes(memberId)) return false;
     if (session.state !== "RECONNECTING" || !session.reconnectDeadline || now > session.reconnectDeadline) return false;
+    // The host may have migrated while this member was offline. Reconnection
+    // restores the same stable seat; it never restores stale host authority.
     session.state = "RUNNING";
     session.updatedAt = now;
     session.reconnectDeadline = null;
