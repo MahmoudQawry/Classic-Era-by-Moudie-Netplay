@@ -854,8 +854,9 @@ export function registerNetplayServer(server: HttpServer) {
     });
 
     socket.on("disconnect", () => {
-      if (activeMemberSockets.get(key) === socket.id) activeMemberSockets.delete(key);
-      if (session.clientKind !== "room-ui") {
+      const isCurrentSocket = activeMemberSockets.get(key) === socket.id;
+      if (isCurrentSocket) activeMemberSockets.delete(key);
+      if (isCurrentSocket && session.clientKind !== "room-ui") {
         const changed = sessionEngine.markDisconnected(session.roomId, session.memberId);
         if (changed) {
           const active = sessionEngine.get(session.roomId);
