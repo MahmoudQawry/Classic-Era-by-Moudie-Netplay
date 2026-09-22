@@ -5,50 +5,41 @@ import { describe, expect, it } from "vitest";
 const root = resolve(__dirname, "..");
 const read = (file: string) => readFileSync(resolve(root, file), "utf8");
 
-describe("NetPlay and voice reliability safeguards", () => {
-  it("uses the Cloudflare Durable Object WebSocket transport for emulator input/state", () => {
-    const worker = read("cloudflare-netplay/src/index.ts");
+describe("NetPlay reliability safeguards", () => {
+  it("uses the canonical Express + Socket.IO transport for native emulator input/state", () => {
     const ps1 = read("modules/moudie-emulator/android/src/main/java/expo/modules/moudieemulator/Ps1NetplayClient.kt");
     const universal = read("modules/moudie-emulator/android/src/main/java/expo/modules/moudieemulator/UniversalNetplayClient.kt");
     const transport = read("modules/moudie-emulator/android/src/main/java/expo/modules/moudieemulator/CloudflareNetplayWebSocket.kt");
-    expect(worker).toContain('this.ctx.acceptWebSocket(server)');
-    expect(worker).toContain('async webSocketMessage');
-    expect(ps1).toContain('CloudflareNetplayWebSocket');
-    expect(universal).toContain('CloudflareNetplayWebSocket');
+    const socketClient = read("lib/netplay-socket.ts");
+    expect(transport).toContain('path="/api/netplay"');
+    expect(transport).toContain('auth=mapOf(');
+    expect(transport).toContain('reconnection=true');
+    expect(ps1).toContain('clientKind="ps1-player"');
+    expect(universal).toContain('clientKind="universal-player"');
     expect(ps1).toContain('transport?.send("netplay:ps1-input"');
     expect(universal).toContain('transport?.send("netplay:universal-input"');
-    expect(transport).toContain('/ws/room/');
-    expect(transport).toContain('netplay:quality-probe');
-    expect(ps1).not.toContain('IO.socket(');
-    expect(universal).not.toContain('IO.socket(');
+    expect(socketClient).toContain('path: "/api/netplay"');
+    expect(socketClient).toContain("reconnectionAttempts: Infinity");
   });
 
-  it("keeps bounded adaptive delay and frame/state relay semantics", () => {
+  it("enforces bounded adaptive delay and frame/state relay semantics", () => {
     const quality = read("modules/moudie-emulator/android/src/main/java/expo/modules/moudieemulator/NetplayQualityMonitor.kt");
-    const worker = read("cloudflare-netplay/src/index.ts");
+    const server = read("server/netplay.ts");
     expect(quality).toContain("MAX_INPUT_DELAY_FRAMES");
     expect(quality).toContain("frames.coerceIn(2L, MAX_INPUT_DELAY_FRAMES)");
-    expect(worker).toContain('inputDelay:3');
-    expect(worker).toContain('netplay:session-start');
+    expect(server).toContain("netplay:quality-probe");
+    expect(server).toContain("netplay:frame-rejected");
+    expect(server).toContain("netplay:ps1-state-request");
+    expect(server).toContain("netplay:universal-state-request");
   });
 
-  it("uses built-in WebRTC voice signaling without requiring LiveKit credentials", () => {
-    const worker = read("cloudflare-netplay/src/index.ts");
+  it("uses LiveKit SFU for group voice media", () => {
     const voice = read("components/room-voice-chat-reliable.native.tsx");
-    const manifest = read("android/app/src/main/AndroidManifest.xml");
-    expect(worker).toContain('voice:signal');
-    expect(worker).toContain('netplay:voice-status');
-    expect(voice).toContain("RTCPeerConnection");
-    expect(voice).toContain("mediaDevices.getUserMedia");
-    expect(voice).toContain("voice:signal");
-    expect(voice).toContain("netplay:voice-status");
-    expect(voice).not.toContain("LiveKitRoom");
-    expect(voice).not.toContain('voiceChannelRoom');
-    expect(voice).not.toContain('voiceChannelTeam');
-    expect(voice).toContain('onChatPress');
-    expect(voice).toContain('track.enabled=enabled');
-    expect(voice).toContain('EXPO_PUBLIC_TURN_URL');
-    expect(voice).toContain('stun:stun.cloudflare.com:3478');
-    expect(manifest).not.toContain("manusmoudienetplay");
+    const livekit = read("server/livekit.ts");
+    expect(voice).toContain('from "@livekit/react-native"');
+    expect(voice).toContain('from "livekit-client"');
+    expect(voice).toContain("AudioSession.startAudioSession");
+    expect(voice).toContain("teamMediaToken");
+    expect(livekit).toContain("AccessToken");
   });
 });
