@@ -17,6 +17,7 @@ class Ps1NetplayClient(
   private val onDelayUpdate:((delay:Long)->Unit)?=null,
 ){
   private var transport:CloudflareNetplayWebSocket?=null
+  private var nextInputSequence=0L
   fun connect(){
     if(transport!=null)return
     transport=CloudflareNetplayWebSocket(config.serverUrl,config.roomId,config.memberId,config.memberToken,
@@ -43,10 +44,11 @@ class Ps1NetplayClient(
       "netplay:chat"->{val text=p.optString("text","").trim();if(text.isNotEmpty())onChat(p.optString("displayName","Other player"),text)}
       "netplay:desync-detected"->onStatus(p.optString("message","Desync detected - resyncing"))
       "netplay:frame-rejected"->onStatus("Sync: slowing down, device ahead")
+      "netplay:input-ack"->{ if(p.optString("channel","")=="ps1" && !p.optBoolean("accepted",true)) onStatus("Input sequence rejected; transport resyncing.") }
       "netplay:delay-update"->{val d=p.optLong("delay",-1L);if(d in 2..45)onDelayUpdate?.invoke(d)}
     }
   }
-  fun sendInputFrame(frame:Long,mask:Int){if(frame>=0&&mask in 0..0xffff)transport?.send("netplay:ps1-input",JSONObject().put("frame",frame).put("mask",mask))}
+  fun sendInputFrame(frame:Long,mask:Int){if(frame>=0&&mask in 0..0xffff){val sequence=nextInputSequence++;transport?.send("netplay:ps1-input",JSONObject().put("frame",frame).put("mask",mask).put("sequence",sequence))}}
   fun sendState(encodedState:String,syncId:Long,encoding:String){if(encodedState.isNotBlank()&&syncId>=0)transport?.send("netplay:ps1-state",JSONObject().put("snapshot",encodedState).put("syncId",syncId).put("encoding",encoding))}
   fun requestState(minimumSyncId:Long=-1L){transport?.send("netplay:ps1-state-request",JSONObject().put("minimumSyncId",minimumSyncId))}
   fun acknowledgeState(syncId:Long){if(syncId>=0)transport?.send("netplay:ps1-sync-ack",JSONObject().put("syncId",syncId))}
@@ -59,7 +61,7 @@ class Ps1NetplayClient(
   fun sendChat(text:String){val safe=text.trim().take(400);if(safe.isNotEmpty())transport?.send("netplay:chat",JSONObject().put("text",safe))}
   fun requestDelayIncrease(delay:Long,reason:String){if(delay in 2..45)transport?.send("netplay:delay-request",JSONObject().put("delay",delay).put("reason",reason))}
   fun reportDesync(frame:Long,predictedFrames:Int){transport?.send("netplay:desync-report",JSONObject().put("frame",frame).put("predictedFrames",predictedFrames))}
-  fun close(){transport?.close();transport=null}
+  fun close(){nextInputSequence=0L;transport?.close();transport=null}
 }
 
 private fun org.json.JSONArray?.toIntList():List<Int>{if(this==null)return emptyList();return buildList{for(i in 0 until length()){val id=optInt(i,0);if(id>0)add(id)}}.distinct()}
