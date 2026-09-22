@@ -503,7 +503,10 @@ export function registerNetplayServer(server: HttpServer) {
       roomInputDelays.set(session.roomId, 3); // Reset to default for new session
       pendingSessions.set(session.roomId, { system, barrier, sessionId: started.session.sessionId, createdAt: Date.now() });
       io.to(channel).emit("netplay:session-start", { system, sessionId: started.session.sessionId, state: started.session.state, seats: Object.fromEntries(started.session.seats), ...barrier, inputDelay: 3 });
-      io.to(channel).emit("netplay:session-state", { sessionId: started.session.sessionId, state: started.session.state, reconnectDeadline: null });
+      sessionEngine.transition(session.roomId, "READY_CHECK");
+      const readySession = sessionEngine.get(session.roomId);
+      if (!readySession) return;
+      io.to(channel).emit("netplay:session-state", { sessionId: readySession.sessionId, state: readySession.state, reconnectDeadline: null });
     });
 
     socket.on("netplay:state", (payload: StatePayload) => {
