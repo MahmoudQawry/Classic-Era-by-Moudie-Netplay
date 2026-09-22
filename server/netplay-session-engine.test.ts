@@ -69,6 +69,20 @@ describe("NetplaySessionEngine", () => {
     expect(expired.reconnect(99, 2, 32_001)).toBe(false);
   });
 
+  it("preserves stable seats when the host migrates and the old host reconnects", () => {
+    const engine = new NetplaySessionEngine({ reconnectGraceMs: 30_000 });
+    engine.start({ roomId: 55, system: "ps2", hostMemberId: 1, playerMemberIds: [1, 2], now: 1000 });
+    engine.transition(55, "READY_CHECK", 1100);
+    engine.beginSync(55, 1200);
+    engine.markRunning(55, 1300);
+    expect(engine.markDisconnected(55, 1, 2000)).toBe(true);
+    expect(engine.migrateHost(55, 1, 2001)).toEqual({ ok: true, hostMemberId: 2 });
+    expect(engine.reconnect(55, 1, 3000)).toBe(true);
+    expect(engine.get(55)?.hostMemberId).toBe(2);
+    expect(engine.get(55)?.seats.get(1)).toBe(1);
+    expect(engine.get(55)?.seats.get(2)).toBe(2);
+  });
+
   it("does not allow an unrelated member to reclaim a seat", () => {
     const engine = new NetplaySessionEngine();
     engine.start({ roomId: 9, system: "ps2", hostMemberId: 1, playerMemberIds: [1, 2] });
