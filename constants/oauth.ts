@@ -22,7 +22,7 @@ const NATIVE_NETPLAY_SERVICE_URL = (env.netplayServiceUrl || configuredRelayUrls
 const NATIVE_NETPLAY_SERVICE_URLS = Array.from(new Set([NATIVE_NETPLAY_SERVICE_URL, ...configuredRelayUrls, env.apiBaseUrl.replace(/\/$/, "")].filter(Boolean)));
 
 // The primary room/API authority is the main Express backend. Dedicated realtime URLs are opt-in.
-const NATIVE_API_FALLBACK_URL = API_BASE_URL || NATIVE_NETPLAY_SERVICE_URL;
+const NATIVE_API_FALLBACK_URL = env.apiBaseUrl || NATIVE_NETPLAY_SERVICE_URL;
 // If a dedicated relay is absent, a configured API origin is a valid room-service fallback.
 const NATIVE_API_RUNTIME_FALLBACK_URL = (env.apiBaseUrl || NATIVE_API_FALLBACK_URL).replace(/\/$/, "");
 
