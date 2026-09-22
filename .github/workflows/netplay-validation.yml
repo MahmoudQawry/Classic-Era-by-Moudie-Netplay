@@ -1,0 +1,58 @@
+name: NetPlay Validation
+
+on:
+  push:
+    branches:
+      - branding-refresh-and-repair-plan
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.0
+
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Normalize six-system types
+        run: python3 scripts/patch-six-system-types.py
+
+      - name: TypeScript check
+        run: pnpm check
+
+      - name: Unit tests
+        run: pnpm test
+
+      - name: Server bundle
+        run: pnpm build
+
+      - name: Server health smoke test
+        run: |
+          set -e
+          PORT=4100 NODE_ENV=production node dist/index.js >/tmp/moudie-server.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill $SERVER_PID 2>/dev/null || true' EXIT
+          for i in $(seq 1 20); do
+            if curl -fsS http://127.0.0.1:4100/api/health | grep -q '"ok":true'; then
+              echo "Server health smoke test passed."
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/moudie-server.log
+          exit 1
