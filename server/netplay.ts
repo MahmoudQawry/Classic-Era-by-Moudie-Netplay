@@ -514,7 +514,9 @@ export function registerNetplayServer(server: HttpServer) {
     });
 
     socket.on("netplay:state", (payload: StatePayload) => {
-      if (session.role !== "host" || typeof payload?.snapshot !== "string" || payload.snapshot.length > 4_500_000) return;
+      const activeSessionForState = sessionEngine.get(session.roomId);
+      if (session.role !== "host" && activeSessionForState?.hostMemberId !== session.memberId) return;
+      if (typeof payload?.snapshot !== "string" || payload.snapshot.length > 4_500_000) return;
       const syncId = normalizeSyncId(payload.syncId);
       if (syncId === null) return;
       const authoritative = { snapshot: payload.snapshot, syncId, updatedAt: Date.now() };
@@ -683,7 +685,9 @@ export function registerNetplayServer(server: HttpServer) {
 
     socket.on("netplay:ps1-state", (payload: Ps1StatePayload) => {
       const snapshot = typeof payload?.snapshot === "string" ? payload.snapshot : "";
-      if (session.role !== "host" || typeof socket.data.ps1Fingerprint !== "string" || snapshot.length === 0 || snapshot.length > 4_300_000) return;
+      const activeSessionForState = sessionEngine.get(session.roomId);
+      if (session.role !== "host" && activeSessionForState?.hostMemberId !== session.memberId) return;
+      if (typeof socket.data.ps1Fingerprint !== "string" || snapshot.length === 0 || snapshot.length > 4_300_000) return;
       const syncId = normalizeSyncId(payload.syncId);
       const encoding = payload.encoding === "base64" ? "base64" : payload.encoding === "gzip-base64" ? "gzip-base64" : null;
       if (syncId === null || !encoding) return;
@@ -818,7 +822,9 @@ export function registerNetplayServer(server: HttpServer) {
       const system = socket.data.universalSystem as Exclude<NetplaySystem, "ps1" | "nes"> | undefined;
       const fingerprint = socket.data.universalFingerprint as string | undefined;
       const snapshot = typeof payload?.snapshot === "string" ? payload.snapshot : "";
-      if (session.role !== "host" || !system || !fingerprint || snapshot.length === 0 || snapshot.length > 4_300_000) return;
+      const activeSessionForState = sessionEngine.get(session.roomId);
+      if (session.role !== "host" && activeSessionForState?.hostMemberId !== session.memberId) return;
+      if (!system || !fingerprint || snapshot.length === 0 || snapshot.length > 4_300_000) return;
       const syncId = normalizeSyncId(payload.syncId);
       const encoding = payload.encoding === "base64" ? "base64" : payload.encoding === "gzip-base64" ? "gzip-base64" : null;
       if (syncId === null || !encoding) return;
@@ -882,15 +888,29 @@ export function registerNetplayServer(server: HttpServer) {
       const isCurrentSocket = activeMemberSockets.get(key) === socket.id;
       if (isCurrentSocket) activeMemberSockets.delete(key);
       if (isCurrentSocket && session.clientKind !== "room-ui") {
+        const activeBeforeDisconnect = sessionEngine.get(session.roomId);
+        const wasHost = activeBeforeDisconnect?.hostMemberId === session.memberId;
         const changed = sessionEngine.markDisconnected(session.roomId, session.memberId);
         if (changed) {
           const active = sessionEngine.get(session.roomId);
           if (active) {
+            if (wasHost) {
+              const migration = sessionEngine.migrateHost(session.roomId, session.memberId);
+              if (migration.ok) {
+                io.to(channel).emit("netplay:host-migrated", {
+                  sessionId: active.sessionId,
+                  previousHostMemberId: session.memberId,
+                  hostMemberId: migration.hostMemberId,
+                  state: active.state,
+                });
+              }
+            }
             io.to(channel).emit("netplay:session-state", {
               sessionId: active.sessionId,
               state: active.state,
               reconnectDeadline: active.reconnectDeadline,
               disconnectedMemberId: session.memberId,
+              hostMemberId: active.hostMemberId,
             });
           }
         }
