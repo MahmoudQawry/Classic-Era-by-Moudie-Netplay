@@ -62,7 +62,7 @@ export class NetplaySessionEngine {
       hostMemberId: input.hostMemberId,
       playerMemberIds: uniquePlayers,
       seats,
-      state: "READY_CHECK",
+      state: "WAITING",
       createdAt: now,
       updatedAt: now,
       reconnectDeadline: null,
