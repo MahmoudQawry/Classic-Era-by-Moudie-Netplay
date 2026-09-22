@@ -48,6 +48,27 @@ describe("NetplaySessionEngine", () => {
     expect(engine.get(10)?.seats.get(2)).toBe(2);
   });
 
+  it("supports reconnect at 2s and 10s, and expires just after the 30s grace window", () => {
+    for (const reconnectAt of [2_000, 10_000, 30_000]) {
+      const engine = new NetplaySessionEngine({ reconnectGraceMs: 30_000 });
+      const started = engine.start({ roomId: reconnectAt, system: "ps1", hostMemberId: 1, playerMemberIds: [1, 2], now: 1_000 });
+      expect(started.ok).toBe(true);
+      engine.transition(reconnectAt, "READY_CHECK", 1_100);
+      engine.beginSync(reconnectAt, 1_200);
+      engine.markRunning(reconnectAt, 1_300);
+      expect(engine.markDisconnected(reconnectAt, 2, 2_000)).toBe(true);
+      expect(engine.reconnect(reconnectAt, 2, 2_000 + reconnectAt - 2_000)).toBe(true);
+    }
+    const expired = new NetplaySessionEngine({ reconnectGraceMs: 30_000 });
+    expired.start({ roomId: 99, system: "ps2", hostMemberId: 1, playerMemberIds: [1, 2], now: 1_000 });
+    expired.transition(99, "READY_CHECK", 1_100);
+    expired.beginSync(99, 1_200);
+    expired.markRunning(99, 1_300);
+    expect(expired.markDisconnected(99, 2, 2_000)).toBe(true);
+    expect(expired.sweep(32_001)).toHaveLength(1);
+    expect(expired.reconnect(99, 2, 32_001)).toBe(false);
+  });
+
   it("does not allow an unrelated member to reclaim a seat", () => {
     const engine = new NetplaySessionEngine();
     engine.start({ roomId: 9, system: "ps2", hostMemberId: 1, playerMemberIds: [1, 2] });
