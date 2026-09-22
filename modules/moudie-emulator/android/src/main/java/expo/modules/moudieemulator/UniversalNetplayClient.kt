@@ -40,6 +40,7 @@ class UniversalNetplayClient(
       "netplay:universal-session-bootstrap"->{if(p.optString("system")==config.system){val ids=p.optJSONArray("playerMemberIds").toIntList();if(ids.size>=2)onBootstrap(ids)}}
       "netplay:universal-session-go"->{if(p.optString("system")==config.system){val ids=p.optJSONArray("playerMemberIds").toIntList();val start=p.optLong("startAt",-1L);if(start>0L&&ids.size>=2)onSessionGo(start,ids)}}
       "netplay:session-state"->{onStatus(config.system.uppercase()+" session: "+p.optString("state","unknown"))}
+      "netplay:host-migrated"->onStatus(config.system.uppercase()+" host migrated to member "+p.optInt("hostMemberId",-1)+".")
       "netplay:session-start-refused"->onStatus(p.optString("message","The emulator session was refused."))
       "netplay:session-start-pending"->onStatus("Waiting for both devices to finish state synchronization...")
       "netplay:universal-sync-ack"->{if(p.optLong("syncId",-1L)==0L)onStatus("Shared game state acknowledged.")}
