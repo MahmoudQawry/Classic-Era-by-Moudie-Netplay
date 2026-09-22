@@ -99,7 +99,7 @@ describe("online room launch safeguards", () => {
     expect(ps1Client).toContain("CloudflareNetplayWebSocket");
     expect(universalClient).toContain("CloudflareNetplayWebSocket");
     expect(transport).toContain('path="/api/netplay"');
-    expect(transport).toContain('auth=mapOf(');
+    expect(transport).toContain('auth=hashMapOf<String,String>().apply{');
     expect(transport).toContain('reconnection=true');
     expect(transport).toContain('netplay:quality-probe');
     expect(transport).toContain("coerceIn(2L,45L)");
