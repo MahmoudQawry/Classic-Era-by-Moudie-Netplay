@@ -41,6 +41,12 @@ jobs:
       - name: Server bundle
         run: pnpm build
 
+      - name: Android native Kotlin compile
+        run: |
+          chmod +x android/gradlew
+          cd android
+          ./gradlew :app:compileDebugKotlin --no-daemon -Dorg.gradle.jvmargs="-Xmx3g" -Dorg.gradle.daemon=false
+
       - name: Server health smoke test
         run: |
           set -e
