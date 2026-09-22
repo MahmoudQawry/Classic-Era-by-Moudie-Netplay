@@ -109,6 +109,17 @@ export class NetplaySessionEngine {
     return true;
   }
 
+  migrateHost(roomId: number, departingMemberId: number, now = Date.now()): { ok: true; hostMemberId: number } | { ok: false; reason: "not-host" | "no-successor" | "invalid-state" } {
+    const session = this.sessions.get(roomId);
+    if (!session || session.hostMemberId !== departingMemberId) return { ok: false, reason: "not-host" };
+    if (session.state !== "RUNNING" && session.state !== "RECONNECTING" && session.state !== "SYNCING") return { ok: false, reason: "invalid-state" };
+    const successor = session.playerMemberIds.find((memberId) => memberId !== departingMemberId);
+    if (successor === undefined) return { ok: false, reason: "no-successor" };
+    session.hostMemberId = successor;
+    session.updatedAt = now;
+    return { ok: true, hostMemberId: successor };
+  }
+
   reconnect(roomId: number, memberId: number, now = Date.now()): boolean {
     const session = this.sessions.get(roomId);
     if (!session || !session.playerMemberIds.includes(memberId)) return false;
