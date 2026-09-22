@@ -35,6 +35,19 @@ describe("NetplaySessionEngine", () => {
     expect(engine.get(8)?.state).toBe("ENDED");
   });
 
+  it("migrates host authority to the next stable player without changing seats", () => {
+    const engine = new NetplaySessionEngine();
+    const started = engine.start({ roomId: 10, system: "ps1", hostMemberId: 1, playerMemberIds: [1, 2, 3], now: 1000 });
+    expect(started.ok).toBe(true);
+    expect(engine.transition(10, "READY_CHECK", 1100)).toBe(true);
+    expect(engine.beginSync(10, 1200)).toBe(true);
+    expect(engine.markRunning(10, 1300)).toBe(true);
+    expect(engine.migrateHost(10, 1, 1400)).toEqual({ ok: true, hostMemberId: 2 });
+    expect(engine.get(10)?.hostMemberId).toBe(2);
+    expect(engine.get(10)?.seats.get(1)).toBe(1);
+    expect(engine.get(10)?.seats.get(2)).toBe(2);
+  });
+
   it("does not allow an unrelated member to reclaim a seat", () => {
     const engine = new NetplaySessionEngine();
     engine.start({ roomId: 9, system: "ps2", hostMemberId: 1, playerMemberIds: [1, 2] });
