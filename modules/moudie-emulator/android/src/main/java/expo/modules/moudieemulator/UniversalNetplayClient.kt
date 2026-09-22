@@ -23,6 +23,7 @@ class UniversalNetplayClient(
   fun connect(){
     if(transport!=null)return
     transport=CloudflareNetplayWebSocket(config.serverUrl,config.roomId,config.memberId,config.memberToken,
+       clientKind="universal-player",
       onEvent={event,payload->handle(event,payload)},
       onConnected={transport?.send("netplay:session-ready",JSONObject().put("isReady",true).put("system",config.system).put("fingerprint",config.fingerprint).put("coreVersion",config.coreVersion));onStatus(config.system.uppercase()+" channel connected - adaptive sync active")},
       onDisconnected={onStatus("Game channel paused; auto-reconnecting...")},
