@@ -33,7 +33,7 @@ const VOICE_SIGNAL_KINDS = new Set(["voice-hello", "voice-ready", "voice-offer",
 type SessionReadyPayload = { system?: unknown; fingerprint?: unknown; coreVersion?: unknown };
 type SessionStartPayload = { system?: unknown };
 type Ps1ReadyPayload = { fingerprint?: unknown; coreVersion?: unknown };
-type Ps1InputPayload = { frame?: unknown; mask?: unknown; analogX?: unknown; analogY?: unknown };
+type Ps1InputPayload = { frame?: unknown; mask?: unknown; analogX?: unknown; analogY?: unknown; sequence?: unknown };
 type Ps1StatePayload = { snapshot?: unknown; syncId?: unknown; encoding?: unknown };
 type Ps1SyncAckPayload = { syncId?: unknown };
 type StateRequestPayload = { minimumSyncId?: unknown };
@@ -98,6 +98,7 @@ export function registerNetplayServer(server: HttpServer) {
   const roomInputDelays = new Map<number, number>();
   const sessionEngine = new NetplaySessionEngine({ reconnectGraceMs: 30_000 });
   const memberInputRate = new Map<string, { count: number; windowStart: number }>();
+  const lastInputSequence = new Map<string, number>();
 
   /** Authoritative snapshots are the largest objects on the server (up to ~4.5 MB
    * each). They must never outlive the session that produced them. */
@@ -122,6 +123,7 @@ export function registerNetplayServer(server: HttpServer) {
     const roomPrefix = `${roomId}:`;
     for (const key of [...activeMemberSockets.keys()]) if (key.startsWith(roomPrefix)) activeMemberSockets.delete(key);
     for (const key of [...memberInputRate.keys()]) if (key.startsWith(roomPrefix)) memberInputRate.delete(key);
+    for (const key of [...lastInputSequence.keys()]) if (key.startsWith(roomPrefix)) lastInputSequence.delete(key);
     for (const key of [...universalSnapshots.keys()]) if (key.startsWith(roomPrefix)) universalSnapshots.delete(key);
     for (const key of [...universalInitialStateAcks.keys()]) if (key.startsWith(roomPrefix)) universalInitialStateAcks.delete(key);
     for (const key of [...universalInputHistory.keys()]) if (key.startsWith(roomPrefix)) universalInputHistory.delete(key);
@@ -326,6 +328,8 @@ export function registerNetplayServer(server: HttpServer) {
       io.sockets.sockets.get(previousSocketId)?.disconnect(true);
     }
     activeMemberSockets.set(key, socket.id);
+    // A reconnect starts a fresh monotonic sequence for this member/client kind.
+    lastInputSequence.delete(`${session.roomId}:${session.memberId}:${session.clientKind}`);
     if (session.clientKind !== "room-ui") {
       const active = sessionEngine.get(session.roomId);
       if (active && active.playerMemberIds.includes(session.memberId) && active.state === "RECONNECTING" && sessionEngine.reconnect(session.roomId, session.memberId)) {
@@ -629,9 +633,17 @@ export function registerNetplayServer(server: HttpServer) {
     socket.on("netplay:ps1-input", (payload: Ps1InputPayload) => {
       const frame = Number(payload?.frame);
       const mask = Number(payload?.mask);
+      const sequence = Number(payload?.sequence);
       const analogX = Number(payload?.analogX ?? 0);
       const analogY = Number(payload?.analogY ?? 0);
-      if (!Number.isSafeInteger(frame) || frame < 0 || !Number.isSafeInteger(mask) || mask < 0 || mask > 0xffff || !Number.isInteger(analogX) || !Number.isInteger(analogY) || analogX < -127 || analogX > 127 || analogY < -127 || analogY > 127 || typeof socket.data.ps1Fingerprint !== "string") return;
+      if (!Number.isSafeInteger(sequence) || sequence < 0 || !Number.isSafeInteger(frame) || frame < 0 || !Number.isSafeInteger(mask) || mask < 0 || mask > 0xffff || !Number.isInteger(analogX) || !Number.isInteger(analogY) || analogX < -127 || analogX > 127 || analogY < -127 || analogY > 127 || typeof socket.data.ps1Fingerprint !== "string") return;
+      const inputKey = `${session.roomId}:${session.memberId}:ps1`;
+      const previousSequence = lastInputSequence.get(inputKey) ?? -1;
+      if (sequence <= previousSequence) {
+        socket.emit("netplay:input-ack", { channel: "ps1", sequence, accepted: false, reason: "duplicate-or-out-of-order" });
+        return;
+      }
+      lastInputSequence.set(inputKey, sequence);
       if (session.role === "spectator") return;
       
       // Rate limiting
@@ -665,7 +677,8 @@ export function registerNetplayServer(server: HttpServer) {
         if (oldFrame < frame - 60) history.delete(oldFrame);
       }
 
-      socket.to(channel).emit("netplay:ps1-input", { memberId: session.memberId, frame, mask, analogX, analogY, serverTime: Date.now() });
+      socket.to(channel).emit("netplay:ps1-input", { memberId: session.memberId, frame, mask, analogX, analogY, inputSequence: sequence, serverTime: Date.now() });
+      socket.emit("netplay:input-ack", { channel: "ps1", sequence, accepted: true });
     });
 
     socket.on("netplay:ps1-state", (payload: Ps1StatePayload) => {
@@ -757,9 +770,17 @@ export function registerNetplayServer(server: HttpServer) {
     socket.on("netplay:universal-input", (payload: Ps1InputPayload & { analogX?: unknown; analogY?: unknown }) => {
       const frame = Number(payload?.frame);
       const mask = Number(payload?.mask);
+      const sequence = Number(payload?.sequence);
       const analogX = Number(payload?.analogX ?? 0);
       const analogY = Number(payload?.analogY ?? 0);
-      if (!Number.isSafeInteger(frame) || frame < 0 || !Number.isSafeInteger(mask) || mask < 0 || mask > 0xffff || !Number.isInteger(analogX) || !Number.isInteger(analogY) || analogX < -127 || analogX > 127 || analogY < -127 || analogY > 127 || typeof socket.data.universalFingerprint !== "string") return;
+      if (!Number.isSafeInteger(sequence) || sequence < 0 || !Number.isSafeInteger(frame) || frame < 0 || !Number.isSafeInteger(mask) || mask < 0 || mask > 0xffff || !Number.isInteger(analogX) || !Number.isInteger(analogY) || analogX < -127 || analogX > 127 || analogY < -127 || analogY > 127 || typeof socket.data.universalFingerprint !== "string") return;
+      const inputKey = `${session.roomId}:${session.memberId}:universal`;
+      const previousSequence = lastInputSequence.get(inputKey) ?? -1;
+      if (sequence <= previousSequence) {
+        socket.emit("netplay:input-ack", { channel: "universal", sequence, accepted: false, reason: "duplicate-or-out-of-order" });
+        return;
+      }
+      lastInputSequence.set(inputKey, sequence);
       if (session.role === "spectator") return;
 
       const rateKey = `${session.roomId}:${session.memberId}:universal`;
@@ -789,7 +810,8 @@ export function registerNetplayServer(server: HttpServer) {
         if (oldFrame < frame - 60) history.delete(oldFrame);
       }
 
-      socket.to(channel).emit("netplay:universal-input", { memberId: session.memberId, frame, mask, analogX, analogY, serverTime: Date.now() });
+      socket.to(channel).emit("netplay:universal-input", { memberId: session.memberId, frame, mask, analogX, analogY, inputSequence: sequence, serverTime: Date.now() });
+      socket.emit("netplay:input-ack", { channel: "universal", sequence, accepted: true });
     });
 
     socket.on("netplay:universal-state", (payload: Ps1StatePayload) => {
