@@ -106,6 +106,7 @@ class CloudflareNetplayWebSocket(
       "netplay:delay-update",
       "netplay:desync-detected",
       "netplay:desync-resync-request",
+      "netplay:input-ack",
     )
     events.forEach{event->
       socket.on(event){args->
