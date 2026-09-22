@@ -35,6 +35,7 @@ class UniversalNetplayClient(
   private fun handle(event:String,p:JSONObject){
     when(event){
       "netplay:joined"->{val ids=p.optJSONArray("onlineMemberIds").toIntList();if(ids.size>=2)onBootstrap(ids)}
+      "netplay:session-start"->{if(p.optString("system")==config.system) transport?.send("netplay:universal-ready",JSONObject().put("system",config.system).put("fingerprint",config.fingerprint).put("coreVersion",config.coreVersion))}
       "netplay:universal-session-bootstrap"->{if(p.optString("system")==config.system){val ids=p.optJSONArray("playerMemberIds").toIntList();if(ids.size>=2)onBootstrap(ids)}}
       "netplay:universal-session-go"->{if(p.optString("system")==config.system){val ids=p.optJSONArray("playerMemberIds").toIntList();val start=p.optLong("startAt",-1L);if(start>0L&&ids.size>=2)onSessionGo(start,ids)}}
       "netplay:session-state"->{onStatus(config.system.uppercase()+" session: "+p.optString("state","unknown"))}
