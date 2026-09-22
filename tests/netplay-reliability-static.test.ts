@@ -17,6 +17,9 @@ describe("NetPlay reliability safeguards", () => {
     expect(ps1).toContain('clientKind="ps1-player"');
     expect(universal).toContain('clientKind="universal-player"');
     expect(ps1).toContain('transport?.send("netplay:ps1-input"');
+    expect(ps1).toContain("nextInputSequence");
+    expect(universal).toContain("nextInputSequence");
+    expect(transport).toContain('"netplay:input-ack"');
     expect(universal).toContain('transport?.send("netplay:universal-input"');
     expect(socketClient).toContain('path: "/api/netplay"');
     expect(socketClient).toContain("reconnectionAttempts: Infinity");
@@ -31,6 +34,8 @@ describe("NetPlay reliability safeguards", () => {
     expect(server).toContain("netplay:frame-rejected");
     expect(server).toContain("netplay:ps1-state-request");
     expect(server).toContain("netplay:universal-state-request");
+    expect(server).toContain("duplicate-or-out-of-order");
+    expect(server).toContain("netplay:host-migrated");
   });
 
   it("uses LiveKit SFU for group voice media", () => {
