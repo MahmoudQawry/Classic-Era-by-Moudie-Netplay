@@ -34,7 +34,7 @@ object NativeCoreCatalog {
   private val definitions = listOf(
     Definition("nes", "Famicom / NES", "FCEUmm", listOf("fceumm_libretro_android.so"), setOf("nes", "fds", "zip"), "retroarch", 2, 2, 6, EmulatorControlProfiles.FAMICOM, "moudie-nes/system"),
     Definition("ps1", "PlayStation 1", "PCSX-ReARMed", listOf("pcsx_rearmed_libretro_android.so", "libpcsx_rearmed_libretro_android.so"), setOf("bin", "cue", "iso", "chd", "pbp"), "retroarch", 4, 4, 4, EmulatorControlProfiles.PS1, "moudie-ps1/system"),
-    Definition("psp", "PlayStation Portable", "PPSSPP", listOf("ppsspp_libretro_android.so"), setOf("iso", "cso", "chd", "pbp"), "psp-network", 4, 4, 4, EmulatorControlProfiles.PSP, "moudie-psp/system"),
+    Definition("psp", "PlayStation Portable", "PPSSPP", listOf("ppsspp_libretro_android.so"), setOf("iso", "cso", "chd", "pbp"), "moudie-relay", 4, 4, 4, EmulatorControlProfiles.PSP, "moudie-psp/system"),
     Definition("sega", "Sega Genesis / Mega Drive", "Genesis Plus GX", listOf("genesis_plus_gx_libretro_android.so"), setOf("bin", "md", "gen", "smd", "sms", "gg", "zip"), "moudie-relay", 4, 4, 4, EmulatorControlProfiles.SEGA, "moudie-sega/system"),
     Definition("n64", "Nintendo 64", "Parallel-N64", listOf("parallel_n64_libretro_android.so"), setOf("z64", "n64", "v64", "zip"), "moudie-relay", 4, 4, 4, EmulatorControlProfiles.N64, "moudie-n64/system"),
     Definition("ps2", "PlayStation 2", "Play!", listOf("play_libretro_android.so"), setOf("iso", "chd", "cso", "cue", "elf", "isz"), "moudie-relay", 4, 4, 4, EmulatorControlProfiles.PS2, "moudie-ps2/system"),
