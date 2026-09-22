@@ -20,6 +20,7 @@ class UniversalNetplayClient(
   private val onDelayUpdate:((delay:Long)->Unit)?=null,
 ){
   private var transport:CloudflareNetplayWebSocket?=null
+  private var nextInputSequence=0L
   fun connect(){
     if(transport!=null)return
     transport=CloudflareNetplayWebSocket(config.serverUrl,config.roomId,config.memberId,config.memberToken,
@@ -49,9 +50,10 @@ class UniversalNetplayClient(
       "netplay:chat"->{val text=p.optString("text","").trim();if(text.isNotEmpty())onChat(p.optString("displayName","Player"),text)}
       "netplay:desync-detected"->onStatus(p.optString("message","Desync detected - resyncing"))
       "netplay:frame-rejected"->onStatus("Sync: device ahead, slowing down")
+      "netplay:input-ack"->{ if(p.optString("channel","")=="universal" && !p.optBoolean("accepted",true)) onStatus("Input sequence rejected; transport resyncing.") }
     }
   }
-  fun sendInputFrame(frame:Long,mask:Int,analogX:Int=0,analogY:Int=0){if(frame>=0&&mask in 0..0xffff&&analogX in -127..127&&analogY in -127..127)transport?.send("netplay:universal-input",JSONObject().put("frame",frame).put("mask",mask).put("analogX",analogX).put("analogY",analogY))}
+  fun sendInputFrame(frame:Long,mask:Int,analogX:Int=0,analogY:Int=0){if(frame>=0&&mask in 0..0xffff&&analogX in -127..127&&analogY in -127..127){val sequence=nextInputSequence++;transport?.send("netplay:universal-input",JSONObject().put("frame",frame).put("mask",mask).put("analogX",analogX).put("analogY",analogY).put("sequence",sequence))}}
   fun sendState(encodedState:String,syncId:Long,encoding:String){if(encodedState.isNotBlank()&&syncId>=0)transport?.send("netplay:universal-state",JSONObject().put("snapshot",encodedState).put("syncId",syncId).put("encoding",encoding))}
   fun requestState(minimumSyncId:Long=-1L){transport?.send("netplay:universal-state-request",JSONObject().put("minimumSyncId",minimumSyncId))}
   fun acknowledgeState(syncId:Long){if(syncId>=0)transport?.send("netplay:universal-sync-ack",JSONObject().put("syncId",syncId))}
@@ -64,7 +66,7 @@ class UniversalNetplayClient(
   fun sendChat(text:String){val safe=text.trim().take(400);if(safe.isNotEmpty())transport?.send("netplay:chat",JSONObject().put("text",safe))}
   fun requestDelayIncrease(delay:Long,reason:String){if(delay in 2..45)transport?.send("netplay:delay-request",JSONObject().put("delay",delay).put("reason",reason))}
   fun reportDesync(frame:Long,predictedFrames:Int){transport?.send("netplay:desync-report",JSONObject().put("frame",frame).put("predictedFrames",predictedFrames))}
-  fun close(){transport?.close();transport=null}
+  fun close(){nextInputSequence=0L;transport?.close();transport=null}
 }
 
 private fun org.json.JSONArray?.toIntList():List<Int>{
