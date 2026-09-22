@@ -32,6 +32,7 @@ class Ps1NetplayClient(
   private fun handle(event:String,p:JSONObject){
     when(event){
       "netplay:joined"->onBootstrap()
+      "netplay:session-start"->{transport?.send("netplay:ps1-ready",JSONObject().put("fingerprint",config.fingerprint).put("coreVersion",config.coreVersion))}
       "netplay:ps1-session-bootstrap"->{onBootstrap()}
       "netplay:ps1-session-go"->{val start=p.optLong("startAt",-1L);val ids=p.optJSONArray("playerMemberIds").toIntList();if(start>0L&&ids.size>=2)onSessionGo(start,ids)}
       "netplay:session-state"->{onStatus("PS1 session: "+p.optString("state","unknown"))}
