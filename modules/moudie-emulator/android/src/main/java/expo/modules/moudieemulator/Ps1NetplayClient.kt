@@ -20,6 +20,7 @@ class Ps1NetplayClient(
   fun connect(){
     if(transport!=null)return
     transport=CloudflareNetplayWebSocket(config.serverUrl,config.roomId,config.memberId,config.memberToken,
+       clientKind="ps1-player",
       onEvent={event,payload->handle(event,payload)},
       onConnected={transport?.send("netplay:ps1-ready",JSONObject().put("fingerprint",config.fingerprint).put("coreVersion",config.coreVersion));onStatus("PS1 channel connected. adaptive sync active.")},
       onDisconnected={onStatus("PS1 paused; auto-reconnecting...")},
