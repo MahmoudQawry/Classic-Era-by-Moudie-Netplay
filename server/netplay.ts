@@ -9,6 +9,7 @@ import { hashAccessToken } from "./rooms";
 import { socketCors } from "./_core/cors";
 import { RoomLifecycleRegistry, SlidingWindowLimiter } from "./room-lifecycle";
 import { roomCapacityFor } from "../shared/room-capacity";
+import { NetplaySessionEngine } from "./netplay-session-engine";
 
 type NetplaySystem = "ps1" | "nes" | "psp" | "sega" | "n64" | "ps2";
 
@@ -43,7 +44,7 @@ type DesyncReportPayload = { frame?: unknown; lastAppliedFrame?: unknown; predic
 type AuthoritativeSnapshot = { snapshot: string; syncId: number; updatedAt: number };
 type Ps1Snapshot = AuthoritativeSnapshot & { fingerprint: string; encoding: "gzip-base64" | "base64" };
 type ReadySessionData = ReadySessionPeer & { system: NetplaySystem };
-type PendingSession = { system: NetplaySystem; barrier: NonNullable<ReturnType<typeof createSessionBarrier>>; createdAt: number };
+type PendingSession = { system: NetplaySystem; barrier: NonNullable<ReturnType<typeof createSessionBarrier>>; sessionId: string; createdAt: number };
 type UniversalSnapshot = AuthoritativeSnapshot & { fingerprint: string; system: Exclude<NetplaySystem, "ps1" | "nes">; encoding: "gzip-base64" | "base64" };
 
 const roomChannel = (roomId: number) => `netplay:${roomId}`;
@@ -95,6 +96,7 @@ export function registerNetplayServer(server: HttpServer) {
   const ps1InputHistory = new Map<number, RoomFrameHistory>();
   const universalInputHistory = new Map<string, RoomFrameHistory>();
   const roomInputDelays = new Map<number, number>();
+  const sessionEngine = new NetplaySessionEngine({ reconnectGraceMs: 30_000 });
   const memberInputRate = new Map<string, { count: number; windowStart: number }>();
 
   /** Authoritative snapshots are the largest objects on the server (up to ~4.5 MB
@@ -127,6 +129,8 @@ export function registerNetplayServer(server: HttpServer) {
     ps1InitialStateAcks.delete(roomId);
     famicomSnapshots.delete(roomId);
     pendingSessions.delete(roomId);
+    sessionEngine.close(roomId);
+    sessionEngine.destroy(roomId);
     roomFrameTrackers.delete(roomId);
     ps1InputHistory.delete(roomId);
     roomInputDelays.delete(roomId);
@@ -217,8 +221,17 @@ export function registerNetplayServer(server: HttpServer) {
     chatLimiter.prune(now);
     signalLimiter.prune(now);
     voiceStatusLimiter.prune(now);
+    const expiredSessions = sessionEngine.sweep(now);
+    for (const expired of expiredSessions) {
+      io.to(roomChannel(expired.roomId)).emit("netplay:session-state", {
+        sessionId: expired.sessionId,
+        state: expired.state,
+        reconnectDeadline: null,
+        reason: "reconnect-timeout",
+      });
+    }
     const report = registry.sweep(now);
-    if (droppedSnapshots > 0 || report.destroyedRooms > 0) {
+    if (droppedSnapshots > 0 || report.destroyedRooms > 0 || expiredSessions.length > 0) {
       console.log(`[netplay] sweep: rooms=${report.liveRooms} sockets=${report.liveSockets} destroyed=${report.destroyedRooms} snapshotsDropped=${droppedSnapshots} snapshotBytes=${report.snapshotBytes}`);
     }
   }, 15_000);
@@ -313,6 +326,17 @@ export function registerNetplayServer(server: HttpServer) {
       io.sockets.sockets.get(previousSocketId)?.disconnect(true);
     }
     activeMemberSockets.set(key, socket.id);
+    if (session.clientKind !== "room-ui") {
+      const active = sessionEngine.get(session.roomId);
+      if (active && active.playerMemberIds.includes(session.memberId) && active.state === "RECONNECTING" && sessionEngine.reconnect(session.roomId, session.memberId)) {
+        io.to(channel).emit("netplay:session-state", {
+          sessionId: active.sessionId,
+          state: active.state,
+          reconnectDeadline: null,
+          reconnectedMemberId: session.memberId,
+        });
+      }
+    }
     const onlineMemberIds = Array.from(io.sockets.adapter.rooms.get(channel) ?? [])
       .map((socketId) => (io.sockets.sockets.get(socketId)?.data.session as NetplaySession | undefined)?.memberId)
       .filter((memberId): memberId is number => typeof memberId === "number");
@@ -345,6 +369,10 @@ export function registerNetplayServer(server: HttpServer) {
       members: snapshot?.members ?? [],
       onlineMemberIds,
       inputDelay: roomInputDelays.get(session.roomId) ?? 3,
+      session: (() => {
+        const active = sessionEngine.get(session.roomId);
+        return active ? { sessionId: active.sessionId, state: active.state, seat: active.seats.get(session.memberId) ?? null } : null;
+      })(),
     });
     socket.to(channel).emit("netplay:presence", { memberId: session.memberId, displayName: session.displayName, online: true });
 
@@ -453,6 +481,17 @@ export function registerNetplayServer(server: HttpServer) {
         socket.emit("netplay:session-start-refused", { message: `ينبغي أن يتصل جميع اللاعبين النشطين (من ${range}) ويؤكدوا ملف اللعبة وإصدار المحرك نفسه قبل البدء.` });
         return;
       }
+      const started = sessionEngine.start({
+        roomId: session.roomId,
+        system,
+        hostMemberId: barrier.hostMemberId,
+        playerMemberIds: barrier.playerMemberIds,
+      });
+      if (!started.ok) {
+        socket.emit("netplay:session-start-refused", { message: "توجد جلسة لعب نشطة لهذه الغرفة. أنهِ الجلسة الحالية قبل بدء جلسة جديدة." });
+        return;
+      }
+
       ps1Snapshots.delete(session.roomId);
       ps1InitialStateAcks.delete(session.roomId);
       famicomSnapshots.delete(session.roomId);
@@ -462,8 +501,9 @@ export function registerNetplayServer(server: HttpServer) {
       ps1InputHistory.delete(session.roomId);
       universalInputHistory.delete(`${session.roomId}:${system}`);
       roomInputDelays.set(session.roomId, 3); // Reset to default for new session
-      pendingSessions.set(session.roomId, { system, barrier, createdAt: Date.now() });
-      io.to(channel).emit("netplay:session-start", { system, ...barrier, inputDelay: 3 });
+      pendingSessions.set(session.roomId, { system, barrier, sessionId: started.session.sessionId, createdAt: Date.now() });
+      io.to(channel).emit("netplay:session-start", { system, sessionId: started.session.sessionId, state: started.session.state, seats: Object.fromEntries(started.session.seats), ...barrier, inputDelay: 3 });
+      io.to(channel).emit("netplay:session-state", { sessionId: started.session.sessionId, state: started.session.state, reconnectDeadline: null });
     });
 
     socket.on("netplay:state", (payload: StatePayload) => {
@@ -572,7 +612,15 @@ export function registerNetplayServer(server: HttpServer) {
         socket.emit("netplay:ps1-waiting", { message: "Waiting for every active PS1 player to open the matching game file.", connectedCount: connectedPlayerIds.size, requiredCount: requiredMemberIds.length });
         return;
       }
-      io.to(channel).emit("netplay:ps1-session-bootstrap", { fingerprint, hostMemberId: pending.barrier.hostMemberId, playerMemberIds: requiredMemberIds, inputDelay: roomInputDelays.get(session.roomId) ?? 3 });
+      sessionEngine.beginSync(session.roomId);
+      const activeSession = sessionEngine.get(session.roomId);
+      if (!activeSession) return;
+      io.to(channel).emit("netplay:session-state", {
+        sessionId: activeSession.sessionId,
+        state: activeSession.state,
+        reconnectDeadline: null,
+      });
+      io.to(channel).emit("netplay:ps1-session-bootstrap", { sessionId: activeSession.sessionId, fingerprint, hostMemberId: pending.barrier.hostMemberId, playerMemberIds: requiredMemberIds, inputDelay: roomInputDelays.get(session.roomId) ?? 3 });
     });
 
     socket.on("netplay:ps1-input", (payload: Ps1InputPayload) => {
@@ -662,7 +710,11 @@ export function registerNetplayServer(server: HttpServer) {
         ps1InitialStateAcks.set(session.roomId, acknowledgements);
         const allGuestsApplied = pending.barrier.playerMemberIds.filter((memberId) => memberId !== pending.barrier.hostMemberId).every((memberId) => acknowledgements.has(memberId));
         if (allGuestsApplied) {
-          io.to(channel).emit("netplay:ps1-session-go", { fingerprint: socket.data.ps1Fingerprint, playerMemberIds: pending.barrier.playerMemberIds, startAt: Date.now() + 1500, inputDelay: roomInputDelays.get(session.roomId) ?? 3, serverTime: Date.now() });
+          if (!sessionEngine.markRunning(session.roomId)) return;
+          const activeSession = sessionEngine.get(session.roomId);
+          if (!activeSession) return;
+          io.to(channel).emit("netplay:session-state", { sessionId: activeSession.sessionId, state: activeSession.state, reconnectDeadline: null });
+          io.to(channel).emit("netplay:ps1-session-go", { sessionId: activeSession.sessionId, fingerprint: socket.data.ps1Fingerprint, playerMemberIds: pending.barrier.playerMemberIds, startAt: Date.now() + 1500, inputDelay: roomInputDelays.get(session.roomId) ?? 3, serverTime: Date.now() });
           ps1InitialStateAcks.delete(session.roomId);
           pendingSessions.delete(session.roomId);
         }
@@ -692,7 +744,11 @@ export function registerNetplayServer(server: HttpServer) {
         socket.emit("netplay:universal-waiting", { message: "Waiting for the other player to choose the same game file.", connectedCount: readyPlayerIds.size, requiredCount: requiredPlayerIds.length });
         return;
       }
-      io.to(channel).emit("netplay:universal-session-bootstrap", { system, fingerprint, hostMemberId: (host.data.session as NetplaySession).memberId, playerMemberIds: requiredPlayerIds, inputDelay: roomInputDelays.get(session.roomId) ?? 3 });
+      sessionEngine.beginSync(session.roomId);
+      const activeSession = sessionEngine.get(session.roomId);
+      if (!activeSession) return;
+      io.to(channel).emit("netplay:session-state", { sessionId: activeSession.sessionId, state: activeSession.state, reconnectDeadline: null });
+      io.to(channel).emit("netplay:universal-session-bootstrap", { sessionId: activeSession.sessionId, system, fingerprint, hostMemberId: (host.data.session as NetplaySession).memberId, playerMemberIds: requiredPlayerIds, inputDelay: roomInputDelays.get(session.roomId) ?? 3 });
     });
 
     socket.on("netplay:universal-input", (payload: Ps1InputPayload & { analogX?: unknown; analogY?: unknown }) => {
@@ -786,7 +842,11 @@ export function registerNetplayServer(server: HttpServer) {
         universalInitialStateAcks.set(key, acknowledgements);
         const guestIds = activePlayerIds.filter((memberId) => memberId !== pending.barrier.hostMemberId);
         if (guestIds.length >= 1 && guestIds.every((memberId) => acknowledgements.has(memberId))) {
-          io.to(channel).emit("netplay:universal-session-go", { system, fingerprint: socket.data.universalFingerprint, startAt: Date.now() + 1500, playerMemberIds: activePlayerIds, inputDelay: roomInputDelays.get(session.roomId) ?? 3, serverTime: Date.now() });
+          if (!sessionEngine.markRunning(session.roomId)) return;
+          const activeSession = sessionEngine.get(session.roomId);
+          if (!activeSession) return;
+          io.to(channel).emit("netplay:session-state", { sessionId: activeSession.sessionId, state: activeSession.state, reconnectDeadline: null });
+          io.to(channel).emit("netplay:universal-session-go", { sessionId: activeSession.sessionId, system, fingerprint: socket.data.universalFingerprint, startAt: Date.now() + 1500, playerMemberIds: activePlayerIds, inputDelay: roomInputDelays.get(session.roomId) ?? 3, serverTime: Date.now() });
           universalInitialStateAcks.delete(key);
           pendingSessions.delete(session.roomId);
         }
@@ -795,6 +855,20 @@ export function registerNetplayServer(server: HttpServer) {
 
     socket.on("disconnect", () => {
       if (activeMemberSockets.get(key) === socket.id) activeMemberSockets.delete(key);
+      if (session.clientKind !== "room-ui") {
+        const changed = sessionEngine.markDisconnected(session.roomId, session.memberId);
+        if (changed) {
+          const active = sessionEngine.get(session.roomId);
+          if (active) {
+            io.to(channel).emit("netplay:session-state", {
+              sessionId: active.sessionId,
+              state: active.state,
+              reconnectDeadline: active.reconnectDeadline,
+              disconnectedMemberId: session.memberId,
+            });
+          }
+        }
+      }
       registry.detachSocket(session.roomId, socket.id);
       const hasSiblingConnection = Array.from(activeMemberSockets.keys()).some((activeKey) => activeKey.startsWith(`${session.roomId}:${session.memberId}:`));
       if (!hasSiblingConnection) socket.to(channel).emit("netplay:presence", { memberId: session.memberId, displayName: session.displayName, online: false });
