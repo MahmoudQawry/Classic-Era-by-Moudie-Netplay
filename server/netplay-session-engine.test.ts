@@ -8,7 +8,9 @@ describe("NetplaySessionEngine", () => {
     expect(first.ok).toBe(true);
     if (!first.ok) return;
     expect(first.session.sessionId).toBeTruthy();
-    expect(first.session.state).toBe("READY_CHECK");
+    expect(first.session.state).toBe("WAITING");
+    expect(engine.transition(7, "READY_CHECK", 1500)).toBe(true);
+    expect(engine.get(7)?.state).toBe("READY_CHECK");
     expect(first.session.seats.get(10)).toBe(1);
     expect(first.session.seats.get(20)).toBe(2);
 
@@ -20,6 +22,7 @@ describe("NetplaySessionEngine", () => {
     const engine = new NetplaySessionEngine({ reconnectGraceMs: 30_000 });
     const started = engine.start({ roomId: 8, system: "n64", hostMemberId: 1, playerMemberIds: [1, 2], now: 1000 });
     expect(started.ok).toBe(true);
+    expect(engine.transition(8, "READY_CHECK", 1500)).toBe(true);
     expect(engine.beginSync(8, 2000)).toBe(true);
     expect(engine.markRunning(8, 3000)).toBe(true);
     expect(engine.markDisconnected(8, 2, 4000)).toBe(true);
