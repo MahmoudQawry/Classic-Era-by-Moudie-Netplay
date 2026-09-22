@@ -28,6 +28,7 @@ describe("NetPlay reliability safeguards", () => {
   it("enforces bounded adaptive delay and frame/state relay semantics", () => {
     const quality = read("modules/moudie-emulator/android/src/main/java/expo/modules/moudieemulator/NetplayQualityMonitor.kt");
     const server = read("server/netplay.ts");
+    const entrypoint = read("server/_core/index.ts");
     expect(quality).toContain("MAX_INPUT_DELAY_FRAMES");
     expect(quality).toContain("frames.coerceIn(2L, MAX_INPUT_DELAY_FRAMES)");
     expect(server).toContain("netplay:quality-probe");
@@ -36,6 +37,8 @@ describe("NetPlay reliability safeguards", () => {
     expect(server).toContain("netplay:universal-state-request");
     expect(server).toContain("duplicate-or-out-of-order");
     expect(server).toContain("netplay:host-migrated");
+    expect(entrypoint).toContain("registerNetplayServer(server);");
+    expect(entrypoint).not.toContain("registerUniversalNetplayServer(server);");
   });
 
   it("uses LiveKit SFU for group voice media", () => {
