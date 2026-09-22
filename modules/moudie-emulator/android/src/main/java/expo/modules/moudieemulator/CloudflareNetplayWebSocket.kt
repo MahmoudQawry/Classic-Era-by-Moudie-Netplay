@@ -57,12 +57,12 @@ class CloudflareNetplayWebSocket(
       reconnectionDelayMax=5000
       timeout=12000
       forceNew=true
-      auth=mapOf(
-        "roomId" to roomId,
-        "memberId" to memberId,
-        "memberToken" to memberToken,
-        "clientKind" to clientKind,
-      )
+      auth=hashMapOf<String,String>().apply{
+        put("roomId",roomId.toString())
+        put("memberId",memberId.toString())
+        put("memberToken",memberToken)
+        put("clientKind",clientKind)
+      }
     }
     socket=IO.socket(serverUrl.trimEnd('/'),options)
 
