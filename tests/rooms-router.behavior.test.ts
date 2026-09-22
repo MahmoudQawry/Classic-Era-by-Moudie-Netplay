@@ -152,7 +152,9 @@ vi.mock("../server/db", () => ({
   },
   activateRoom: async (roomId: number) => {
     const room = h.store.rooms.find((candidate) => candidate.id === roomId);
-    if (room) room.status = "active";
+    if (!room || room.status !== "waiting") return false;
+    room.status = "active";
+    return true;
   },
   getRoomMemberCount: async (roomId: number) => h.store.members.filter((member) => member.roomId === roomId).length,
   listPublicRooms: async (limit: number) =>
