@@ -62,8 +62,9 @@ export const RoomVoiceChat = forwardRef<RoomVoiceChatHandle, Props>(function Roo
     if (!memberId || remote.id === memberId || fallbackPeers.current.has(remote.id)) return;
     const pc = new RTCPeerConnection({ iceServers: STUN_SERVERS });
     fallbackPeers.current.set(remote.id, pc);
-    pc.onicecandidate = (event) => {
-      if (event.candidate) sendSignal(remote.id, { kind: "voice-candidate", candidate: { candidate: event.candidate.candidate, sdpMid: event.candidate.sdpMid, sdpMLineIndex: event.candidate.sdpMLineIndex } });
+    pc.onicecandidate = (event: any) => {
+      const candidate = event?.candidate;
+      if (candidate) sendSignal(remote.id, { kind: "voice-candidate", candidate: { candidate: candidate.candidate, sdpMid: candidate.sdpMid, sdpMLineIndex: candidate.sdpMLineIndex } });
     };
     pc.onconnectionstatechange = () => {
       if (pc.connectionState === "connected") setStatus("VOICE CONNECTED");
@@ -78,7 +79,7 @@ export const RoomVoiceChat = forwardRef<RoomVoiceChatHandle, Props>(function Roo
     if (stream) stream.getAudioTracks().forEach((track) => pc.addTrack(track, stream));
     else pc.addTransceiver("audio", { direction: "recvonly" });
     if (initiate) {
-      const offer = await pc.createOffer({});
+      const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
       sendSignal(remote.id, { kind: "voice-offer", description: { type: offer.type, sdp: offer.sdp ?? "" } });
     }
@@ -131,7 +132,7 @@ export const RoomVoiceChat = forwardRef<RoomVoiceChatHandle, Props>(function Roo
     if (!pc) return;
     if (signal.kind === "voice-offer" && signal.description?.sdp) {
       await pc.setRemoteDescription(new RTCSessionDescription({ type: signal.description.type === "answer" ? "answer" : "offer", sdp: signal.description.sdp }));
-      const answer = await pc.createAnswer({});
+      const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       sendSignal(fromMemberId, { kind: "voice-answer", description: { type: answer.type, sdp: answer.sdp ?? "" } });
     } else if (signal.kind === "voice-answer" && signal.description?.sdp) {
