@@ -39,6 +39,14 @@ describe("NetPlay reliability safeguards", () => {
     expect(server).toContain("netplay:host-migrated");
     expect(entrypoint).toContain("registerNetplayServer(server);");
     expect(entrypoint).not.toContain("registerUniversalNetplayServer(server);");
+    const sessionEngine = read("server/netplay-session-engine.ts");
+    expect(sessionEngine).toContain('"WAITING"');
+    expect(sessionEngine).toContain('"READY_CHECK"');
+    expect(sessionEngine).toContain('"SYNCING"');
+    expect(sessionEngine).toContain('"RUNNING"');
+    expect(sessionEngine).toContain('"RECONNECTING"');
+    expect(sessionEngine).toContain("migrateHost");
+    expect(sessionEngine).toContain("reconnectGraceMs");
   });
 
   it("uses LiveKit SFU for group voice media", () => {
