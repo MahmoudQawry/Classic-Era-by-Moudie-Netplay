@@ -32,6 +32,35 @@ jobs:
       - name: Normalize six-system types
         run: python3 scripts/patch-six-system-types.py
 
+      - name: Prepare canonical Android brand assets
+        run: |
+          python3 scripts/prepare-new-brand-assets.py
+          python3 scripts/repair-png-crc.py assets/images/classic-era-new-icon.png
+
+      - name: Install Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Bundle all six Android emulator cores
+        run: |
+          set -e
+          chmod +x scripts/sync-libretro-cores.sh
+          export ANDROID_NDK_HOME="$(find "$ANDROID_HOME/ndk" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
+          test -n "$ANDROID_NDK_HOME"
+          test -f "$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake"
+          echo "Using Android NDK: $ANDROID_NDK_HOME"
+          ./scripts/sync-libretro-cores.sh arm64-v8a
+          python3 scripts/patch-six-core-catalog.py
+          python3 scripts/patch-emulator-runtime.py
+          for core in             fceumm_libretro_android.so             pcsx_rearmed_libretro_android.so             ppsspp_libretro_android.so             genesis_plus_gx_libretro_android.so             parallel_n64_libretro_android.so             play_libretro_android.so; do
+            test -s "modules/moudie-emulator/android/src/main/jniLibs/arm64-v8a/$core"
+          done
+          test -s modules/moudie-emulator/android/src/main/assets/ppsspp/ppge_atlas.zim
+          grep -q '"n64"' modules/moudie-emulator/android/src/main/java/expo/modules/moudieemulator/NativeCoreCatalog.kt
+          grep -q '"ps2"' modules/moudie-emulator/android/src/main/java/expo/modules/moudieemulator/NativeCoreCatalog.kt
+
       - name: TypeScript check
         run: pnpm check
 
@@ -46,6 +75,18 @@ jobs:
           chmod +x android/gradlew
           cd android
           ./gradlew :app:compileDebugKotlin --no-daemon -Dorg.gradle.jvmargs="-Xmx3g" -Dorg.gradle.daemon=false
+
+      - name: Verify six emulator cores are inside the APK
+        run: |
+          set -e
+          APK="android/app/build/outputs/apk/release/app-release.apk"
+          unzip -l "$APK" | grep -q 'lib/arm64-v8a/fceumm_libretro_android.so'
+          unzip -l "$APK" | grep -q 'lib/arm64-v8a/pcsx_rearmed_libretro_android.so'
+          unzip -l "$APK" | grep -q 'lib/arm64-v8a/ppsspp_libretro_android.so'
+          unzip -l "$APK" | grep -q 'lib/arm64-v8a/genesis_plus_gx_libretro_android.so'
+          unzip -l "$APK" | grep -q 'lib/arm64-v8a/parallel_n64_libretro_android.so'
+          unzip -l "$APK" | grep -q 'lib/arm64-v8a/play_libretro_android.so'
+          echo "All six emulator cores are packaged in the release APK."
 
       - name: Build Android release APK
         run: |
