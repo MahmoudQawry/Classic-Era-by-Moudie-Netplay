@@ -1,12 +1,6 @@
 import { StyleSheet, View } from "react-native";
 
-/**
- * Decorative layer used by the legacy screens.
- *
- * The actual Classic Era background is now rendered globally by ScreenContainer.
- * This layer is intentionally transparent so it never hides the canonical
- * background image with an opaque legacy canvas.
- */
+/** Transparent decorative accents over the canonical MN circuit background. */
 export function NeonCircuitBackground() {
   return (
     <View pointerEvents="none" style={styles.canvas}>
@@ -20,7 +14,7 @@ export function NeonCircuitBackground() {
 
 const styles = StyleSheet.create({
   canvas: { ...StyleSheet.absoluteFillObject, overflow: "hidden", backgroundColor: "transparent" },
-  glow: { position: "absolute", borderRadius: 180, opacity: 0.10 },
+  glow: { position: "absolute", borderRadius: 180, opacity: 0.08 },
   glowPurple: { width: 340, height: 340, backgroundColor: "#7025CB", top: -200, right: -150 },
   glowCyan: { width: 280, height: 280, backgroundColor: "#067EAD", bottom: -165, left: -135 },
   dot: { position: "absolute", width: 8, height: 8, borderRadius: 8, shadowOpacity: 1, shadowRadius: 10, elevation: 3 },
