@@ -4,31 +4,16 @@ import { SafeAreaView, type Edge } from "react-native-safe-area-context";
 import { cn } from "@/lib/utils";
 
 export interface ScreenContainerProps extends ViewProps {
-  /**
-   * SafeArea edges to apply. Defaults to ["top", "left", "right"].
-   * Bottom is typically handled by Tab Bar.
-   */
   edges?: Edge[];
-  /**
-   * Tailwind className for the content area.
-   */
   className?: string;
-  /**
-   * Additional className for the outer container (background layer).
-   */
   containerClassName?: string;
-  /**
-   * Additional className for the SafeAreaView (content layer).
-   */
   safeAreaClassName?: string;
 }
 
 /**
- * Global app screen container.
- *
- * The supplied Classic Era circuit background is intentionally kept faint and
- * slightly softened so buttons, cards, text, and emulator controls remain easy
- * to read on every interface that uses ScreenContainer.
+ * Canonical Classic Era screen shell.
+ * Every React Native interface uses the supplied MN circuit image as its
+ * actual background; legacy neon canvases remain transparent overlays only.
  */
 export function ScreenContainer({
   children,
@@ -40,23 +25,15 @@ export function ScreenContainer({
   ...props
 }: ScreenContainerProps) {
   return (
-    <View
-      className={cn("flex-1", "bg-background", containerClassName)}
-      {...props}
-    >
+    <View className={cn("flex-1", "bg-background", containerClassName)} {...props}>
       <Image
         source={require("@/assets/images/classic-era-ui-background.jpg")}
         style={styles.background}
         resizeMode="cover"
-        blurRadius={3}
         accessibilityIgnoresInvertColors
       />
       <View pointerEvents="none" style={styles.dim} />
-      <SafeAreaView
-        edges={edges}
-        className={cn("flex-1", safeAreaClassName)}
-        style={style}
-      >
+      <SafeAreaView edges={edges} className={cn("flex-1", safeAreaClassName)} style={style}>
         <View className={cn("flex-1", className)}>{children}</View>
       </SafeAreaView>
     </View>
@@ -70,7 +47,7 @@ const styles = {
     right: 0,
     bottom: 0,
     left: 0,
-    opacity: 0.24,
+    opacity: 0.52,
   },
   dim: {
     position: "absolute" as const,
@@ -78,6 +55,6 @@ const styles = {
     right: 0,
     bottom: 0,
     left: 0,
-    backgroundColor: "rgba(3, 10, 20, 0.52)",
+    backgroundColor: "rgba(2, 9, 18, 0.30)",
   },
 };
