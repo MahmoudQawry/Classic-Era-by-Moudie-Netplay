@@ -622,15 +622,18 @@ export function registerNetplayServer(server: HttpServer) {
         socket.emit("netplay:ps1-waiting", { message: "Waiting for every active PS1 player to open the matching game file.", connectedCount: connectedPlayerIds.size, requiredCount: requiredMemberIds.length });
         return;
       }
-      sessionEngine.beginSync(session.roomId);
+      if (!sessionEngine.beginSync(session.roomId)) return;
       const activeSession = sessionEngine.get(session.roomId);
       if (!activeSession) return;
+      const activeHostMemberId = activeSession.hostMemberId;
+      if (!requiredMemberIds.includes(activeHostMemberId) || !connectedPlayerIds.has(activeHostMemberId)) return;
       io.to(channel).emit("netplay:session-state", {
         sessionId: activeSession.sessionId,
         state: activeSession.state,
         reconnectDeadline: null,
+        hostMemberId: activeHostMemberId,
       });
-      io.to(channel).emit("netplay:ps1-session-bootstrap", { sessionId: activeSession.sessionId, fingerprint, hostMemberId: pending.barrier.hostMemberId, playerMemberIds: requiredMemberIds, inputDelay: roomInputDelays.get(session.roomId) ?? 3 });
+      io.to(channel).emit("netplay:ps1-session-bootstrap", { sessionId: activeSession.sessionId, fingerprint, hostMemberId: activeHostMemberId, playerMemberIds: requiredMemberIds, inputDelay: roomInputDelays.get(session.roomId) ?? 3 });
     });
 
     socket.on("netplay:ps1-input", (payload: Ps1InputPayload) => {
@@ -730,7 +733,9 @@ export function registerNetplayServer(server: HttpServer) {
         const acknowledgements = ps1InitialStateAcks.get(session.roomId) ?? new Set<number>();
         acknowledgements.add(session.memberId);
         ps1InitialStateAcks.set(session.roomId, acknowledgements);
-        const allGuestsApplied = pending.barrier.playerMemberIds.filter((memberId) => memberId !== pending.barrier.hostMemberId).every((memberId) => acknowledgements.has(memberId));
+        const activeSession = sessionEngine.get(session.roomId);
+        if (!activeSession) return;
+        const allGuestsApplied = pending.barrier.playerMemberIds.filter((memberId) => memberId !== activeSession.hostMemberId).every((memberId) => acknowledgements.has(memberId));
         if (allGuestsApplied) {
           if (!sessionEngine.markRunning(session.roomId)) return;
           const activeSession = sessionEngine.get(session.roomId);
@@ -761,16 +766,17 @@ export function registerNetplayServer(server: HttpServer) {
         })
         .map((peer) => (peer.data.session as NetplaySession).memberId));
       const requiredPlayerIds = pending.barrier.playerMemberIds;
-      const host = peers.find((peer) => (peer.data.session as NetplaySession | undefined)?.role === "host" && readyPlayerIds.has((peer.data.session as NetplaySession).memberId));
-      if (!host || requiredPlayerIds.some((memberId) => !readyPlayerIds.has(memberId))) {
+      if (requiredPlayerIds.some((memberId) => !readyPlayerIds.has(memberId))) {
         socket.emit("netplay:universal-waiting", { message: "Waiting for the other player to choose the same game file.", connectedCount: readyPlayerIds.size, requiredCount: requiredPlayerIds.length });
         return;
       }
-      sessionEngine.beginSync(session.roomId);
+      if (!sessionEngine.beginSync(session.roomId)) return;
       const activeSession = sessionEngine.get(session.roomId);
       if (!activeSession) return;
-      io.to(channel).emit("netplay:session-state", { sessionId: activeSession.sessionId, state: activeSession.state, reconnectDeadline: null });
-      io.to(channel).emit("netplay:universal-session-bootstrap", { sessionId: activeSession.sessionId, system, fingerprint, hostMemberId: (host.data.session as NetplaySession).memberId, playerMemberIds: requiredPlayerIds, inputDelay: roomInputDelays.get(session.roomId) ?? 3 });
+      const activeHostMemberId = activeSession.hostMemberId;
+      if (!requiredPlayerIds.includes(activeHostMemberId) || !readyPlayerIds.has(activeHostMemberId)) return;
+      io.to(channel).emit("netplay:session-state", { sessionId: activeSession.sessionId, state: activeSession.state, reconnectDeadline: null, hostMemberId: activeHostMemberId });
+      io.to(channel).emit("netplay:universal-session-bootstrap", { sessionId: activeSession.sessionId, system, fingerprint, hostMemberId: activeHostMemberId, playerMemberIds: requiredPlayerIds, inputDelay: roomInputDelays.get(session.roomId) ?? 3 });
     });
 
     socket.on("netplay:universal-input", (payload: Ps1InputPayload & { analogX?: unknown; analogY?: unknown }) => {
@@ -874,7 +880,9 @@ export function registerNetplayServer(server: HttpServer) {
         const acknowledgements = universalInitialStateAcks.get(key) ?? new Set<number>();
         acknowledgements.add(session.memberId);
         universalInitialStateAcks.set(key, acknowledgements);
-        const guestIds = activePlayerIds.filter((memberId) => memberId !== pending.barrier.hostMemberId);
+        const activeSession = sessionEngine.get(session.roomId);
+        if (!activeSession) return;
+        const guestIds = activePlayerIds.filter((memberId) => memberId !== activeSession.hostMemberId);
         if (guestIds.length >= 1 && guestIds.every((memberId) => acknowledgements.has(memberId))) {
           if (!sessionEngine.markRunning(session.roomId)) return;
           const activeSession = sessionEngine.get(session.roomId);
