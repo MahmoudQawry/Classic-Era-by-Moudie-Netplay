@@ -48,7 +48,7 @@ export function ScreenContainer({
         source={require("@/assets/images/classic-era-ui-background.jpg")}
         style={styles.background}
         resizeMode="cover"
-        blurRadius={1}
+        blurRadius={3}
         accessibilityIgnoresInvertColors
       />
       <View pointerEvents="none" style={styles.dim} />
