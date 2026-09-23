@@ -34,6 +34,7 @@ jobs:
 
       - name: Prepare canonical Android brand assets
         run: |
+          python3 -m pip install --user --disable-pip-version-check pillow
           python3 scripts/prepare-new-brand-assets.py
           python3 scripts/repair-png-crc.py assets/images/classic-era-new-icon.png
 
