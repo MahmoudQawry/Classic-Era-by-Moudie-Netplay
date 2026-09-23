@@ -69,3 +69,13 @@ MIT — راجع [LICENSE](LICENSE).
 
 ---
 صُنع بحب لذكريات الطفولة 🕹️
+
+
+## Official community links
+
+- Discord: https://discord.gg/9KtKFVH5m
+- Telegram: https://t.me/ClassicEraByMoudieNetplay
+
+The mobile client exposes both official destinations from Settings. Bot credentials remain server-side only.
+
+See `docs/production-readiness.md` and `docs/community-integration.md` for the production release gates and social integration contract.
