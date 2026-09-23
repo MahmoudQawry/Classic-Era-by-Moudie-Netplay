@@ -1,10 +1,11 @@
 import * as DocumentPicker from "expo-document-picker";
 import { useEffect, useState } from "react";
-import { Alert, Image, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Image, Linking, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from "react-native";
 import { BrandLogo } from "@/components/brand-logo";
 import { ScreenContainer } from "@/components/screen-container";
 import { haptic } from "@/lib/haptics";
 import { useLanguage } from "@/lib/language";
+import { COMMUNITY_LINKS } from "@/lib/community-links";
 import { ensureProfileId, getProfileAvatar, getProfileName, saveProfileAvatar, saveProfileId, saveProfileName } from "@/lib/room-storage";
 
 const languages = [{ id: "ar", flag: "🇪🇬", label: "العربية" }, { id: "en", flag: "🇺🇸", label: "English" }, { id: "fr", flag: "🇫🇷", label: "Français" }] as const;
@@ -13,6 +14,14 @@ export default function SettingsScreen() {
   const [name, setName] = useState(""); const [userId, setUserId] = useState(""); const [avatar, setAvatar] = useState<string | null>(null); const { language, setLanguage, t } = useLanguage();
   useEffect(() => { Promise.all([getProfileName(), ensureProfileId(), getProfileAvatar()]).then(([savedName, id, savedAvatar]) => { if (savedName) setName(savedName); setUserId(id); setAvatar(savedAvatar); }); }, []);
   const save = async () => { if (name.trim().length < 2) { haptic.error(); Alert.alert(t("nameShort"), t("nameShortText")); return; } await saveProfileName(name.trim()); await saveProfileId(userId); haptic.success(); Alert.alert(t("saved"), t("savedText")); };
+  const openCommunity = async (url: string) => {
+    try {
+      if (!(await Linking.canOpenURL(url))) throw new Error("unsupported");
+      await Linking.openURL(url);
+    } catch {
+      Alert.alert(t("community"), t("communityOpenError"));
+    }
+  };
   const chooseAvatar = async () => { const result = await DocumentPicker.getDocumentAsync({ type: "image/*", copyToCacheDirectory: true }); if (!result.canceled && result.assets[0]?.uri) { setAvatar(result.assets[0].uri); await saveProfileAvatar(result.assets[0].uri); } };
   const shareId = () => Share.share({ message: `${t("shareText")} ${userId}.` }); const selectLanguage = async (id: "ar" | "en" | "fr") => { await setLanguage(id); };
   return <ScreenContainer className="px-5"><ScrollView contentContainerStyle={styles.content}>
@@ -23,7 +32,18 @@ export default function SettingsScreen() {
     <Text style={styles.label}>{t("userId")}</Text><TextInput value={userId} onChangeText={setUserId} placeholder="MN-3xxxxxx" placeholderTextColor="#74869C" style={styles.input} autoCapitalize="characters" maxLength={16} />
     <Pressable onPress={save} style={({ pressed }) => [styles.button, pressed && styles.pressed]}><Text style={styles.buttonText}>{t("save")}</Text></Pressable>
     <Text style={styles.section}>{t("language")}</Text><View style={styles.languageRow}>{languages.map((item) => <Pressable key={item.id} onPress={() => selectLanguage(item.id)} style={[styles.language, language === item.id && styles.languageActive]}><Text style={styles.flag}>{item.flag}</Text><Text style={styles.languageText}>{item.label}</Text></Pressable>)}</View>
-    <View style={styles.menu}>{["about", "policy", "privacyPolicy", "community", "contact", "help", "suggestions"].map((key) => <Pressable key={key} onPress={() => Alert.alert(t(key), t("pendingText"))} style={styles.menuItem}><Text style={styles.menuText}>{t(key)}</Text><Text style={styles.chevron}>›</Text></Pressable>)}</View>
+    <View style={styles.menu}>{["about", "policy", "privacyPolicy", "contact", "help", "suggestions"].map((key) => <Pressable key={key} onPress={() => Alert.alert(t(key), t("pendingText"))} style={styles.menuItem}><Text style={styles.menuText}>{t(key)}</Text><Text style={styles.chevron}>›</Text></Pressable>)}</View>
+    <Text style={styles.section}>{t("community")}</Text>
+    <View style={styles.communityCard}>
+      <Text style={styles.communityTitle}>{t("communityTitle")}</Text>
+      <Text style={styles.communityText}>{t("communityText")}</Text>
+      <Pressable onPress={() => void openCommunity(COMMUNITY_LINKS.discord)} style={({ pressed }) => [styles.communityButton, styles.discordButton, pressed && styles.pressed]}>
+        <Text style={styles.communityButtonText}>Discord</Text><Text style={styles.communityUrl}>{COMMUNITY_LINKS.discordLabel}</Text>
+      </Pressable>
+      <Pressable onPress={() => void openCommunity(COMMUNITY_LINKS.telegram)} style={({ pressed }) => [styles.communityButton, styles.telegramButton, pressed && styles.pressed]}>
+        <Text style={styles.communityButtonText}>Telegram</Text><Text style={styles.communityUrl}>{COMMUNITY_LINKS.telegramLabel}</Text>
+      </Pressable>
+    </View>
     <View style={styles.privacy}><Text style={styles.privacyTitle}>{t("localPrivacy")}</Text><Text style={styles.privacyText}>{t("privacyText")}</Text></View>
     <View style={styles.brandBlock}><BrandLogo size={58} /><Text style={styles.brandName}>{t("brandName")}</Text><Text style={styles.slogan}>Old Equal Gold</Text></View>
   </ScrollView></ScreenContainer>;
