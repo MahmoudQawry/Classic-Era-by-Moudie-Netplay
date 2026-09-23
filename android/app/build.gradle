@@ -89,7 +89,7 @@ android {
 
     namespace 'com.app.moudienetplay'
     defaultConfig {
-        applicationId 'com.app.moudienetplay'
+        applicationId (findProperty('android.applicationId') ?: 'com.app.moudienetplay')
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 53
