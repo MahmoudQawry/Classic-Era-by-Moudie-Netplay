@@ -81,7 +81,7 @@ const config: ExpoConfig = {
     "@livekit/react-native-expo-plugin",
     [
       "expo-build-properties",
-      { android: { buildArchs: ["arm64-v8a"], minSdkVersion: 24 } },
+      { android: { buildArchs: ["arm64-v8a"], minSdkVersion: 26 } },
     ],
   ],
   experiments: { typedRoutes: true, reactCompiler: true },
