@@ -47,6 +47,20 @@ jobs:
           cd android
           ./gradlew :app:compileDebugKotlin --no-daemon -Dorg.gradle.jvmargs="-Xmx3g" -Dorg.gradle.daemon=false
 
+      - name: Build Android release APK
+        run: |
+          chmod +x android/gradlew
+          cd android
+          ./gradlew :app:assembleRelease --no-daemon -Dorg.gradle.jvmargs="-Xmx3g" -Dorg.gradle.daemon=false
+
+      - name: Upload Android release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: classic-era-android-release
+          path: android/app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Server health smoke test
         run: |
           set -e
