@@ -419,7 +419,8 @@ export function registerNetplayServer(server: HttpServer) {
           const peer = io.sockets.sockets.get(peerId);
           if (!peer) continue;
           const peerSession = peer.data.session as NetplaySession | undefined;
-          if (peerSession?.role === "host") {
+          const activeSession = sessionEngine.get(session.roomId);
+          if (peerSession && activeSession?.hostMemberId === peerSession.memberId) {
             peer.emit("netplay:desync-resync-request", { fromMemberId: session.memberId, frame });
             break;
           }
@@ -712,7 +713,8 @@ export function registerNetplayServer(server: HttpServer) {
         const peer = io.sockets.sockets.get(peerId);
         if (!peer) continue;
         const peerSession = peer.data.session as NetplaySession | undefined;
-        if (peerSession?.role === "host" && peer.data.ps1Fingerprint === fingerprint) {
+        const activeSession = sessionEngine.get(session.roomId);
+        if (peerSession && activeSession?.hostMemberId === peerSession.memberId && peer.data.ps1Fingerprint === fingerprint) {
           peer.emit("netplay:ps1-state-request", { fromMemberId: session.memberId });
           break;
         }
@@ -849,7 +851,8 @@ export function registerNetplayServer(server: HttpServer) {
         const peer = io.sockets.sockets.get(peerId);
         if (!peer) continue;
         const peerSession = peer.data.session as NetplaySession | undefined;
-        if (peerSession?.role === "host" && peerSession.clientKind === "universal-player" && peer.data.universalSystem === system && peer.data.universalFingerprint === fingerprint) {
+        const activeSession = sessionEngine.get(session.roomId);
+        if (peerSession && activeSession?.hostMemberId === peerSession.memberId && peerSession.clientKind === "universal-player" && peer.data.universalSystem === system && peer.data.universalFingerprint === fingerprint) {
           peer.emit("netplay:universal-state-request", { fromMemberId: session.memberId });
           break;
         }
