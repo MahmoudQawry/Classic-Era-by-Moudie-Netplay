@@ -48,6 +48,9 @@ describe("NetPlay reliability safeguards", () => {
     expect(sessionEngine).toContain("migrateHost");
     expect(sessionEngine).toContain("reconnectGraceMs");
     expect(server).toContain("activeSession?.hostMemberId === peerSession.memberId");
+    expect(server).toContain("const activeHostMemberId = activeSession.hostMemberId");
+    expect(server).toContain("hostMemberId: activeHostMemberId");
+    expect(server).toContain("memberId !== activeSession.hostMemberId");
   });
 
   it("uses LiveKit SFU for group voice media", () => {
