@@ -5,6 +5,8 @@ const bundleId = "com.app.moudienetplay";
 const timestamp = bundleId.split(".").pop()?.replace(/^t/, "") ?? "";
 const schemeFromBundleId = `classicera${timestamp}`;
 
+const DEFAULT_NETPLAY_API_URL = "https://moudienet-7h7tawv.manus.space";
+
 const env = {
   portal: process.env.EXPO_PUBLIC_OAUTH_PORTAL_URL ?? "",
   server: process.env.EXPO_PUBLIC_OAUTH_SERVER_URL ?? "",
@@ -18,11 +20,11 @@ const env = {
 };
 
 const configuredRelayUrls = env.netplayServiceUrls.split(",").map((url) => url.trim().replace(/\/$/, "")).filter(Boolean);
-const NATIVE_NETPLAY_SERVICE_URL = (env.netplayServiceUrl || configuredRelayUrls[0] || env.apiBaseUrl || "").replace(/\/$/, "");
+const NATIVE_NETPLAY_SERVICE_URL = (env.netplayServiceUrl || configuredRelayUrls[0] || env.apiBaseUrl || DEFAULT_NETPLAY_API_URL).replace(/\/$/, "");
 const NATIVE_NETPLAY_SERVICE_URLS = Array.from(new Set([NATIVE_NETPLAY_SERVICE_URL, ...configuredRelayUrls, env.apiBaseUrl.replace(/\/$/, "")].filter(Boolean)));
 
 // The primary room/API authority is the main Express backend. Dedicated realtime URLs are opt-in.
-const NATIVE_API_FALLBACK_URL = env.apiBaseUrl || NATIVE_NETPLAY_SERVICE_URL;
+const NATIVE_API_FALLBACK_URL = env.apiBaseUrl || NATIVE_NETPLAY_SERVICE_URL || DEFAULT_NETPLAY_API_URL;
 // If a dedicated relay is absent, a configured API origin is a valid room-service fallback.
 const NATIVE_API_RUNTIME_FALLBACK_URL = (env.apiBaseUrl || NATIVE_API_FALLBACK_URL).replace(/\/$/, "");
 
@@ -41,7 +43,7 @@ export function getApiBaseUrl(): string {
     const apiHostname = hostname.replace(/^8081-/, "3000-");
     if (apiHostname !== hostname) return `${protocol}//${apiHostname}`;
   }
-  return NATIVE_API_RUNTIME_FALLBACK_URL;
+  return NATIVE_API_RUNTIME_FALLBACK_URL || DEFAULT_NETPLAY_API_URL;
 }
 
 export function getNetplayServiceUrl(): string { return NATIVE_NETPLAY_SERVICE_URL; }
