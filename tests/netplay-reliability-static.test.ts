@@ -35,6 +35,7 @@ describe("NetPlay reliability safeguards", () => {
     expect(server).toContain("netplay:frame-rejected");
     expect(server).toContain("netplay:ps1-state-request");
     expect(server).toContain("netplay:universal-state-request");
+    expect(server).toContain("registry.start();");
     expect(server).toContain("duplicate-or-out-of-order");
     expect(server).toContain("netplay:host-migrated");
     expect(entrypoint).toContain("registerNetplayServer(server);");
