@@ -114,6 +114,9 @@ export function registerNetplayServer(server: HttpServer) {
     snapshotBudgetBytes: SNAPSHOT_BUDGET_BYTES,
     intervalMs: 15_000,
   });
+  // Start the real cleanup loop. Without this call, the lifecycle registry
+  // only collected state in memory and never released idle rooms/snapshots.
+  registry.start();
   const chatLimiter = new SlidingWindowLimiter(5, 5_000);
   const signalLimiter = new SlidingWindowLimiter(60, 10_000);
   const voiceStatusLimiter = new SlidingWindowLimiter(6, 1_000);
