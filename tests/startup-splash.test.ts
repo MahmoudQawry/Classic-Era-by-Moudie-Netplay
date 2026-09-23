@@ -53,7 +53,7 @@ describe("Android startup splash safeguards", () => {
     expect(intro).not.toContain("MaterialCommunityIcons");
     expect(intro).not.toContain("classic-era-official-boot.mp4");
     expect(intro).not.toContain("Animated.sequence");
-    expect(intro).not.toContain("classic-era-new-poster.png");
+    expect(intro).toContain("classic-era-new-poster.png");
     expect(intro).toContain("onPress={() => setIntroVisible(false)}");
     expect(intro).toContain("const [introVisible, setIntroVisible] = useState(true)");
     expect(intro).toContain("{children}");
