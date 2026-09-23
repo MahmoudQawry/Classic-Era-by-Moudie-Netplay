@@ -52,6 +52,7 @@ describe("NetPlay reliability safeguards", () => {
     expect(server).toContain("const activeHostMemberId = activeSession.hostMemberId");
     expect(server).toContain("hostMemberId: activeHostMemberId");
     expect(server).toContain("memberId !== activeSession.hostMemberId");
+    expect(server).toContain("const stableSeat = activeSession?.seats.get(session.memberId);");
   });
 
   it("uses LiveKit SFU for group voice media", () => {
