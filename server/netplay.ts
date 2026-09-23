@@ -362,9 +362,12 @@ export function registerNetplayServer(server: HttpServer) {
         return left.id - right.id;
       });
     const maxPlayers = snapshot ? roomCapacityFor(snapshot.room.system as NetplaySystem).maxPlayers : 0;
+    const activeSession = sessionEngine.get(session.roomId);
     const assignedPlayer: NetplayPlayerSeat | null = session.role === "spectator"
       ? null
       : (() => {
+          const stableSeat = activeSession?.seats.get(session.memberId);
+          if (stableSeat !== undefined && stableSeat <= maxPlayers) return stableSeat as NetplayPlayerSeat;
           const index = activeSeats.findIndex((member) => member.id === session.memberId);
           return index >= 0 && index < maxPlayers ? (index + 1) as NetplayPlayerSeat : null;
         })();
