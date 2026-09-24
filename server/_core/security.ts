@@ -36,6 +36,16 @@ export function validateProductionEnvironment() {
     }
   }
 
+  const discord = ["DISCORD_CLIENT_ID", "DISCORD_CLIENT_SECRET", "DISCORD_REDIRECT_URI"];
+  const configuredDiscord = discord.filter(hasValue);
+  if (configuredDiscord.length > 0 && configuredDiscord.length !== discord.length) {
+    throw new Error("DISCORD_CLIENT_ID, DISCORD_CLIENT_SECRET and DISCORD_REDIRECT_URI must be configured together.");
+  }
+  if (hasValue("DISCORD_CLIENT_ID") && hasValue("DISCORD_REDIRECT_URI")) {
+    const redirect = new URL(process.env.DISCORD_REDIRECT_URI!);
+    if (redirect.protocol !== "https:") throw new Error("Production DISCORD_REDIRECT_URI must use HTTPS.");
+  }
+
   const livekit = ["LIVEKIT_URL", "LIVEKIT_API_KEY", "LIVEKIT_API_SECRET"];
   const configuredLiveKit = livekit.filter(hasValue);
   if (configuredLiveKit.length > 0 && configuredLiveKit.length !== livekit.length) {
