@@ -40,6 +40,22 @@ export async function upsertUser(user: InsertUser): Promise<void> {
   } catch (error) { console.error("[Database] Failed to upsert user:", error); throw error; }
 }
 
+export async function linkDiscordAccount(openId: string, discordUserId: string) {
+  const db = await getDb();
+  if (!db) throw new Error("خدمة الحساب غير متاحة حالياً.");
+  await db.update(users)
+    .set({ discordUserId, discordLinkedAt: new Date() })
+    .where(eq(users.openId, openId));
+}
+
+export async function unlinkDiscordAccount(openId: string) {
+  const db = await getDb();
+  if (!db) throw new Error("خدمة الحساب غير متاحة حالياً.");
+  await db.update(users)
+    .set({ discordUserId: null, discordLinkedAt: null })
+    .where(eq(users.openId, openId));
+}
+
 export async function getUserByOpenId(openId: string) {
   const db = await getDb();
   if (!db) { console.warn("[Database] Cannot get user: database not available"); return undefined; }
