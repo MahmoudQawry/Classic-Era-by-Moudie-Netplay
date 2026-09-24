@@ -14,7 +14,7 @@
 
 Discord Social SDK 1.10+ supports Android and provides Rich Presence, account linking, activity invites, friends, lobbies, and communication capabilities. The SDK is distributed from the Discord Developer Portal as native SDK artifacts; it is not a normal npm dependency.
 
-The repository therefore deliberately does not contain a fabricated or third-party replacement for discordpp. Before enabling native Rich Presence, Activity Invites, Friends, Discord Lobby, or Discord Voice in the APK:
+The repository deliberately does not commit the raw Discord SDK archive. The Android AAR is a proprietary SDK artifact distributed under Discord's Social SDK Terms; it must be used only as integrated into the application, not redistributed as a standalone repository/release asset. GitHub browser uploads are also limited to 25 MiB, while this official AAR is larger. The correct workflow is to keep the official AAR in the developer's controlled build environment and inject it into android/app/libs/ only for the native build. Before enabling native Rich Presence, Activity Invites, Friends, Discord Lobby, or Discord Voice in the APK:
 
 1. Create the Discord application in the Discord Developer Portal.
 2. Configure the Social SDK section and obtain the Android SDK package.
