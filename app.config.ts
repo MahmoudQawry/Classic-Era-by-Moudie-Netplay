@@ -55,6 +55,7 @@ const config: ExpoConfig = {
       "ACCESS_NETWORK_STATE",
       "CHANGE_NETWORK_STATE",
       "BLUETOOTH",
+      "BLUETOOTH_ADMIN",
       "BLUETOOTH_CONNECT",
     ],
     intentFilters: [{
