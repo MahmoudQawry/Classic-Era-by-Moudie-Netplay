@@ -11,6 +11,7 @@ import { trpc } from "@/lib/trpc";
 import { useLanguage } from "@/lib/language";
 import { useRealtimeRoomSnapshot } from "@/lib/use-realtime-room-snapshot";
 import { roomCapacityFor } from "@/shared/room-capacity";
+import { updateDiscordRichPresence } from "@/lib/discord-social";
 
 const SYSTEM_LABEL: Record<string, string> = { psp: "PSP", nes: "Famicom / NES", sega: "Sega Genesis", ps1: "PlayStation 1", n64: "Nintendo 64", ps2: "PlayStation 2" };
 type MediaToken = { configured: boolean; url?: string; roomName?: string; token?: string; canPublish?: boolean; message?: string; teamMediaToken?: MediaToken | null };
@@ -56,6 +57,17 @@ export default function RoomScreen() {
   const readyCount = snapshot.members.filter((member) => member.role !== "spectator" && member.isReady).length;
   const playerCount = snapshot.members.filter((member) => member.role !== "spectator").length; const spectatorCount = snapshot.members.filter((member) => member.role === "spectator").length;
   const nativeRoom = system === "sega" || system === "n64" || system === "ps2";
+
+  useEffect(() => {
+    if (Platform.OS === "web") return;
+    updateDiscordRichPresence(
+      snapshot.room.name || "Classic Era",
+      `${SYSTEM_LABEL[snapshot.room.system] ?? snapshot.room.system.toUpperCase()} · ${snapshot.room.status === "waiting" ? "Waiting room" : "Playing"}`,
+      `classic-era-room-${snapshot.room.id}`,
+      Math.max(1, playerCount),
+      Math.max(1, capacity.maxPlayers),
+    );
+  }, [snapshot.room.id, snapshot.room.name, snapshot.room.status, snapshot.room.system, playerCount, capacity.maxPlayers]);
   return <ScreenContainer className="px-5" edges={["top", "bottom", "left", "right"]}><ScrollView contentContainerStyle={styles.content}>
     <View style={styles.topRow}><Pressable onPress={() => router.replace("/")} style={({ pressed }) => [styles.back, pressed && styles.pressed]}><Text style={styles.backText}>‹ {t("lobby")}</Text></Pressable><View style={styles.live}><View style={styles.liveDot} /><Text style={styles.liveText}>{snapshot.room.status === "waiting" ? t("rmWaiting") : t("rmActive")}</Text></View></View>
     <Text style={styles.system}>{SYSTEM_LABEL[snapshot.room.system] ?? snapshot.room.system.toUpperCase()}</Text><Text style={styles.title}>{snapshot.room.name}</Text><Text style={styles.caption}>{t("rmPrivateRoom")} · {playerCount}/{capacity.maxPlayers} {t("lbPlayersShort")} · {spectatorCount}/{capacity.maxSpectators} {t("lbSpectatorsShort")}</Text>
