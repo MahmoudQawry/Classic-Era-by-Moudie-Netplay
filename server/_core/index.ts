@@ -11,6 +11,7 @@ import { registerNetplayServer } from "../netplay";
 import { registerUniversalNetplayServer } from "../universal-netplay";
 import { isAllowedOrigin } from "./cors";
 import { securityHeaders, validateProductionEnvironment } from "./security";
+import { registerDiscordRoutes } from "../discord";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise((resolve) => {
@@ -64,6 +65,7 @@ async function startServer() {
 
   registerStorageProxy(app);
   registerOAuthRoutes(app);
+  registerDiscordRoutes(app);
   registerNetplayServer(server);
   registerUniversalNetplayServer(server);
 
