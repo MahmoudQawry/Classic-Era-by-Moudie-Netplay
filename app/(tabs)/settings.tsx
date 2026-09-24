@@ -1,20 +1,22 @@
 import * as DocumentPicker from "expo-document-picker";
 import { useEffect, useState } from "react";
-import { Alert, Image, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Image, Linking, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from "react-native";
 import { BrandLogo } from "@/components/brand-logo";
 import { ScreenContainer } from "@/components/screen-container";
 import { haptic } from "@/lib/haptics";
 import { useLanguage } from "@/lib/language";
 import { ensureProfileId, getProfileAvatar, getProfileName, saveProfileAvatar, saveProfileId, saveProfileName } from "@/lib/room-storage";
+import { apiCall } from "@/lib/_core/api";
 
 const languages = [{ id: "ar", flag: "🇪🇬", label: "العربية" }, { id: "en", flag: "🇺🇸", label: "English" }, { id: "fr", flag: "🇫🇷", label: "Français" }] as const;
 
 export default function SettingsScreen() {
-  const [name, setName] = useState(""); const [userId, setUserId] = useState(""); const [avatar, setAvatar] = useState<string | null>(null); const { language, setLanguage, t } = useLanguage();
-  useEffect(() => { Promise.all([getProfileName(), ensureProfileId(), getProfileAvatar()]).then(([savedName, id, savedAvatar]) => { if (savedName) setName(savedName); setUserId(id); setAvatar(savedAvatar); }); }, []);
+  const [name, setName] = useState(""); const [userId, setUserId] = useState(""); const [avatar, setAvatar] = useState<string | null>(null); const [discordLinked, setDiscordLinked] = useState(false); const { language, setLanguage, t } = useLanguage();
+  useEffect(() => { Promise.all([getProfileName(), ensureProfileId(), getProfileAvatar()]).then(([savedName, id, savedAvatar]) => { if (savedName) setName(savedName); setUserId(id); setAvatar(savedAvatar); }); apiCall<{ linked: boolean }>("/api/discord/status").then((status) => setDiscordLinked(status.linked)).catch(() => setDiscordLinked(false)); }, []);
   const save = async () => { if (name.trim().length < 2) { haptic.error(); Alert.alert(t("nameShort"), t("nameShortText")); return; } await saveProfileName(name.trim()); await saveProfileId(userId); haptic.success(); Alert.alert(t("saved"), t("savedText")); };
   const chooseAvatar = async () => { const result = await DocumentPicker.getDocumentAsync({ type: "image/*", copyToCacheDirectory: true }); if (!result.canceled && result.assets[0]?.uri) { setAvatar(result.assets[0].uri); await saveProfileAvatar(result.assets[0].uri); } };
   const shareId = () => Share.share({ message: `${t("shareText")} ${userId}.` }); const selectLanguage = async (id: "ar" | "en" | "fr") => { await setLanguage(id); };
+  const connectDiscord = async () => { try { const result = await apiCall<{ url: string }>("/api/discord/authorize-url"); await Linking.openURL(result.url); } catch { Alert.alert(t("discord"), t("pendingText")); } };
   return <ScreenContainer className="px-5"><ScrollView contentContainerStyle={styles.content}>
     <View style={styles.brandHeader}><BrandLogo size={48} /><View><Text style={styles.brandName}>{t("brandName")}</Text><Text style={styles.brandMark}>MN · Moudie NetPlay</Text></View></View>
     <Text style={styles.eyebrow}>{t("settings")}</Text><Text style={styles.title}>{t("profile")}</Text>
