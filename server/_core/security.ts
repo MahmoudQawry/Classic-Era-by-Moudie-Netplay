@@ -18,17 +18,21 @@ export function validateProductionEnvironment() {
   }
 
   for (const origin of origins) {
+    let parsed: URL;
     try {
-      const parsed = new URL(origin);
-      if (parsed.protocol !== "https:") {
-        throw new Error(`Production CORS origin must use HTTPS: ${origin}`);
-      }
-      if (parsed.username || parsed.password || parsed.pathname !== "/" || parsed.search || parsed.hash) {
-        throw new Error(`Production CORS origin must be a plain HTTPS origin: ${origin}`);
-      }
-    } catch (error) {
-      if (error instanceof Error && error.message.startsWith("Production CORS origin")) throw error;
+      parsed = new URL(origin);
+    } catch {
       throw new Error(`Invalid production CORS origin: ${origin}`);
+    }
+    if (
+      parsed.protocol !== "https:" ||
+      parsed.username ||
+      parsed.password ||
+      parsed.pathname !== "/" ||
+      parsed.search ||
+      parsed.hash
+    ) {
+      throw new Error(`Production CORS origin must be a plain HTTPS origin: ${origin}`);
     }
   }
 
@@ -36,14 +40,6 @@ export function validateProductionEnvironment() {
   const configuredLiveKit = livekit.filter(hasValue);
   if (configuredLiveKit.length > 0 && configuredLiveKit.length !== livekit.length) {
     throw new Error("LIVEKIT_URL, LIVEKIT_API_KEY and LIVEKIT_API_SECRET must be configured together.");
-  }
-
-  const forbiddenClientSecrets = ["LIVEKIT_API_SECRET", "DATABASE_URL", "BUILT_IN_FORGE_API_KEY"];
-  for (const name of forbiddenClientSecrets) {
-    const value = process.env[name];
-    if (value && (name.startsWith("EXPO_PUBLIC_") || name.includes("PUBLIC"))) {
-      throw new Error(`Secret ${name} must never be exposed as a client environment variable.`);
-    }
   }
 }
 
