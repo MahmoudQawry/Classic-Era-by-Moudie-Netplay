@@ -14,6 +14,7 @@ const bundleId = rawBundleId
   .join(".") || "com.classicera.netplay";
 const timestamp = bundleId.split(".").pop()?.replace(/^t/, "") ?? "";
 const schemeFromBundleId = `classicera${timestamp}`;
+const discordApplicationId = process.env.DISCORD_APPLICATION_ID?.trim();
 
 const env = {
   appName: "Classic Era by Moudie",
@@ -58,12 +59,19 @@ const config: ExpoConfig = {
       "BLUETOOTH_ADMIN",
       "BLUETOOTH_CONNECT",
     ],
-    intentFilters: [{
-      action: "VIEW",
-      autoVerify: true,
-      data: [{ scheme: env.scheme, host: "*" }],
-      category: ["BROWSABLE", "DEFAULT"],
-    }],
+    intentFilters: [
+      {
+        action: "VIEW",
+        autoVerify: true,
+        data: [{ scheme: env.scheme, host: "*" }],
+        category: ["BROWSABLE", "DEFAULT"],
+      },
+      ...(discordApplicationId ? [{
+        action: "VIEW" as const,
+        data: [{ scheme: `discord-${discordApplicationId}` }],
+        category: ["BROWSABLE", "DEFAULT"],
+      }] : []),
+    ],
   },
   web: {
     bundler: "metro",
