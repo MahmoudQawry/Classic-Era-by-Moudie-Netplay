@@ -92,7 +92,7 @@ android {
         applicationId 'com.app.moudienetplay'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 46
+        versionCode 53
         versionName "1.7.0"
 
         ndk {
