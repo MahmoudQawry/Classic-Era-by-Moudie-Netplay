@@ -63,6 +63,9 @@ jobs:
       - name: Repair app icon CRCs
         run: python3 scripts/repair-png-crc.py assets/images/classic-era-new-icon.png
 
+      - name: Validate Discord Social SDK AAR
+        run: node scripts/verify-discord-android-sdk.mjs
+
       - name: Generate Android native project
         run: npx expo prebuild --platform android --non-interactive
 
