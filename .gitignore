@@ -24,3 +24,7 @@ android/local.properties
 # Release APK artifacts belong in GitHub Releases, not in git.
 *.apk
 
+# Discord Social SDK is proprietary and must not be committed as a standalone SDK artifact.
+android/app/libs/discord_partner_sdk.aar
+android/app/libs/discord_partner_sdk_krisp.aar
+android/app/libs/*.kef
