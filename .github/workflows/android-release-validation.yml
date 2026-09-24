@@ -1,0 +1,111 @@
+name: Android release validation
+
+on:
+  push:
+    branches: [security-legal-hardening-2026]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      EXPO_PUBLIC_NETPLAY_SERVICE_URL: https://classic-era-by-moudie-netplay.moudienetplay.workers.dev
+      EXPO_PUBLIC_NETPLAY_SERVICE_URLS: https://classic-era-by-moudie-netplay.moudienetplay.workers.dev
+      EXPO_PUBLIC_API_BASE_URL: https://classic-era-by-moudie-netplay.moudienetplay.workers.dev
+      DATABASE_URL: mysql://127.0.0.1:3306/test
+      ALLOWED_ORIGINS: https://classic.example.com
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.0
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Patch generated six-system type contract
+        run: python3 scripts/patch-six-system-types.py
+
+      - name: TypeScript check
+        run: pnpm check
+
+      - name: Unit and integration tests
+        run: pnpm test
+
+      - name: Apply native multitouch release fix
+        run: python3 scripts/apply-native-multitouch-fix.py
+
+      - name: Prepare verified Libretro cores
+        run: |
+          chmod +x scripts/sync-libretro-cores.sh
+          scripts/sync-libretro-cores.sh arm64-v8a
+
+      - name: Repair app icon CRCs
+        run: python3 scripts/repair-png-crc.py assets/images/classic-era-new-icon.png
+
+      - name: Generate Android native project
+        run: npx expo prebuild --platform android --non-interactive
+
+      - name: Restore plain Android startup path
+        run: python3 scripts/restore-plain-android-startup.py
+
+      - name: Verify release permissions
+        run: |
+          set -e
+          MANIFEST=android/app/src/main/AndroidManifest.xml
+          if grep -Eq 'android.permission.(CAMERA|READ_EXTERNAL_STORAGE|WRITE_EXTERNAL_STORAGE|SYSTEM_ALERT_WINDOW|POST_NOTIFICATIONS)' "$MANIFEST"; then
+            echo "ERROR: an unnecessary/high-risk Android permission is present in the release manifest."
+            grep -E 'android.permission.(CAMERA|READ_EXTERNAL_STORAGE|WRITE_EXTERNAL_STORAGE|SYSTEM_ALERT_WINDOW|POST_NOTIFICATIONS)' "$MANIFEST"
+            exit 1
+          fi
+          echo "Release permission scan passed."
+
+      - name: Build release APK
+        working-directory: android
+        run: ./gradlew :app:assembleRelease --no-daemon --stacktrace
+
+      - name: Verify six emulator cores in APK
+        run: |
+          set -e
+          APK=android/app/build/outputs/apk/release/app-release.apk
+          test -s "$APK"
+          unzip -l "$APK" > apk-contents.txt
+          for core in             fceumm_libretro_android.so             pcsx_rearmed_libretro_android.so             genesis_plus_gx_libretro_android.so             parallel_n64_libretro_android.so             ppsspp_libretro_android.so             play_libretro_android.so; do
+            grep -q "$core" apk-contents.txt || { echo "Missing emulator core: $core"; exit 1; }
+          done
+          echo "All six emulator cores are present."
+
+      - name: APK metadata
+        run: |
+          APK=android/app/build/outputs/apk/release/app-release.apk
+          sha256sum "$APK" | tee apk-sha256.txt
+          stat -c 'APK bytes: %s' "$APK" | tee -a apk-sha256.txt
+
+      - name: Upload validated APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: classic-era-android-arm64-release
+          path: |
+            android/app/build/outputs/apk/release/app-release.apk
+            apk-sha256.txt
+          retention-days: 7
