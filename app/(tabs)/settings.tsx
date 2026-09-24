@@ -26,7 +26,7 @@ export default function SettingsScreen() {
     <Pressable onPress={save} style={({ pressed }) => [styles.button, pressed && styles.pressed]}><Text style={styles.buttonText}>{t("save")}</Text></Pressable>
     <Text style={styles.section}>{t("language")}</Text><View style={styles.languageRow}>{languages.map((item) => <Pressable key={item.id} onPress={() => selectLanguage(item.id)} style={[styles.language, language === item.id && styles.languageActive]}><Text style={styles.flag}>{item.flag}</Text><Text style={styles.languageText}>{item.label}</Text></Pressable>)}</View>
     <View style={styles.menu}>{["about", "policy", "privacyPolicy", "community", "contact", "help", "suggestions"].map((key) => <Pressable key={key} onPress={() => Alert.alert(t(key), t("pendingText"))} style={styles.menuItem}><Text style={styles.menuText}>{t(key)}</Text><Text style={styles.chevron}>›</Text></Pressable>)}</View>
-    <Pressable onPress={connectDiscord} style={({ pressed }) => [styles.discordButton, pressed && styles.pressed]}><Text style={styles.discordText}>{t("discord")} · {discordLinked ? "LINKED" : "LINK"}</Text></Pressable>
+    <Pressable onPress={connectDiscord} style={({ pressed }) => [styles.discordButton, pressed && styles.pressed]}><Text style={styles.discordText}>{t("discord")} · {discordLinked ? t("discordLinked") : t("discordLink")}</Text></Pressable>
     <View style={styles.privacy}><Text style={styles.privacyTitle}>{t("localPrivacy")}</Text><Text style={styles.privacyText}>{t("privacyText")}</Text></View>
     <View style={styles.brandBlock}><BrandLogo size={58} /><Text style={styles.brandName}>{t("brandName")}</Text><Text style={styles.slogan}>Old Equal Gold</Text></View>
   </ScrollView></ScreenContainer>;
