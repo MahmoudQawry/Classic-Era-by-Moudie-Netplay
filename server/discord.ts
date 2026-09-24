@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import type { Express, Request, Response } from "express";
-import { linkDiscordAccount, getUserByOpenId, unlinkDiscordAccount } from "./db";
+import { getUserByDiscordId, linkDiscordAccount, getUserByOpenId, unlinkDiscordAccount } from "./db";
 import { sdk } from "./_core/sdk";
 
 const DISCORD_API = "https://discord.com/api/v10";
@@ -129,6 +129,8 @@ export function registerDiscordRoutes(app: Express) {
         const current = await getUserByOpenId(identity.sub);
         if (!current) throw new Error("Classic Era account no longer exists.");
         if (current.discordUserId && current.discordUserId !== discordUser.id) throw new Error("A different Discord account is already linked.");
+        const linkedElsewhere = await getUserByDiscordId(discordUser.id);
+        if (linkedElsewhere && linkedElsewhere.openId !== identity.sub) throw new Error("This Discord account is already linked to another Classic Era account.");
         await linkDiscordAccount(identity.sub, discordUser.id);
       } finally {
         await revokeToken(token.access_token, cfg);
