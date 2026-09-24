@@ -48,6 +48,19 @@ export default function RoomScreen() {
 
   const snapshotQuery = useRealtimeRoomSnapshot(roomId, credential, 4_000);
   const snapshot = snapshotQuery.data; const roomMember = snapshot?.members.find((member) => member.id === credential?.memberId);
+
+  useEffect(() => {
+    if (Platform.OS === "web" || !snapshot) return;
+    const currentCapacity = roomCapacityFor(snapshot.room.system as RoomSystem);
+    const currentPlayers = snapshot.members.filter((member) => member.role !== "spectator").length;
+    updateDiscordRichPresence(
+      snapshot.room.name || "Classic Era",
+      `${SYSTEM_LABEL[snapshot.room.system] ?? snapshot.room.system.toUpperCase()} · ${snapshot.room.status === "waiting" ? "Waiting room" : "Playing"}`,
+      `classic-era-room-${snapshot.room.id}`,
+      Math.max(1, currentPlayers),
+      Math.max(1, currentCapacity.maxPlayers),
+    );
+  }, [snapshot?.room.id, snapshot?.room.name, snapshot?.room.status, snapshot?.room.system, snapshot?.members.length]);
   const share = async () => { if (!snapshot) return; haptic.light(); await Share.share({ message: `${t("rmSharePrefix")} ${snapshot.room.name} · ${t("rmShareCodeLabel")}: ${snapshot.room.joinCode}` }); };
 
   if (credential === undefined || snapshotQuery.isLoading) return <ScreenContainer className="items-center justify-center"><ActivityIndicator color="#62C2EB" size="large" /></ScreenContainer>;
@@ -58,16 +71,6 @@ export default function RoomScreen() {
   const playerCount = snapshot.members.filter((member) => member.role !== "spectator").length; const spectatorCount = snapshot.members.filter((member) => member.role === "spectator").length;
   const nativeRoom = system === "sega" || system === "n64" || system === "ps2";
 
-  useEffect(() => {
-    if (Platform.OS === "web") return;
-    updateDiscordRichPresence(
-      snapshot.room.name || "Classic Era",
-      `${SYSTEM_LABEL[snapshot.room.system] ?? snapshot.room.system.toUpperCase()} · ${snapshot.room.status === "waiting" ? "Waiting room" : "Playing"}`,
-      `classic-era-room-${snapshot.room.id}`,
-      Math.max(1, playerCount),
-      Math.max(1, capacity.maxPlayers),
-    );
-  }, [snapshot.room.id, snapshot.room.name, snapshot.room.status, snapshot.room.system, playerCount, capacity.maxPlayers]);
   return <ScreenContainer className="px-5" edges={["top", "bottom", "left", "right"]}><ScrollView contentContainerStyle={styles.content}>
     <View style={styles.topRow}><Pressable onPress={() => router.replace("/")} style={({ pressed }) => [styles.back, pressed && styles.pressed]}><Text style={styles.backText}>‹ {t("lobby")}</Text></Pressable><View style={styles.live}><View style={styles.liveDot} /><Text style={styles.liveText}>{snapshot.room.status === "waiting" ? t("rmWaiting") : t("rmActive")}</Text></View></View>
     <Text style={styles.system}>{SYSTEM_LABEL[snapshot.room.system] ?? snapshot.room.system.toUpperCase()}</Text><Text style={styles.title}>{snapshot.room.name}</Text><Text style={styles.caption}>{t("rmPrivateRoom")} · {playerCount}/{capacity.maxPlayers} {t("lbPlayersShort")} · {spectatorCount}/{capacity.maxSpectators} {t("lbSpectatorsShort")}</Text>
