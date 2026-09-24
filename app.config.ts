@@ -89,12 +89,14 @@ const config: ExpoConfig = {
     "expo-video",
     ["expo-secure-store", { configureAndroidBackup: true }],
     "expo-document-picker",
+    "./plugins/with-discord-social-sdk",
     "@livekit/react-native-expo-plugin",
     [
       "expo-build-properties",
       { android: { buildArchs: ["arm64-v8a"], minSdkVersion: 24 } },
     ],
   ],
+  extra: { discordApplicationId },
   experiments: { typedRoutes: true, reactCompiler: true },
 };
 
