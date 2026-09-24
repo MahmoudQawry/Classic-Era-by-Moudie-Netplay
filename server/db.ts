@@ -56,6 +56,13 @@ export async function unlinkDiscordAccount(openId: string) {
     .where(eq(users.openId, openId));
 }
 
+export async function getUserByDiscordId(discordUserId: string) {
+  const db = await getDb();
+  if (!db) { console.warn("[Database] Cannot get user by Discord id: database not available"); return undefined; }
+  const result = await db.select().from(users).where(eq(users.discordUserId, discordUserId)).limit(1);
+  return result[0];
+}
+
 export async function getUserByOpenId(openId: string) {
   const db = await getDb();
   if (!db) { console.warn("[Database] Cannot get user: database not available"); return undefined; }
