@@ -20,6 +20,9 @@ jobs:
       EXPO_PUBLIC_TURN_USERNAME: ${{ vars.TURN_USERNAME }}
       EXPO_PUBLIC_TURN_CREDENTIAL: ${{ vars.TURN_CREDENTIAL }}
       EXPO_PUBLIC_LIVEKIT_URL: ${{ vars.LIVEKIT_URL }}
+      # Safe dummy values used only by the isolated production-start smoke test.
+      DATABASE_URL: mysql://test:test@127.0.0.1:3306/test
+      ALLOWED_ORIGINS: https://classic.example.com
     steps:
       - name: 📥 جلب الكود
         uses: actions/checkout@v4
