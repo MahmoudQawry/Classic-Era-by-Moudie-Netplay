@@ -50,13 +50,11 @@ const config: ExpoConfig = {
     predictiveBackGestureEnabled: false,
     package: env.androidPackage,
     permissions: [
-      "POST_NOTIFICATIONS",
-      "RECORD_AUDIO",
+        "RECORD_AUDIO",
       "MODIFY_AUDIO_SETTINGS",
       "ACCESS_NETWORK_STATE",
       "CHANGE_NETWORK_STATE",
       "BLUETOOTH",
-      "BLUETOOTH_ADMIN",
       "BLUETOOTH_CONNECT",
     ],
     intentFilters: [{
