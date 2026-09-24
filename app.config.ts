@@ -40,7 +40,7 @@ const config: ExpoConfig = {
     infoPlist: { ITSAppUsesNonExemptEncryption: false },
   },
   android: {
-    versionCode: 52,
+    versionCode: 53,
     adaptiveIcon: {
       backgroundColor: "#101827",
       foregroundImage: "./assets/images/classic-era-new-icon.png",
