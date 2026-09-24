@@ -2,7 +2,7 @@ name: Android Build Zero Counter
 
 on:
   push:
-    branches: [main]
+    branches: [main, security-legal-hardening-2026]
   workflow_dispatch:
 run-name: Android Build Zero Counter
 permissions:
