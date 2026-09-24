@@ -51,4 +51,12 @@
 
 ## Discord
 
-لا يبدأ دمج Discord إلا بعد إغلاق البنود الحرجة أعلاه. بعد ذلك يكون Discord طبقة اجتماعية (account linking / Rich Presence / invites / lobby) ولا يستبدل بروتوكول NetPlay الأساسي.
+- [x] ربط حساب Discord رسمي عبر OAuth2 من الخادم مع state موقّع قصير العمر.
+- [x] عدم تخزين access token الخاص بـ Discord؛ يستخدم فقط للتحقق ثم يُلغى.
+- [x] منع ربط حساب Discord نفسه بأكثر من حساب Classic Era.
+- [x] إعداد Android callback scheme اختياريًا من Discord Application ID.
+- [ ] إدخال حزمة Discord Social SDK الرسمية من Developer Portal وربط مكتبة Android arm64-v8a الفعلية.
+- [ ] تفعيل Rich Presence / Activity Invites / Friends عبر discordpp بعد إضافة الحزمة الرسمية واختبارها على أجهزة فعلية.
+- [ ] فتح Communication Scopes فقط بعد استيفاء متطلبات Discord والمراجعة المطلوبة.
+
+بعد إغلاق البنود الحرجة، يبقى Discord طبقة اجتماعية ولا يستبدل بروتوكول NetPlay الأساسي.
