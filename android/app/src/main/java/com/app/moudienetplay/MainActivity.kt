@@ -18,6 +18,7 @@ import expo.modules.ReactActivityDelegateWrapper
 class MainActivity : ReactActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     try {
+      com.discord.socialsdk.DiscordSocialSdkInit.setEngineActivity(this)
       super.onCreate(null)
     } catch (error: Throwable) {
       Log.e("MoudieStartup", "ReactActivity could not be created", error)
