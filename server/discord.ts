@@ -30,7 +30,8 @@ function createState(openId: string, secret: string) {
 
 function verifyState(state: string, secret: string): DiscordState {
   const [payload, signature] = state.split(".");
-  if (!payload || !signature || !crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(sign(payload, secret)))) {
+  const expected = payload ? sign(payload, secret) : "";
+  if (!payload || !signature || signature.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) {
     throw new Error("Invalid Discord OAuth state.");
   }
   const decoded = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as DiscordState;
