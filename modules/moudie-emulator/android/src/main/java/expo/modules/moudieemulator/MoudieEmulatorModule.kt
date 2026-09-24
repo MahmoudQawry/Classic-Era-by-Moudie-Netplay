@@ -45,7 +45,7 @@ class MoudieEmulatorModule : Module() {
           "acceptedExtensions" to definition.extensions.sorted(),
           "message" to when {
             available -> "${definition.coreName} is ready for local play."
-            NativeCoreCatalog.isDownloadable(definition) -> "The official ${definition.coreName} core downloads when the selected emulator is launched for the first time. Internet access and storage space are required."
+            NativeCoreCatalog.isDownloadable(definition) -> "The ${definition.coreName} core downloads when the selected emulator is launched for the first time. Internet access and storage space are required."
             else -> "The ${definition.coreName} core is not included in this APK."
           },
         )
@@ -82,7 +82,7 @@ class MoudieEmulatorModule : Module() {
         "ready" to (available || downloadable),
         "message" to when {
           available -> "${definition.title} is prepared. You can start local play now."
-          downloadable -> "${definition.title} is prepared. The The selected core is packaged in the app."
+          downloadable -> "${definition.title} is prepared. The selected core is packaged in the app."
           else -> "The ${definition.coreName} core is not included in this build."
         },
       )
