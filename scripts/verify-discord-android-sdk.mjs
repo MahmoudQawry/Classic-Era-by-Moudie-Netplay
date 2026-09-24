@@ -7,13 +7,14 @@ const aar = path.resolve("android/app/libs/discord_partner_sdk.aar");
 
 if (!fs.existsSync(aar)) {
   console.error("Discord Social SDK AAR is not present.");
-  console.error("This is intentional: the proprietary SDK must not be committed to this repository.");
-  console.error("Place the official discord_partner_sdk.aar in android/app/libs/ only in the controlled build environment.");
+  console.error("The release build requires the controlled Discord SDK artifact at android/app/libs/discord_partner_sdk.aar.");
   process.exit(2);
 }
 
 const stat = fs.statSync(aar);
-if (stat.size < 20 * 1024 * 1024) {
+// The project is arm64-v8a only, so the AAR may be a deliberately reduced
+// arm64 package rather than Discord's original multi-ABI archive.
+if (stat.size < 5 * 1024 * 1024) {
   console.error(`Unexpected Discord SDK AAR size: ${stat.size} bytes`);
   process.exit(3);
 }
@@ -21,7 +22,7 @@ if (stat.size < 20 * 1024 * 1024) {
 let listing;
 try {
   listing = execFileSync("unzip", ["-l", aar], { encoding: "utf8" });
-} catch (error) {
+} catch {
   console.error("The Discord SDK file is not a readable AAR/ZIP archive.");
   process.exit(4);
 }
@@ -29,7 +30,9 @@ try {
 const required = [
   "arm64-v8a/libdiscord_partner_sdk.so",
   "prefab/",
+  "prefab/modules/",
   "AndroidManifest.xml",
+  "discord_partner_sdk.jar",
 ];
 
 for (const entry of required) {
@@ -40,7 +43,7 @@ for (const entry of required) {
 }
 
 if (listing.includes("discord_partner_sdk_krisp.aar")) {
-  console.error("Unexpected nested Krisp AAR detected; voice/Krisp is not part of this integration.");
+  console.error("Unexpected nested Krisp AAR detected; Discord voice/Krisp is not part of this integration.");
   process.exit(6);
 }
 
