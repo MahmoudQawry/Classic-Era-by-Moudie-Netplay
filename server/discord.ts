@@ -82,21 +82,34 @@ function safeReturnUri() {
   return value;
 }
 
+function buildAuthorizeUrl(openId: string, cfg: ReturnType<typeof config>) {
+  const state = createState(openId, cfg.stateSecret);
+  const authorize = new URL("https://discord.com/oauth2/authorize");
+  authorize.searchParams.set("response_type", "code");
+  authorize.searchParams.set("client_id", cfg.clientId);
+  authorize.searchParams.set("scope", "identify");
+  authorize.searchParams.set("redirect_uri", cfg.redirectUri);
+  authorize.searchParams.set("state", state);
+  return authorize.toString();
+}
+
 export function registerDiscordRoutes(app: Express) {
   app.get("/api/discord/authorize", async (req: Request, res: Response) => {
     try {
       const user = await sdk.authenticateRequest(req);
       const cfg = config();
-      const state = createState(user.openId, cfg.stateSecret);
-      const authorize = new URL("https://discord.com/oauth2/authorize");
-      authorize.searchParams.set("response_type", "code");
-      authorize.searchParams.set("client_id", cfg.clientId);
-      authorize.searchParams.set("scope", "identify");
-      authorize.searchParams.set("redirect_uri", cfg.redirectUri);
-      authorize.searchParams.set("state", state);
-      res.redirect(302, authorize.toString());
+      res.redirect(302, buildAuthorizeUrl(user.openId, cfg));
     } catch (error) {
       res.status(503).json({ error: error instanceof Error ? error.message : "Discord linking unavailable" });
+    }
+  });
+
+  app.get("/api/discord/authorize-url", async (req: Request, res: Response) => {
+    try {
+      const user = await sdk.authenticateRequest(req);
+      res.json({ url: buildAuthorizeUrl(user.openId, config()) });
+    } catch (error) {
+      res.status(401).json({ error: error instanceof Error ? error.message : "Discord linking unavailable" });
     }
   });
 
