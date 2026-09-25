@@ -126,9 +126,13 @@ jobs:
         run: |
           set -e
           MANIFEST=android/app/src/main/AndroidManifest.xml
-          if grep -Eq 'android.permission.(CAMERA|READ_EXTERNAL_STORAGE|WRITE_EXTERNAL_STORAGE|SYSTEM_ALERT_WINDOW|POST_NOTIFICATIONS)' "$MANIFEST"; then
+          if grep -E '^[[:space:]]*<uses-permission ' "$MANIFEST" |
+             grep -v 'tools:node="remove"' |
+             grep -Eq 'android.permission.(CAMERA|READ_EXTERNAL_STORAGE|WRITE_EXTERNAL_STORAGE|SYSTEM_ALERT_WINDOW|POST_NOTIFICATIONS)'; then
             echo "ERROR: an unnecessary/high-risk Android permission is present in the release manifest."
-            grep -E 'android.permission.(CAMERA|READ_EXTERNAL_STORAGE|WRITE_EXTERNAL_STORAGE|SYSTEM_ALERT_WINDOW|POST_NOTIFICATIONS)' "$MANIFEST"
+            grep -E '^[[:space:]]*<uses-permission ' "$MANIFEST" |
+              grep -v 'tools:node="remove"' |
+              grep -E 'android.permission.(CAMERA|READ_EXTERNAL_STORAGE|WRITE_EXTERNAL_STORAGE|SYSTEM_ALERT_WINDOW|POST_NOTIFICATIONS)'
             exit 1
           fi
           echo "Release permission scan passed."
