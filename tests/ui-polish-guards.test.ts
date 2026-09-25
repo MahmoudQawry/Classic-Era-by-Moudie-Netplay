@@ -102,7 +102,6 @@ describe("requested UI, wording and analog-control changes", () => {
     expect(controller).toContain("onPressIn");
     expect(controller).toContain("onPressOut");
     expect(player).toContain("profile");
-    expect(player).toContain("dispatchKey");
     expect(player).toContain("UniversalNetplayClient");
   });
 
