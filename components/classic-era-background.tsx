@@ -1,5 +1,5 @@
 import { StyleSheet, View } from "react-native";
-import Svg, { Circle, Defs, DropShadow, Ellipse, Filter, LinearGradient, Path, Rect, Stop, Text as SvgText } from "react-native-svg";
+import Svg, { Circle, Defs, Ellipse, LinearGradient, Path, Rect, Stop, Text as SvgText } from "react-native-svg";
 
 export function ClassicEraBackground() {
   const traces = [
@@ -33,10 +33,9 @@ export function ClassicEraBackground() {
       <Svg width="100%" height="100%" viewBox="0 0 691 1536" preserveAspectRatio="xMidYMid slice">
         <Defs>
           <LinearGradient id="mnBg" x1="0" y1="0" x2="0" y2="1"><Stop offset="0" stopColor="#071a2c"/><Stop offset=".5" stopColor="#061629"/><Stop offset="1" stopColor="#04101d"/></LinearGradient>
-          <Filter id="mnGlow"><DropShadow dx="0" dy="0" stdDeviation="16" floodColor="#20eaff" floodOpacity=".28"/></Filter>
         </Defs>
         <Rect width="691" height="1536" fill="url(#mnBg)" />
-        <Ellipse cx="346" cy="760" rx="230" ry="230" fill="#0aa8d0" opacity=".12" filter="url(#mnGlow)" />
+        <Ellipse cx="346" cy="760" rx="230" ry="230" fill="#0aa8d0" opacity=".12" />
         {traces.map((d, i) => <Path key={i} d={d} fill="none" stroke="#d4f8ff" strokeOpacity=".58" strokeWidth="2" />)}
         {bright.map((d, i) => <Path key={"b"+i} d={d} fill="none" stroke="#25eaff" strokeOpacity=".9" strokeWidth="3" />)}
         {[["82","166"],["152","242"],["207","352"],["104","405"],["609","166"],["539","242"],["484","352"],["587","405"],["168","710"],["523","710"],["312","268"],["379","268"]].map(([cx,cy], i) => <Circle key={i} cx={cx} cy={cy} r="4" fill="#c9f8ff" />)}
