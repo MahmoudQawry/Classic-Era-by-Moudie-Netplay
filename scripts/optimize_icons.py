@@ -3,13 +3,15 @@ from pathlib import Path
 from PIL import Image
 
 
-PROJECT = Path("/home/ubuntu/moudie-netplay")
-SOURCE = Path("/home/ubuntu/webdev-static-assets/moudie-netplay-icon.png")
+PROJECT = Path(__file__).resolve().parents[1]
+SOURCE = PROJECT / "assets/images/classic-era-new-icon.png"
 TARGETS = [
     PROJECT / "assets/images/icon.png",
     PROJECT / "assets/images/splash-icon.png",
     PROJECT / "assets/images/favicon.png",
     PROJECT / "assets/images/android-icon-foreground.png",
+    PROJECT / "assets/images/android-icon-background.png",
+    PROJECT / "assets/images/android-icon-monochrome.png",
 ]
 
 
