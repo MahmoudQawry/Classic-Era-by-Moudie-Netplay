@@ -43,9 +43,9 @@ const config: ExpoConfig = {
     versionCode: 53,
     adaptiveIcon: {
       backgroundColor: "#101827",
-      foregroundImage: "./assets/images/classic-era-new-icon.png",
-      backgroundImage: "./assets/images/classic-era-new-icon.png",
-      monochromeImage: "./assets/images/classic-era-new-icon.png",
+      foregroundImage: "./assets/images/android-icon-foreground.png",
+      backgroundImage: "./assets/images/android-icon-background.png",
+      monochromeImage: "./assets/images/android-icon-monochrome.png",
     },
     edgeToEdgeEnabled: true,
     predictiveBackGestureEnabled: false,
