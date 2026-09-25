@@ -1,6 +1,5 @@
-import { useVideoPlayer, VideoView } from "expo-video";
 import { useEffect, useState, type ReactNode } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { useLanguage } from "@/lib/language";
 
 type Props = { children: ReactNode };
@@ -9,21 +8,16 @@ type Props = { children: ReactNode };
 export function MoudieLaunchIntro({ children }: Props) {
   const { t } = useLanguage();
   const [introVisible, setIntroVisible] = useState(true);
-  const bootVideo = useVideoPlayer(require("@/assets/videos/classic-era-official-boot.mp4"), (player) => {
-    player.muted = true;
-    player.loop = false;
-    player.play();
-  });
 
   useEffect(() => {
-    const endSubscription = bootVideo.addListener("playToEnd", () => setIntroVisible(false));
-    return () => endSubscription.remove();
-  }, [bootVideo]);
+    const timer = setTimeout(() => setIntroVisible(false), 1800);
+    return () => clearTimeout(timer);
+  }, []);
 
   return <View style={styles.host}>
     {children}
     {introVisible && <View style={styles.screen} accessibilityLabel={t("introBootLabel")}>
-      <VideoView player={bootVideo} style={styles.video} nativeControls={false} contentFit="cover" />
+      <Image source={require("@/assets/images/classic-era-new-poster.png")} style={styles.video} resizeMode="cover" accessibilityIgnoresInvertColors />
       <Pressable style={styles.skip} onPress={() => setIntroVisible(false)} accessibilityRole="button"><Text style={styles.skipText}>{t("introSkip")}</Text></Pressable>
     </View>}
   </View>;
