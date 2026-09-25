@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 691 1536" preserveAspectRatio="xMidYMid slice">
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#071a2c"/><stop offset=".5" stop-color="#061629"/><stop offset="1" stop-color="#04101d"/></linearGradient>
+  <radialGradient id="glow"><stop stop-color="#20eaff" stop-opacity=".55"/><stop offset="1" stop-color="#20eaff" stop-opacity="0"/></radialGradient>
+  <filter id="soft"><feGaussianBlur stdDeviation="9"/></filter>
+  <filter id="chip"><feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#000" flood-opacity=".65"/></filter>
+  <pattern id="micro" width="34" height="34" patternUnits="userSpaceOnUse"><path d="M0 17H34M17 0V34" stroke="#1b4867" stroke-opacity=".16" stroke-width="1"/></pattern>
+</defs>
+<rect width="691" height="1536" fill="url(#bg)"/>
+<rect width="691" height="1536" fill="url(#micro)"/>
+<ellipse cx="346" cy="760" rx="230" ry="230" fill="url(#glow)" filter="url(#soft)"/>
+<g fill="none" stroke="#d4f8ff" stroke-opacity=".7" stroke-width="2">
+<path d="M0 90H82v76h70v76h55v110h60v118"/>
+<path d="M0 180h45v58h98v72h62v91h52"/>
+<path d="M0 350h104v55h91v64h55v92"/>
+<path d="M0 510h69v64h94v74h66v77"/>
+<path d="M0 700h135v-54h83v-86h71"/>
+<path d="M691 90h-82v76h-70v76h-55v110h-60v118"/>
+<path d="M691 180h-45v58h-98v72h-62v91h-52"/>
+<path d="M691 350h-104v55h-91v64h-55v92"/>
+<path d="M691 510h-69v64h-94v74h-66v77"/>
+<path d="M691 700H556v-54h-83v-86h-71"/>
+<path d="M160 1536v-160l80-80v-135l64-64V940"/>
+<path d="M245 1536v-145l72-72v-150l40-40V940"/>
+<path d="M330 1536v-160l36-36V940"/>
+<path d="M530 1536v-160l-80-80v-135l-64-64V940"/>
+<path d="M445 1536v-145l-72-72v-150l-40-40V940"/>
+<path d="M360 1536v-160l-36-36V940"/>
+</g>
+<g fill="none" stroke="#25eaff" stroke-opacity=".95" stroke-width="3">
+<path d="M0 742h118l50-50h76l44-44h58"/>
+<path d="M691 742H573l-50-50h-76l-44-44h-58"/>
+<path d="M274 0v230l38 38v170l34 34v214"/>
+<path d="M417 0v230l-38 38v170l-34 34v214"/>
+<path d="M273 1536v-208l39-39v-166"/>
+<path d="M418 1536v-208l-39-39v-166"/>
+</g>
+<g fill="#c9f8ff">
+  <circle cx="82" cy="166" r="4"/><circle cx="152" cy="242" r="4"/><circle cx="207" cy="352" r="4"/><circle cx="104" cy="405" r="4"/>
+  <circle cx="609" cy="166" r="4"/><circle cx="539" cy="242" r="4"/><circle cx="484" cy="352" r="4"/><circle cx="587" cy="405" r="4"/>
+  <circle cx="168" cy="710" r="4"/><circle cx="523" cy="710" r="4"/><circle cx="312" cy="268" r="4"/><circle cx="379" cy="268" r="4"/>
+</g>
+<g filter="url(#chip)">
+  <rect x="267" y="655" width="157" height="157" rx="14" fill="#141a20" stroke="#a8b0b7" stroke-width="3"/>
+  <rect x="280" y="668" width="131" height="131" rx="9" fill="#0a0d11" stroke="#4c555d" stroke-width="2"/>
+  <g stroke="#bfc8cf" stroke-width="5">
+    <path d="M275 640v22M292 640v22M309 640v22M326 640v22M343 640v22M360 640v22M377 640v22M394 640v22M411 640v22"/>
+    <path d="M275 812v22M292 812v22M309 812v22M326 812v22M343 812v22M360 812v22M377 812v22M394 812v22M411 812v22"/>
+  </g>
+  <text x="346" y="755" text-anchor="middle" font-family="Arial, sans-serif" font-size="61" font-weight="900" fill="#72d9ff">M</text>
+  <text x="383" y="755" text-anchor="middle" font-family="Arial, sans-serif" font-size="61" font-weight="900" fill="#e7c84d">N</text>
+</g>
+</svg>
