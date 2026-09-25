@@ -1,3 +1,6 @@
+concurrency:
+  group: security-audit-${{ github.ref }}
+  cancel-in-progress: true
 name: Security audit
 
 on:
