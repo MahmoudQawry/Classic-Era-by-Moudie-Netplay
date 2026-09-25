@@ -1,5 +1,5 @@
 concurrency:
-  group: android-release-${{ github.ref }}
+  group: android-reset-${{ github.ref }}
   cancel-in-progress: true
 name: Android Build Zero Counter
 
