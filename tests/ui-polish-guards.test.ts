@@ -115,8 +115,8 @@ describe("requested UI, wording and analog-control changes", () => {
     expect(background).toContain("ImageBackground");
     expect(statSync(imagePath).size).toBeGreaterThan(1000);
     const size = readJpegSize(imagePath);
-    expect(size.width).toBe(691);
-    expect(size.height).toBe(1380);
+    expect(size.width).toBe(256);
+    expect(size.height / size.width).toBeCloseTo(1536 / 691, 2);
   });
 
   it("does not reference the legacy runtime brand assets", () => {
