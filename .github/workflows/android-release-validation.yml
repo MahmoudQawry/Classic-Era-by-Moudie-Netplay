@@ -64,6 +64,24 @@ jobs:
           chmod +x scripts/sync-libretro-cores.sh
           scripts/sync-libretro-cores.sh arm64-v8a
 
+      - name: Restore exact official boot video
+        run: |
+          set -e
+          git fetch --no-tags origin 06c1bc6a78fe197698f6c52071d730532534637b --depth=1
+          mkdir -p assets/videos
+          git show 06c1bc6a78fe197698f6c52071d730532534637b:assets/videos/classic-era-official-boot.mp4 > assets/videos/classic-era-official-boot.mp4
+          test -s assets/videos/classic-era-official-boot.mp4
+          test "$(stat -c%s assets/videos/classic-era-official-boot.mp4)" -gt 8000
+
+      - name: Validate canonical MN branding
+        run: |
+          set -e
+          grep -q 'android-icon-foreground.png' app.config.ts
+          grep -q 'android-icon-background.png' app.config.ts
+          grep -q 'android-icon-monochrome.png' app.config.ts
+          grep -q 'viewBox="0 0 691 1536"' components/classic-era-background.tsx
+          grep -q '#25eaff' components/classic-era-background.tsx
+
       - name: Repair app icon CRCs
         run: python3 scripts/repair-png-crc.py assets/images/classic-era-new-icon.png
 
