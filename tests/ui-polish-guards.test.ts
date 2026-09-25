@@ -113,4 +113,22 @@ describe("requested UI, wording and analog-control changes", () => {
     }
   });
 
+  it("keeps multiplayer synchronization and room voice paths wired to the native players", () => {
+    const catalog = read("modules/moudie-emulator/android/src/main/java/expo/modules/moudieemulator/NativeCoreCatalog.kt");
+    const netplay = read("modules/moudie-emulator/android/src/main/java/expo/modules/moudieemulator/UniversalNetplayClient.kt");
+    const ps1Netplay = read("modules/moudie-emulator/android/src/main/java/expo/modules/moudieemulator/Ps1NetplayClient.kt");
+    const voice = read("components/room-voice-chat.native.tsx");
+    expect(catalog).toContain('val netplay: String');
+    expect(catalog).toContain('"retroarch"');
+    expect(catalog).toContain('"psp-network"');
+    expect(catalog).toContain('"moudie-relay"');
+    expect(netplay).toContain("fingerprint");
+    expect(netplay).toContain("coreVersion");
+    expect(netplay).toContain("frame");
+    expect(ps1Netplay).toContain("fingerprint");
+    expect(ps1Netplay).toContain("frame");
+    expect(voice).toContain("@livekit/react-native");
+    expect(voice).toContain("restartIce");
+  });
+
 });
