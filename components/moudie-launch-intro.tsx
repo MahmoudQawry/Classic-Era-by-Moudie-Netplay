@@ -1,24 +1,36 @@
+import { useVideoPlayer, VideoView } from "expo-video";
 import { useEffect, useState, type ReactNode } from "react";
-import { Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useLanguage } from "@/lib/language";
 
 type Props = { children: ReactNode };
 
-/** Bundled MN launch poster keeps startup self-contained and avoids a missing external video asset. */
+/**
+ * The original launch video is restored as the canonical startup experience.
+ * The CI build restores the exact binary from the repository's verified Git history
+ * before Expo prebuild, so the APK never silently falls back to the poster.
+ */
 export function MoudieLaunchIntro({ children }: Props) {
   const { t } = useLanguage();
   const [introVisible, setIntroVisible] = useState(true);
+  const bootVideo = useVideoPlayer(require("@/assets/videos/classic-era-official-boot.mp4"), (player) => {
+    player.muted = false;
+    player.loop = false;
+    player.play();
+  });
 
   useEffect(() => {
-    const timer = setTimeout(() => setIntroVisible(false), 1800);
-    return () => clearTimeout(timer);
-  }, []);
+    const endSubscription = bootVideo.addListener("playToEnd", () => setIntroVisible(false));
+    return () => endSubscription.remove();
+  }, [bootVideo]);
 
   return <View style={styles.host}>
     {children}
     {introVisible && <View style={styles.screen} accessibilityLabel={t("introBootLabel")}>
-      <Image source={require("@/assets/images/classic-era-new-poster.png")} style={styles.video} resizeMode="cover" accessibilityIgnoresInvertColors />
-      <Pressable style={styles.skip} onPress={() => setIntroVisible(false)} accessibilityRole="button"><Text style={styles.skipText}>{t("introSkip")}</Text></Pressable>
+      <VideoView player={bootVideo} style={styles.video} nativeControls={false} contentFit="cover" />
+      <Pressable style={styles.skip} onPress={() => setIntroVisible(false)} accessibilityRole="button">
+        <Text style={styles.skipText}>{t("introSkip")}</Text>
+      </Pressable>
     </View>}
   </View>;
 }
