@@ -1,4 +1,5 @@
-import { Image, View, type ViewProps } from "react-native";
+import { View, type ViewProps } from "react-native";
+import { ClassicEraBackground } from "@/components/classic-era-background";
 import { SafeAreaView, type Edge } from "react-native-safe-area-context";
 
 import { cn } from "@/lib/utils";
@@ -44,13 +45,7 @@ export function ScreenContainer({
       className={cn("flex-1", "bg-background", containerClassName)}
       {...props}
     >
-      <Image
-        source={require("@/assets/images/classic-era-ui-background.jpg")}
-        style={styles.background}
-        resizeMode="cover"
-        blurRadius={1}
-        accessibilityIgnoresInvertColors
-      />
+      <ClassicEraBackground />
       <View pointerEvents="none" style={styles.dim} />
       <SafeAreaView
         edges={edges}
@@ -64,14 +59,6 @@ export function ScreenContainer({
 }
 
 const styles = {
-  background: {
-    position: "absolute" as const,
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-    opacity: 0.24,
-  },
   dim: {
     position: "absolute" as const,
     top: 0,
