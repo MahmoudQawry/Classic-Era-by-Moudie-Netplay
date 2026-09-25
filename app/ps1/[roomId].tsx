@@ -16,9 +16,10 @@ import { trpc } from "@/lib/trpc";
 import { useRealtimeRoomSnapshot } from "@/lib/use-realtime-room-snapshot";
 import MoudieEmulatorModule from "@/modules/moudie-emulator/src/MoudieEmulatorModule";
 
-// Android's single-file picker cannot guarantee that a CUE's companion BIN remains beside it.
-// Accept self-contained formats so the native player receives a complete game image.
-const SUPPORTED_EXTENSIONS = [".bin", ".iso", ".chd", ".pbp"] as const;
+// Prefer complete PS1 disc layouts. CUE/M3U are accepted because PCSX-ReARMed uses
+// their track metadata for CD audio; the native layer validates companion files.
+// Self-contained BIN/ISO/CHD/PBP images remain supported as well.
+const SUPPORTED_EXTENSIONS = [".bin", ".cue", ".img", ".toc", ".ccd", ".mdf", ".pbp", ".chd", ".iso", ".m3u"] as const;
 const PS1_NETPLAY_CORE_VERSION = "pcsx-rearmed-0.13.2-lockstep-v2-adaptive";
 type BiosStatus = Record<string, { required: boolean; available: boolean; files?: string[]; message: string }>;
 type RoomVoiceChatHandle = { setMicrophoneEnabled: (enabled: boolean) => Promise<void>; setSpeakerEnabled?: (enabled: boolean) => Promise<void> };
