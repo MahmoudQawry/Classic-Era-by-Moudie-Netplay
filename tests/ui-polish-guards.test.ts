@@ -154,6 +154,6 @@ describe("requested UI, wording and analog-control changes", () => {
     expect(ps1Netplay).toContain("frame");
     expect(voice).toContain("restartIce");
     expect(voiceNative).toContain("@livekit/react-native");
-    expect(voiceNative).toContain("restartIce");
+    expect(voiceNative).toContain("ConnectionState");
   });
 });
