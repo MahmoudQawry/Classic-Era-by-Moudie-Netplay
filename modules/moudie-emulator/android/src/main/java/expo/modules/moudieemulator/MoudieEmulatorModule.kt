@@ -222,7 +222,7 @@ class MoudieEmulatorModule : Module() {
     }
 
     AsyncFunction("fingerprintPS1Game") { uri: String, fileName: String ->
-      require(fileName.substringAfterLast('.', "").lowercase() in ps1GameExtensions) { "Choose a PS1 BIN, CUE, ISO, CHD, or PBP file." }
+      require(fileName.substringAfterLast('.', "").lowercase() in ps1GameExtensions) { "Choose a supported PS1 disc image or CUE/M3U layout." }
       fingerprintGameUri(uri)
     }
 
@@ -268,7 +268,7 @@ class MoudieEmulatorModule : Module() {
   }
 
   private val ps1BiosCandidates = setOf("scph5500.bin", "scph5501.bin", "scph5502.bin", "scph1001.bin")
-  private val ps1GameExtensions = setOf("bin", "cue", "iso", "chd", "pbp")
+  private val ps1GameExtensions = setOf("bin", "cue", "img", "toc", "ccd", "mdf", "m3u", "iso", "chd", "pbp")
 
   private fun launchFamicomNativePlayer(uri: String, fileName: String, focusMode: Boolean, playerOptions: Map<String, Any>? = null) {
     require(uri.isNotBlank()) { "Choose a local Famicom game file first." }
