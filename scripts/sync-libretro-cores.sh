@@ -110,7 +110,7 @@ if "Moudie PS2 JNI bootstrap" not in text:
 path.write_text(text)
 PY
 
-  cmake -S "${play_source}" -B "${play_build}" -G Ninja -DBUILD_LIBRETRO_CORE=yes -DBUILD_PLAY=off -DBUILD_TESTS=no -DENABLE_AMAZON_S3=no -DGLES_COMPATIBILITY=1 -DANDROID_STL=c++_static -DANDROID_ABI="${ABI}" -DANDROID_NATIVE_API_LEVEL=24 -DANDROID_NDK="${ndk}" -DCMAKE_TOOLCHAIN_FILE="${ndk}/build/cmake/android.toolchain.cmake" -DCMAKE_BUILD_TYPE=Release
+  cmake -S "${play_source}" -B "${play_build}" -G Ninja -DBUILD_LIBRETRO_CORE=yes -DBUILD_PLAY=off -DBUILD_TESTS=no -DENABLE_AMAZON_S3=no -DGLES_COMPATIBILITY=1 -DANDROID_STL=c++_static -DANDROID_ABI="${ABI}" -DANDROID_NATIVE_API_LEVEL=26 -DANDROID_NDK="${ndk}" -DCMAKE_TOOLCHAIN_FILE="${ndk}/build/cmake/android.toolchain.cmake" -DCMAKE_BUILD_TYPE=Release
   cmake --build "${play_build}" --target play_libretro --parallel 2
   local built
   built="$(find "${play_build}" -type f -name 'play_libretro_android.so' -print -quit)"
