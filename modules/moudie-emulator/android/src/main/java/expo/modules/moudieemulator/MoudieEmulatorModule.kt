@@ -330,7 +330,28 @@ class MoudieEmulatorModule : Module() {
     val gameFile = File(gamePath)
     require(gameFile.length() > 1024L) { "The PS1 game file is too small or incomplete." }
     if (extension == "cue") validateCueCompanion(gameFile)
+    if (extension == "bin") {
+      val generatedCue = File(gameFile.parentFile, "${gameFile.nameWithoutExtension}.moudie.cue")
+      if (!generatedCue.isFile || generatedCue.length() == 0L) {
+        val mode = detectRawBinSectorMode(gameFile)
+        generatedCue.writeText("""FILE "${gameFile.name}" BINARY
+TRACK 01 ${mode}
+INDEX 01 00:00:00
+""")
+      }
+      return generatedCue.absolutePath
+    }
     return gamePath
+  }
+
+
+  private fun detectRawBinSectorMode(file: File): String {
+    return runCatching {
+      file.inputStream().use { input ->
+        val header = ByteArray(16)
+        if (input.read(header) == 16 && header[15].toInt() == 2) "MODE2/2352" else "MODE1/2352"
+      }
+    }.getOrDefault("MODE2/2352")
   }
 
   private fun validateCueCompanion(cueFile: File) {
