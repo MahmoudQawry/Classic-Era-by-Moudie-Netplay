@@ -1,3 +1,6 @@
+concurrency:
+  group: android-release-${{ github.ref }}
+  cancel-in-progress: true
 name: Android release validation
 
 on:
