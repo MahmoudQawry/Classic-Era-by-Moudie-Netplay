@@ -61,4 +61,56 @@ describe("requested UI, wording and analog-control changes", () => {
     expect(voice).toContain("AppState");
     expect(voice).toContain("remoteTracksRef");
   });
+  it("keeps all six emulator cores and their touch-control profiles aligned", () => {
+    const catalog = read("modules/moudie-emulator/android/src/main/java/expo/modules/moudieemulator/NativeCoreCatalog.kt");
+    const controls = read("modules/moudie-emulator/android/src/main/java/expo/modules/moudieemulator/EmulatorControlProfiles.kt");
+    const controller = read("components/customizable-controller.tsx");
+    const expected = [
+      ["fceumm_libretro_android.so", "FAMICOM", "famicom"],
+      ["pcsx_rearmed_libretro_android.so", "PS1", "ps1"],
+      ["ppsspp_libretro_android.so", "PSP", "psp"],
+      ["genesis_plus_gx_libretro_android.so", "SEGA", "sega"],
+      ["parallel_n64_libretro_android.so", "N64", "n64"],
+      ["play_libretro_android.so", "PS2", "ps2"],
+    ];
+    for (const [core, profile, system] of expected) {
+      expect(catalog).toContain(core);
+      expect(controls).toContain(`val ${profile}`);
+      expect(controller).toContain(`${system}:`);
+    }
+    expect(controller).toContain("onButtonChange?.");
+    expect(controller).toContain("onPressIn");
+    expect(controller).toContain("onPressOut");
+  });
+
+  it("uses the new MN circuit background as the global screen layer", () => {
+    const container = read("components/screen-container.tsx");
+    const background = read("components/classic-era-background.tsx");
+    expect(container).toContain("ClassicEraBackground");
+    expect(container).not.toContain("classic-era-ui-background.jpg");
+    expect(background).toContain("viewBox=\"0 0 691 1536\"");
+    expect(background).toContain("#25eaff");
+    expect(background).toContain(">M</SvgText>");
+    expect(background).toContain(">N</SvgText>");
+  });
+
+  it("does not reference the legacy runtime brand assets", () => {
+    const files = [
+      "app.config.ts",
+      "components/brand-logo.tsx",
+      "app/(tabs)/index.tsx",
+      "app/(tabs)/settings.tsx",
+      "app/create-room.tsx",
+      "app/join-room.tsx",
+      "app/public-lobby.tsx",
+    ];
+    for (const file of files) {
+      const source = read(file);
+      expect(source).not.toContain("moudie-brand-icon.png");
+      expect(source).not.toContain("partial-react-logo.png");
+      expect(source).not.toContain("react-logo.png");
+      expect(source).toContain("classic-era-new-icon.png");
+    }
+  });
+
 });
