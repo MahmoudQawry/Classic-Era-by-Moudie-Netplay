@@ -119,10 +119,43 @@ jobs:
           echo "Room service failed to start or /api/health is unavailable."
           cat /tmp/moudie-server.log
           exit 1
+      - name: 🎬 استعادة فيديو الإقلاع الرسمي الأصلي
+        run: |
+          set -e
+          # The binary was accidentally removed in an earlier cleanup commit.
+          # Restore the exact verified blob from its last known-good Git commit.
+          git fetch --no-tags origin 06c1bc6a78fe197698f6c52071d730532534637b --depth=1
+          mkdir -p assets/videos
+          git show 06c1bc6a78fe197698f6c52071d730532534637b:assets/videos/classic-era-official-boot.mp4 > assets/videos/classic-era-official-boot.mp4
+          test -s assets/videos/classic-era-official-boot.mp4
+          file assets/videos/classic-era-official-boot.mp4
+          sha256sum assets/videos/classic-era-official-boot.mp4
+          test "$(stat -c%s assets/videos/classic-era-official-boot.mp4)" -gt 8000
+
       - name: 🧩 إصلاح سلامة أيقونة PNG قبل Expo prebuild
         run: python3 scripts/repair-png-crc.py assets/images/classic-era-new-icon.png
+      - name: 🧷 التحقق من طبقات أيقونة MN قبل Expo prebuild
+        run: |
+          set -e
+          test -s assets/images/classic-era-new-icon.png
+          test -s assets/images/android-icon-foreground.png
+          test -s assets/images/android-icon-background.png
+          test -s assets/images/android-icon-monochrome.png
+          grep -q 'android-icon-foreground.png' app.config.ts
+          grep -q 'android-icon-background.png' app.config.ts
+          grep -q 'android-icon-monochrome.png' app.config.ts
+
       - name: 🔧 Prebuild Android
         run: npx expo prebuild --platform android
+      - name: 🎨 التحقق من الخلفية الجديدة في كل مسار واجهة
+        run: |
+          set -e
+          grep -q 'viewBox="0 0 691 1536"' assets/images/classic-era-ui-background-new.svg
+          grep -q 'ClassicEraBackground' components/screen-container.tsx
+          grep -q 'viewBox="0 0 691 1536"' components/classic-era-background.tsx
+          grep -q '#25eaff' components/classic-era-background.tsx
+          echo "Canonical 691x1536 MN circuit background is wired globally."
+
       - name: 🛡️ استعادة مسار الإقلاع العادي
         run: python3 scripts/restore-plain-android-startup.py
       - name: 🔐 فحص صلاحيات Android قبل Release
