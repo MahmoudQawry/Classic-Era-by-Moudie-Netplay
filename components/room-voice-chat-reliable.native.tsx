@@ -1,6 +1,6 @@
 import { RTCPeerConnection, RTCIceCandidate, RTCSessionDescription, mediaDevices, registerGlobals, type MediaStream, type MediaStreamTrack } from "@livekit/react-native-webrtc";
 import InCallManager from "react-native-incall-manager";
-import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { AppState, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { useLanguage } from "@/lib/language";
 
@@ -47,6 +47,7 @@ export const RoomVoiceChat=forwardRef<RoomVoiceChatHandle,Props>(function RoomVo
   const micRef=useRef(microphoneEnabled);
   micRef.current=microphoneEnabled;
   const speakerRef=useRef(speakerEnabled);
+  const retryTimers=useRef(new Map<number,ReturnType<typeof setTimeout>>());
   speakerRef.current=speakerEnabled;
 
   const send=(event:string,payload:unknown)=>socketRef.current?.emit?.(event,payload);
@@ -67,7 +68,7 @@ export const RoomVoiceChat=forwardRef<RoomVoiceChatHandle,Props>(function RoomVo
     const entry=peers.current.get(remoteId);
     if(entry){try{entry.pc.close();}catch{} peers.current.delete(remoteId);}
     remoteTracks.current.delete(remoteId);
-    setConnectedPeers(peers.current.size);
+    setConnectedPeers(Array.from(peers.current.values()).filter(x=>x.pc.connectionState==="connected").length);
   };
 
   const attachLocalTrack=async(pc:RTCPeerConnection)=>{
@@ -110,6 +111,7 @@ export const RoomVoiceChat=forwardRef<RoomVoiceChatHandle,Props>(function RoomVo
       if(state==="connected" || state==="completed") setStatus("VOICE CONNECTED");
       if(state==="checking") setStatus("VOICE CONNECTING");
       if(state==="failed"){
+        try{pc.restartIce();}catch{}
         closePeer(remoteId);
         if(socketRef.current?.connected && memberId && memberId<remoteId){
           setTimeout(()=>{ if(socketRef.current?.connected) void createPeer(remoteId,true).catch(()=>setStatus("VOICE CONNECTION RETRYING")); },750);
@@ -177,7 +179,20 @@ export const RoomVoiceChat=forwardRef<RoomVoiceChatHandle,Props>(function RoomVo
     }
   };
 
+  const ensurePeers=()=>{
+    if(!memberId || !socketRef.current?.connected) return;
+    for(const member of members){
+      const remoteId=Number(member.id);
+      if(!remoteId || remoteId===memberId || memberId>=remoteId) continue;
+      const existing=peers.current.get(remoteId);
+      if(existing && (existing.pc.connectionState==="connected" || existing.pc.connectionState==="connecting")) continue;
+      if(existing) closePeer(remoteId);
+      void createPeer(remoteId,true).catch(()=>setStatus("VOICE CONNECTION RETRYING"));
+    }
+  };
+
   const enableMic=async(enabled:boolean)=>{
+    ensurePeers();
     if(enabled){
       try{
         ensureAudioSession();
@@ -263,7 +278,7 @@ export const RoomVoiceChat=forwardRef<RoomVoiceChatHandle,Props>(function RoomVo
 
   if(Platform.OS==="web")return null;
   return <View style={styles.card}>
-    <View style={styles.heading}><Text style={styles.title}>🎙️ {t("voice")}</Text><Text style={styles.online}>{connectedPeers} PEERS</Text></View>
+    <View style={styles.heading}><Text style={styles.title}>🎙️ {t("voice")}</Text><Text style={styles.online}>{connectedPeers}/{Math.max(0, members.filter(m=>m.id!==memberId).length)} PEERS</Text></View>
     <Text style={styles.status}>{status}</Text>
     <View style={styles.row}>
       <Pressable onPress={()=>void enableMic(!microphoneEnabled)} style={[styles.action,microphoneEnabled&&styles.active]}><Text style={styles.actionText}>{microphoneEnabled?t("micOn"):t("micOff")}</Text></Pressable>
