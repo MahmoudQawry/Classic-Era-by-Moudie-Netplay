@@ -110,7 +110,8 @@ describe("requested UI, wording and analog-control changes", () => {
     const background = read("components/classic-era-background.tsx");
     const imagePath = resolve(root, "assets/images/classic-era-ui-background.jpg");
     expect(container).toContain("ClassicEraBackground");
-    expect(background).toContain("classic-era-ui-background.jpg");
+    expect(background).toContain('viewBox="0 0 691 1536"');
+    expect(background).toContain("#25eaff");
     expect(background).toContain("ImageBackground");
     expect(statSync(imagePath).size).toBeGreaterThan(1000);
     const size = readJpegSize(imagePath);
