@@ -4,7 +4,7 @@ import { useLanguage } from "@/lib/language";
 
 type Props = { children: ReactNode };
 
-/** Official boot video. The source video is intentionally left untouched so its original animation/audio timing stays intact. */
+/** Bundled MN launch poster keeps startup self-contained and avoids a missing external video asset. */
 export function MoudieLaunchIntro({ children }: Props) {
   const { t } = useLanguage();
   const [introVisible, setIntroVisible] = useState(true);
