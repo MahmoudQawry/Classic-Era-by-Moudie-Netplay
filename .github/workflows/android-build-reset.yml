@@ -2,7 +2,7 @@ name: Android Build Zero Counter
 
 on:
   push:
-    branches: [main]
+    branches: [main, release/deep-hardening-2026-09-26]
   workflow_dispatch:
 run-name: Android Build Zero Counter
 permissions:
@@ -49,6 +49,8 @@ jobs:
           fi
       - name: 🛑 رفض البناء عند فشل TypeScript
         run: test "$(cat ts-check.exit)" = "0"
+      - name: 🧹 تنظيف آمن قبل الاختبارات والبناء
+        run: pnpm cleanup -- --apply
       - name: 🧪 تشغيل الاختبارات
         run: pnpm test
       - name: 🖐️ تثبيت نظام التحكم الحقيقي متعدد الأصابع
