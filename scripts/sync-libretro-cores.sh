@@ -19,46 +19,9 @@ build_play_core() {
   echo "Building patched Play! core from upstream source..."
   git clone --depth 1 --recurse-submodules --shallow-submodules https://github.com/jpd002/Play-.git "${play_source}"
 
-  python3 - "${play_source}/Source/ui_libretro/GSH_OpenGL_Libretro.cpp" <<'PY'
-from pathlib import Path
-import sys
-path = Path(sys.argv[1])
-text = path.read_text()
-text = text.replace(
-"""	if(g_hw_render.get_current_framebuffer)
-		m_presentFramebuffer = g_hw_render.get_current_framebuffer();
-""",
-"""	// Moudie frontend: Play!'s GS runs on the libretro/GL thread and presents
-	// directly into the GLSurfaceView default framebuffer. LibretroDroid's
-	// intermediate FBO is not used for this core because Play! owns the
-	// presentation pass and asynchronous GS state can otherwise leave the
-	// hand-off texture black even while the emulator/audio/input are alive.
-	m_presentFramebuffer = 0;
-""",1)
-text = text.replace(
-"""	if(g_hw_render.get_current_framebuffer)
-		m_presentFramebuffer = g_hw_render.get_current_framebuffer();
-	else
-		return;
-
-	CGSH_OpenGL::FlipImpl(dispInfo);
-""",
-"""	// Keep presentation on the Android window framebuffer for this frontend.
-	m_presentFramebuffer = 0;
-	CGSH_OpenGL::FlipImpl(dispInfo);
-""",1)
-text = text.replace(
-"""	if(g_video_cb)
-		g_video_cb(RETRO_HW_FRAME_BUFFER_VALID, GetCrtWidth() * g_res_factor, GetCrtHeight() * g_res_factor, 0);
-""",
-"""	// The framebuffer is already the Android GLSurfaceView default framebuffer.
-	// Do not invoke LibretroDroid's hardware-video callback here: that callback
-	// would run its own post-processing renderer and clear the framebuffer we
-	// just presented.
-""",1)
-if "Moudie frontend: Play!'s GS runs on the libretro/GL thread" not in text: raise SystemExit("Direct presentation patch was not applied")
-path.write_text(text)
-PY
+  # Keep Play!'s upstream GL presentation path intact. The Android bridge below
+  # only initializes JavaVM before LibretroDroid loads the core; changing the
+  # framebuffer ownership here can black-screen PS2 on some GPU drivers.
 
   python3 - "${play_source}/Source/ui_libretro/main_libretro.cpp" <<'PY'
 from pathlib import Path
