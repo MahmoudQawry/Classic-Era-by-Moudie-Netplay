@@ -3,6 +3,8 @@ name: Android Build Zero Counter
 on:
   push:
     branches: [main, release/deep-hardening-2026-09-26]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 run-name: Android Build Zero Counter
 permissions:
