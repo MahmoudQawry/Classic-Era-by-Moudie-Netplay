@@ -108,6 +108,19 @@ android {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
         }
+        release {
+            def storeFilePath = System.getenv("MOUDIE_RELEASE_STORE_FILE")
+            def storePasswordValue = System.getenv("MOUDIE_RELEASE_STORE_PASSWORD")
+            def keyAliasValue = System.getenv("MOUDIE_RELEASE_KEY_ALIAS")
+            def keyPasswordValue = System.getenv("MOUDIE_RELEASE_KEY_PASSWORD")
+            if (!storeFilePath || !storePasswordValue || !keyAliasValue || !keyPasswordValue) {
+                throw new GradleException("Release signing is not configured. Set MOUDIE_RELEASE_STORE_FILE, MOUDIE_RELEASE_STORE_PASSWORD, MOUDIE_RELEASE_KEY_ALIAS and MOUDIE_RELEASE_KEY_PASSWORD.")
+            }
+            storeFile file(storeFilePath)
+            storePassword storePasswordValue
+            keyAlias keyAliasValue
+            keyPassword keyPasswordValue
+        }
     }
     buildTypes {
         debug {
@@ -116,7 +129,7 @@ android {
         release {
             // Caution! In production, you need to generate your own keystore file.
             // see https://reactnative.dev/docs/signed-apk-android.
-            signingConfig signingConfigs.debug
+            signingConfig signingConfigs.release
             def enableShrinkResources = findProperty('android.enableShrinkResourcesInReleaseBuilds') ?: 'false'
             shrinkResources enableShrinkResources.toBoolean()
             minifyEnabled enableMinifyInReleaseBuilds
