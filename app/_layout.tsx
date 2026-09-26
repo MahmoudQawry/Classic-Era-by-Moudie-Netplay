@@ -5,6 +5,9 @@ import { StatusBar } from "expo-status-bar";
 import { useMemo, useState } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { Platform } from "react-native";
+import Constants from "expo-constants";
+import { useEffect } from "react";
+import { initializeDiscordSocial, clearDiscordRichPresence } from "@/lib/discord-social";
 import "@/lib/_core/nativewind-pressable";
 import { ThemeProvider } from "@/lib/theme-provider";
 import { LanguageProvider } from "@/lib/language";
@@ -18,6 +21,13 @@ const DEFAULT_WEB_FRAME: Rect = { x: 0, y: 0, width: 0, height: 0 };
 export const unstable_settings = { anchor: "(tabs)" };
 
 export default function RootLayout() {
+  useEffect(() => {
+    if (Platform.OS !== "android") return;
+    const applicationId = Constants.expoConfig?.extra?.discordApplicationId as string | undefined;
+    initializeDiscordSocial(applicationId);
+    return () => clearDiscordRichPresence();
+  }, []);
+
   const initialInsets = initialWindowMetrics?.insets ?? DEFAULT_WEB_INSETS;
   const initialFrame = initialWindowMetrics?.frame ?? DEFAULT_WEB_FRAME;
   const [insets] = useState<EdgeInsets>(initialInsets);
