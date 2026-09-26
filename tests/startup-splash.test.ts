@@ -52,7 +52,8 @@ describe("Android startup splash safeguards", () => {
     ["introSkip", "VideoView", "useVideoPlayer"].forEach((label) => expect(intro).toContain(label));
     expect(intro).not.toContain("MaterialCommunityIcons");
     expect(intro).not.toContain("Animated.sequence");
-    expect(intro).not.toContain("classic-era-new-poster.png");\n    expect(lobby).toContain("classic-era-ui-background.jpg");
+    expect(intro).not.toContain("classic-era-new-poster.png");
+    expect(lobby).toContain("classic-era-ui-background.jpg");
     expect(intro).toContain("EXPO_PUBLIC_BOOT_VIDEO_URL");
     expect(intro).toContain("onPress={() => setIntroVisible(false)}");
     expect(intro).toContain("const [introVisible, setIntroVisible] = useState(true)");
