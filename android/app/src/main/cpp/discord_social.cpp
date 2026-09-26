@@ -1,5 +1,10 @@
+#if __has_include("discordpp.h")
 #define DISCORDPP_IMPLEMENTATION
 #include "discordpp.h"
+#define MOUDIE_HAS_DISCORD_SDK 1
+#else
+#define MOUDIE_HAS_DISCORD_SDK 0
+#endif
 
 #include <jni.h>
 #include <android/log.h>
@@ -10,6 +15,7 @@
 #include <tuple>
 #include <utility>
 
+#if MOUDIE_HAS_DISCORD_SDK
 namespace {
 std::mutex g_mutex;
 std::unique_ptr<discordpp::Client> g_client;
@@ -37,12 +43,11 @@ void publishLocked() {
 #endif
 }
 }
+#endif
 
 extern "C" JNIEXPORT jboolean JNICALL
 Java_com_app_moudienetplay_DiscordSocialNative_initialize(JNIEnv* env, jobject, jstring applicationId) {
-#if !defined(__aarch64__)
-  return JNI_FALSE;
-#else
+#if MOUDIE_HAS_DISCORD_SDK && defined(__aarch64__)
   const char* chars = env->GetStringUTFChars(applicationId, nullptr);
   if (!chars) return JNI_FALSE;
   uint64_t appId = 0;
@@ -63,13 +68,17 @@ Java_com_app_moudienetplay_DiscordSocialNative_initialize(JNIEnv* env, jobject, 
   g_client->SetApplicationId(appId);
   g_client->Connect();
   return JNI_TRUE;
+#else
+  (void)env;
+  (void)applicationId;
+  return JNI_FALSE;
 #endif
 }
 
 extern "C" JNIEXPORT void JNICALL
 Java_com_app_moudienetplay_DiscordSocialNative_updateRichPresence(
     JNIEnv* env, jobject, jstring details, jstring state, jstring partyId, jint partySize, jint partyMax) {
-#if defined(__aarch64__)
+#if MOUDIE_HAS_DISCORD_SDK && defined(__aarch64__)
   auto readString = [env](jstring value) -> std::string {
     if (!value) return {};
     const char* chars = env->GetStringUTFChars(value, nullptr);
@@ -81,12 +90,14 @@ Java_com_app_moudienetplay_DiscordSocialNative_updateRichPresence(
   std::lock_guard<std::mutex> lock(g_mutex);
   g_pending = std::make_tuple(readString(details), readString(state), readString(partyId), static_cast<int32_t>(partySize), static_cast<int32_t>(partyMax));
   publishLocked();
+#else
+  (void)env; (void)details; (void)state; (void)partyId; (void)partySize; (void)partyMax;
 #endif
 }
 
 extern "C" JNIEXPORT void JNICALL
 Java_com_app_moudienetplay_DiscordSocialNative_clearRichPresence(JNIEnv*, jobject) {
-#if defined(__aarch64__)
+#if MOUDIE_HAS_DISCORD_SDK && defined(__aarch64__)
   std::lock_guard<std::mutex> lock(g_mutex);
   g_pending.reset();
   if (g_client && g_client->GetStatus() == discordpp::Client::Status::Ready) g_client->ClearRichPresence();
@@ -95,14 +106,14 @@ Java_com_app_moudienetplay_DiscordSocialNative_clearRichPresence(JNIEnv*, jobjec
 
 extern "C" JNIEXPORT void JNICALL
 Java_com_app_moudienetplay_DiscordSocialNative_runCallbacks(JNIEnv*, jobject) {
-#if defined(__aarch64__)
+#if MOUDIE_HAS_DISCORD_SDK && defined(__aarch64__)
   discordpp::RunCallbacks();
 #endif
 }
 
 extern "C" JNIEXPORT void JNICALL
 Java_com_app_moudienetplay_DiscordSocialNative_shutdown(JNIEnv*, jobject) {
-#if defined(__aarch64__)
+#if MOUDIE_HAS_DISCORD_SDK && defined(__aarch64__)
   std::lock_guard<std::mutex> lock(g_mutex);
   if (g_client) g_client->Disconnect();
   g_client.reset();
