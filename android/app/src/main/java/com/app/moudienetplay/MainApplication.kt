@@ -66,6 +66,7 @@ class MainApplication : Application(), ReactApplication {
       ReleaseLevel.STABLE
     }
     LiveKitReactNative.setup(this, AudioType.CommunicationAudioType())
+    RuntimeCleanup.run(this)
     loadReactNative(this)
     ApplicationLifecycleDispatcher.onApplicationCreate(this)
   }
@@ -74,7 +75,7 @@ class MainApplication : Application(), ReactApplication {
     super.onTrimMemory(level)
     if (level >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) {
       // Discard only small temporary cache files; ROMs, saves, and user files are preserved.
-      cacheDir.listFiles()?.filter { it.isFile && it.length() < 8L * 1024 * 1024 }?.forEach { it.delete() }
+      RuntimeCleanup.run(this)
     }
   }
 
