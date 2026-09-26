@@ -1,6 +1,6 @@
 import { AudioSession, LiveKitRoom, registerGlobals, useRoomContext } from "@livekit/react-native";
 import { ConnectionState, RoomEvent } from "livekit-client";
-import { AppState, Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { forwardRef, useEffect, useImperativeHandle, useState } from "react";
 import { useLanguage } from "@/lib/language";
 
@@ -76,26 +76,25 @@ const LiveKitVoiceControls=forwardRef<RoomVoiceChatHandle,ControlsProps>(functio
     const onParticipant=()=>update();
     room.on(RoomEvent.Connected,onConnected);
     room.on(RoomEvent.Disconnected,onDisconnected);
+    room.on(RoomEvent.Reconnecting,()=>setStatus("VOICE RECONNECTING"));
+    room.on(RoomEvent.Reconnected,()=>setStatus("VOICE CONNECTED"));
     room.on(RoomEvent.ParticipantConnected,onParticipant);
     room.on(RoomEvent.ParticipantDisconnected,onParticipant);
     room.on(RoomEvent.ConnectionQualityChanged,onParticipant);
     return ()=>{
       room.off(RoomEvent.Connected,onConnected);
       room.off(RoomEvent.Disconnected,onDisconnected);
+      room.off(RoomEvent.Reconnecting,()=>setStatus("VOICE RECONNECTING"));
+      room.off(RoomEvent.Reconnected,()=>setStatus("VOICE CONNECTED"));
       room.off(RoomEvent.ParticipantConnected,onParticipant);
       room.off(RoomEvent.ParticipantDisconnected,onParticipant);
       room.off(RoomEvent.ConnectionQualityChanged,onParticipant);
     };
   },[room]);
 
-  useEffect(()=>{
-    const onAppState=(state:string)=>{
-      if(state==="active" && room.state===ConnectionState.Disconnected) void room.reconnect();
-    };
-    const sub=AppState.addEventListener("change",onAppState);
-    return ()=>sub.remove();
-  },[room]);
-
+  // LiveKit owns reconnection and ICE migration. We only surface its state;
+  // manual reconnect calls are intentionally avoided because Room's reconnect
+  // policy is internal and handles Wi-Fi/cellular transitions safely.
   const setMic=async(enabled:boolean)=>{
     try{
       await room.localParticipant.setMicrophoneEnabled(enabled);
