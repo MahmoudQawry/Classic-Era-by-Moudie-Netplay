@@ -27,7 +27,11 @@ describe("six-emulator release matrix",()=>{
       }else{
         expect(sync).toContain(`fetch_core ${remote} ${remote}`);
       }
-      if(id === "ps2") {\n        expect(sync).toContain(`cp "${built}" "${TARGET}/play_libretro_android.so"`);\n      } else {\n        expect(sync).toContain("TARGET/${local_name}_libretro_android.so");\n      }
+      if(id === "ps2"){
+        expect(sync).toContain('cp "${built}" "${TARGET}/play_libretro_android.so"');
+      }else{
+        expect(sync).toContain('unzip -p "${archive}" "${remote_name}_libretro_android.so" > "${TARGET}/${local_name}_libretro_android.so"');
+      }
     }
     expect(build).toContain("for CORE in fceumm pcsx_rearmed ppsspp genesis_plus_gx parallel_n64 play");
   });
