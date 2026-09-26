@@ -58,7 +58,8 @@ describe("Android startup splash safeguards", () => {
     expect(intro).toContain("onPress={() => setIntroVisible(false)}");
     expect(intro).toContain("const [introVisible, setIntroVisible] = useState(true)");
     expect(intro).toContain("{children}");
-    expect(intro).toContain("{introVisible && <View style={styles.screen}");
+    expect(intro).toContain("{introVisible && (");
+    expect(intro).toContain("<View style={styles.screen}");
     expect(recovery).toContain("TRY AGAIN");
     expect(recovery).toContain("MOUDIE IS READY");
     expect(rootLayout).not.toContain("MoudieLaunchIntro");
