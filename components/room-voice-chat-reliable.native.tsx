@@ -1,7 +1,7 @@
-import { RTCPeerConnection, RTCIceCandidate, RTCSessionDescription, mediaDevices, registerGlobals, type MediaStream, type MediaStreamTrack } from "@livekit/react-native-webrtc";
-import InCallManager from "react-native-incall-manager";
-import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { AudioSession, LiveKitRoom, registerGlobals, useRoomContext } from "@livekit/react-native";
+import { ConnectionState, RoomEvent } from "livekit-client";
+import { AppState, Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { forwardRef, useEffect, useImperativeHandle, useState } from "react";
 import { useLanguage } from "@/lib/language";
 
 registerGlobals();
@@ -11,275 +11,145 @@ export type RoomVoiceChatHandle = {
   setMicrophoneEnabled:(enabled:boolean)=>Promise<void>;
   setSpeakerEnabled?:(enabled:boolean)=>Promise<void>;
 };
+type MediaToken = { configured:boolean; url?:string; roomName?:string; token?:string; canPublish?:boolean; message?:string };
 type Props = {
   memberId?:number;
   members?:VoiceMember[];
   memberRole?:VoiceMember["role"];
-  socket?:{ on?:(event:string,cb:(payload:any)=>void)=>unknown; off?:(event:string,cb:(payload:any)=>void)=>unknown; emit?:(event:string,payload?:unknown)=>unknown; connected?:boolean }|null;
-  mediaToken?:{configured:boolean;message?:string}|null;
-  teamMediaToken?:{configured:boolean;message?:string}|null;
+  socket?:unknown;
+  mediaToken?:MediaToken|null;
+  teamMediaToken?:MediaToken|null;
   onChatPress?:()=>void;
 };
 
-type PeerEntry={pc:RTCPeerConnection; pendingIce:RTCIceCandidate[]};
-
-const TURN_URL=process.env.EXPO_PUBLIC_TURN_URL?.trim();
-const TURN_USERNAME=process.env.EXPO_PUBLIC_TURN_USERNAME?.trim();
-const TURN_CREDENTIAL=process.env.EXPO_PUBLIC_TURN_CREDENTIAL?.trim();
-const ICE_CONFIG={iceServers:[
-  {urls:"stun:stun.l.google.com:19302"},
-  {urls:"stun:stun.cloudflare.com:3478"},
-  ...(TURN_URL&&TURN_USERNAME&&TURN_CREDENTIAL?[{urls:TURN_URL,username:TURN_USERNAME,credential:TURN_CREDENTIAL}]:[]),
-]};
-
-export const RoomVoiceChat=forwardRef<RoomVoiceChatHandle,Props>(function RoomVoiceChat({memberId,members=[],socket,onChatPress},ref){
+export const RoomVoiceChat = forwardRef<RoomVoiceChatHandle, Props>(function RoomVoiceChat({members=[],mediaToken,onChatPress},ref){
   const {t}=useLanguage();
+  const [audioSessionReady,setAudioSessionReady]=useState(false);
+
+  useEffect(()=>{
+    if(Platform.OS==="web" || !mediaToken?.configured) return;
+    let active=true;
+    void AudioSession.startAudioSession().then(()=>{if(active)setAudioSessionReady(true)}).catch(()=>setAudioSessionReady(false));
+    return ()=>{active=false; void AudioSession.stopAudioSession();};
+  },[mediaToken?.configured]);
+
+  if(Platform.OS==="web") return null;
+  if(!mediaToken?.configured || !mediaToken.url || !mediaToken.token){
+    return <View style={styles.card}>
+      <View style={styles.heading}><Text style={styles.title}>🎙️ {t("voice")}</Text><Text style={styles.offline}>LIVEKIT</Text></View>
+      <Text style={styles.status}>{mediaToken?.message || "خدمة الصوت الإنتاجية غير متاحة حاليًا."}</Text>
+    </View>;
+  }
+
+  return <View style={styles.card}>
+    <LiveKitRoom
+      serverUrl={mediaToken.url}
+      token={mediaToken.token}
+      connect={audioSessionReady}
+      audio={false}
+      video={false}
+      options={{adaptiveStream:true,dynacast:true}}
+      onError={(error)=>console.warn("[Moudie LiveKit]",error)}
+    >
+      <LiveKitVoiceControls members={members} onChatPress={onChatPress} ref={ref}/>
+    </LiveKitRoom>
+  </View>;
+});
+
+type ControlsProps={members:VoiceMember[];onChatPress?:()=>void};
+const LiveKitVoiceControls=forwardRef<RoomVoiceChatHandle,ControlsProps>(function LiveKitVoiceControls({members,onChatPress},ref){
+  const {t}=useLanguage();
+  const room=useRoomContext();
   const [microphoneEnabled,setMicrophoneEnabled]=useState(false);
   const [speakerEnabled,setSpeakerEnabled]=useState(true);
+  const [status,setStatus]=useState("VOICE CONNECTING");
   const [connectedPeers,setConnectedPeers]=useState(0);
-  const [status,setStatus]=useState("VOICE READY");
-  const peers=useRef(new Map<number,PeerEntry>());
-  const makingOffer=useRef(new Set<number>());
-  const localStream=useRef<MediaStream|null>(null);
-  const remoteTracks=useRef(new Map<number,MediaStreamTrack[]>());
-  const socketRef=useRef(socket);
-  socketRef.current=socket;
-  const micRef=useRef(microphoneEnabled);
-  micRef.current=microphoneEnabled;
-  const speakerRef=useRef(speakerEnabled);
-  speakerRef.current=speakerEnabled;
 
-  const send=(event:string,payload:unknown)=>socketRef.current?.emit?.(event,payload);
+  useEffect(()=>{
+    const update=()=>{
+      setStatus(room.state===ConnectionState.Connected?"VOICE CONNECTED":"VOICE CONNECTING");
+      setConnectedPeers(room.remoteParticipants.size);
+    };
+    update();
+    const onConnected=()=>update();
+    const onDisconnected=()=>{setStatus("VOICE RECONNECTING");setConnectedPeers(0)};
+    const onParticipant=()=>update();
+    room.on(RoomEvent.Connected,onConnected);
+    room.on(RoomEvent.Disconnected,onDisconnected);
+    room.on(RoomEvent.ParticipantConnected,onParticipant);
+    room.on(RoomEvent.ParticipantDisconnected,onParticipant);
+    room.on(RoomEvent.ConnectionQualityChanged,onParticipant);
+    return ()=>{
+      room.off(RoomEvent.Connected,onConnected);
+      room.off(RoomEvent.Disconnected,onDisconnected);
+      room.off(RoomEvent.ParticipantConnected,onParticipant);
+      room.off(RoomEvent.ParticipantDisconnected,onParticipant);
+      room.off(RoomEvent.ConnectionQualityChanged,onParticipant);
+    };
+  },[room]);
 
-  const ensureAudioSession=()=>{
+  useEffect(()=>{
+    const onAppState=(state:string)=>{
+      if(state==="active" && room.state===ConnectionState.Disconnected) void room.reconnect();
+    };
+    const sub=AppState.addEventListener("change",onAppState);
+    return ()=>sub.remove();
+  },[room]);
+
+  const setMic=async(enabled:boolean)=>{
     try{
-      InCallManager.start({media:"audio",auto:true});
-      InCallManager.setForceSpeakerphoneOn(speakerRef.current);
-      InCallManager.setSpeakerphoneOn(speakerRef.current);
-    }catch{}
-  };
-
-  const applySpeakerMute=(enabled:boolean)=>{
-    for(const tracks of remoteTracks.current.values()) tracks.forEach(track=>{track.enabled=enabled;});
-  };
-
-  const closePeer=(remoteId:number)=>{
-    const entry=peers.current.get(remoteId);
-    if(entry){try{entry.pc.close();}catch{} peers.current.delete(remoteId);}
-    remoteTracks.current.delete(remoteId);
-    setConnectedPeers(peers.current.size);
-  };
-
-  const attachLocalTrack=async(pc:RTCPeerConnection)=>{
-    const stream=localStream.current;
-    const track=stream?.getAudioTracks?.()[0] as MediaStreamTrack|undefined;
-    const transceivers=(pc as any).getTransceivers?.()||[];
-    const audio=transceivers.find((x:any)=>x.receiver?.track?.kind==="audio" || x.sender?.track?.kind==="audio" || x.mid===null);
-    if(track && audio?.sender){
-      await audio.sender.replaceTrack(track).catch(()=>undefined);
-      try{audio.direction="sendrecv";}catch{}
-    }else if(track){
-      pc.addTrack(track,stream!);
-    }
-    if(!track && audio){try{audio.direction="recvonly";}catch{}}
-  };
-
-  const createPeer=async(remoteId:number,initiator:boolean)=>{
-    if(!memberId || remoteId===memberId)return;
-    const existing=peers.current.get(remoteId);
-    if(existing)return existing.pc;
-    const pc=new RTCPeerConnection(ICE_CONFIG as any);
-    peers.current.set(remoteId,{pc,pendingIce:[]});
-    setConnectedPeers(peers.current.size);
-    pc.addEventListener("icecandidate",(event:any)=>{
-      if(event.candidate)send("voice:signal",{targetMemberId:remoteId,type:"ice",candidate:event.candidate});
-    });
-    pc.addEventListener("track",(event:any)=>{
-      ensureAudioSession();
-      const streamTracks=(event.streams?.[0]?.getAudioTracks?.()||[]).filter(Boolean) as MediaStreamTrack[];
-      const fallbackTrack=event.track?.kind==="audio" ? [event.track as MediaStreamTrack] : [];
-      const tracks=streamTracks.length ? streamTracks : fallbackTrack;
-      if(tracks.length){
-        remoteTracks.current.set(remoteId,tracks);
-        applySpeakerMute(speakerRef.current);
-        setStatus("VOICE CONNECTED");
-      }
-    });
-    pc.addEventListener("iceconnectionstatechange",()=>{
-      const state=pc.iceConnectionState;
-      if(state==="connected" || state==="completed") setStatus("VOICE CONNECTED");
-      if(state==="checking") setStatus("VOICE CONNECTING");
-      if(state==="failed"){
-        closePeer(remoteId);
-        if(socketRef.current?.connected && memberId && memberId<remoteId){
-          setTimeout(()=>{ if(socketRef.current?.connected) void createPeer(remoteId,true).catch(()=>setStatus("VOICE CONNECTION RETRYING")); },750);
-        }
-      }
-    });
-    pc.addEventListener("connectionstatechange",()=>{
-      const state=pc.connectionState;
-      if(state==="connected")setStatus("VOICE CONNECTED");
-      if(["failed","closed","disconnected"].includes(state))closePeer(remoteId);
-    });
-    await attachLocalTrack(pc);
-    if(!localStream.current){
-      try{(pc as any).addTransceiver("audio",{direction:"recvonly"});}catch{}
-    }
-    if(initiator){
-      const offer=await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      send("voice:signal",{targetMemberId:remoteId,type:"offer",description:offer});
-    }
-    return pc;
-  };
-
-  const renegotiate=async(remoteId:number)=>{
-    const entry=peers.current.get(remoteId);
-    if(!entry || entry.pc.signalingState!=="stable" || makingOffer.current.has(remoteId))return;
-    makingOffer.current.add(remoteId);
-    try{
-      await attachLocalTrack(entry.pc);
-      if(entry.pc.signalingState!=="stable")return;
-      const offer=await entry.pc.createOffer();
-      await entry.pc.setLocalDescription(offer);
-      if(entry.pc.localDescription) send("voice:signal",{targetMemberId:remoteId,type:"offer",description:entry.pc.localDescription});
+      await room.localParticipant.setMicrophoneEnabled(enabled);
+      setMicrophoneEnabled(enabled);
+      setStatus(enabled?"MICROPHONE ON":"MICROPHONE OFF");
     }catch(error){
-      setStatus(error instanceof Error?error.message:"VOICE NEGOTIATION FAILED");
-    }finally{
-      makingOffer.current.delete(remoteId);
-    }
-  };
-
-  const handleSignal=async(payload:any)=>{
-    if(!memberId || !payload)return;
-    const from=Number(payload.fromMemberId);
-    if(!from || from===memberId)return;
-    const peer=await createPeer(from,false);
-    if(!peer)return;
-    if(payload.type==="offer"){
-      const polite=Boolean(memberId && memberId>from);
-      const offerCollision=makingOffer.current.has(from) || peer.signalingState!=="stable";
-      if(offerCollision && !polite)return;
-      await peer.setRemoteDescription(new (RTCSessionDescription as any)(payload.description));
-      const entry=peers.current.get(from);
-      if(entry){for(const candidate of entry.pendingIce){await peer.addIceCandidate(candidate).catch(()=>undefined);}entry.pendingIce=[];}
-      const answer=await peer.createAnswer();
-      await peer.setLocalDescription(answer);
-      if(peer.localDescription)send("voice:signal",{targetMemberId:from,type:"answer",description:peer.localDescription});
-    }else if(payload.type==="answer"){
-      await peer.setRemoteDescription(new (RTCSessionDescription as any)(payload.description));
-      const entry=peers.current.get(from);
-      if(entry){for(const candidate of entry.pendingIce){await peer.addIceCandidate(candidate).catch(()=>undefined);}entry.pendingIce=[];}
-    }else if(payload.type==="ice"){
-      const candidate=new (RTCIceCandidate as any)(payload.candidate);
-      if(peer.remoteDescription)await peer.addIceCandidate(candidate).catch(()=>undefined);
-      else peers.current.get(from)?.pendingIce.push(candidate);
-    }
-  };
-
-  const enableMic=async(enabled:boolean)=>{
-    if(enabled){
-      try{
-        ensureAudioSession();
-        if(!localStream.current){
-          localStream.current=await mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:false} as any);
-        }
-        localStream.current.getAudioTracks().forEach(track=>{track.enabled=true;});
-        setMicrophoneEnabled(true);
-        for(const [id] of peers.current)await renegotiate(id);
-        send("netplay:voice-status",{microphoneEnabled:true,speakerEnabled:speakerRef.current});
-        setStatus("MICROPHONE ON");
-      }catch(error){
-        setStatus(error instanceof Error?error.message:"Microphone permission failed");
-        setMicrophoneEnabled(false);
-      }
-    }else{
-      localStream.current?.getAudioTracks().forEach(track=>{track.enabled=false;});
+      setStatus(error instanceof Error?error.message:"Microphone unavailable");
       setMicrophoneEnabled(false);
-      send("netplay:voice-status",{microphoneEnabled:false,speakerEnabled:speakerRef.current});
-      setStatus("MICROPHONE OFF");
     }
   };
 
-  const toggleSpeaker=async(enabled:boolean)=>{
+  const setSpeaker=async(enabled:boolean)=>{
     setSpeakerEnabled(enabled);
-    speakerRef.current=enabled;
-    try{InCallManager.start({media:"audio",auto:true});InCallManager.setForceSpeakerphoneOn(enabled);InCallManager.setSpeakerphoneOn(enabled);}catch{}
-    applySpeakerMute(enabled);
-    send("netplay:voice-status",{microphoneEnabled:micRef.current,speakerEnabled:enabled});
-    setStatus(enabled?"SPEAKER ON":"SPEAKER MUTED");
+    try{
+      if(enabled) await AudioSession.selectAudioOutput("speaker");
+      else {
+        const outputs=await AudioSession.getAudioOutputs();
+        const headset=outputs.find((x:any)=>x==="headset"||x==="bluetooth"||x==="earpiece");
+        if(headset) await AudioSession.selectAudioOutput(headset);
+      }
+      setStatus(enabled?"SPEAKER ON":"AUDIO ROUTED");
+    }catch{setStatus("AUDIO ROUTING UNAVAILABLE");}
   };
 
-  useImperativeHandle(ref,()=>({setMicrophoneEnabled:enableMic,setSpeakerEnabled:toggleSpeaker}),[memberId,members]);
+  useImperativeHandle(ref,()=>({setMicrophoneEnabled:setMic,setSpeakerEnabled:setSpeaker}),[room]);
 
-  useEffect(()=>{
-    if(Platform.OS==="web")return;
-    const onSignal=(p:any)=>void handleSignal(p);
-    const onJoined=(p:any)=>{
-      const online=Array.isArray(p?.onlineMemberIds)?p.onlineMemberIds.map(Number).filter((id:number)=>id&&id!==memberId):[];
-      for(const id of online){
-        if(!memberId || memberId>=id)continue;
-        const existing=peers.current.get(id);
-        if(existing?.pc.connectionState==="connected")continue;
-        if(existing)closePeer(id);
-        void createPeer(id,true).catch(()=>setStatus("VOICE CONNECTION RETRYING"));
-      }
-    };
-    const onPresence=(p:any)=>{
-      const id=Number(p?.memberId);
-      if(!id||id===memberId)return;
-      if(p?.online && memberId && memberId<id){
-        const existing=peers.current.get(id);
-        if(existing?.pc.connectionState!=="connected" && existing)closePeer(id);
-        void createPeer(id,true).catch(()=>setStatus("VOICE CONNECTION RETRYING"));
-      }
-      if(!p?.online)closePeer(id);
-    };
-    const onDisconnect=()=>{
-      for(const [id] of peers.current)closePeer(id);
-      setStatus("VOICE RECONNECTING");
-    };
-    socket?.on?.("voice:signal",onSignal);
-    socket?.on?.("netplay:joined",onJoined);
-    socket?.on?.("netplay:presence",onPresence);
-    socket?.on?.("disconnect",onDisconnect);
-    return()=>{socket?.off?.("voice:signal",onSignal);socket?.off?.("netplay:joined",onJoined);socket?.off?.("netplay:presence",onPresence);socket?.off?.("disconnect",onDisconnect);};
-  },[socket,memberId,members]);
-
-  // Reconcile peers from the room member list too, closing late-listener/reconnect races.
-  useEffect(()=>{
-    if(Platform.OS==="web" || !memberId || !socket?.connected)return;
-    for(const member of members){
-      const remoteId=Number(member.id);
-      if(!remoteId || remoteId===memberId || memberId>remoteId)continue;
-      const existing=peers.current.get(remoteId);
-      if(existing?.pc.connectionState==="connected" || existing?.pc.connectionState==="connecting")continue;
-      if(existing)closePeer(remoteId);
-      void createPeer(remoteId,true).catch(()=>setStatus("VOICE CONNECTION RETRYING"));
-    }
-  },[socket,memberId,members]);
-
-  useEffect(()=>()=>{for(const [id] of peers.current)closePeer(id);makingOffer.current.clear();localStream.current?.getTracks().forEach(t=>t.stop());try{InCallManager.stop();}catch{}},[]);
-
-  if(Platform.OS==="web")return null;
-  return <View style={styles.card}>
-    <View style={styles.heading}><Text style={styles.title}>🎙️ {t("voice")}</Text><Text style={styles.online}>{connectedPeers} PEERS</Text></View>
+  return <View>
+    <View style={styles.heading}>
+      <Text style={styles.title}>🎙️ {t("voice")}</Text>
+      <Text style={styles.online}>{connectedPeers} PEERS</Text>
+    </View>
     <Text style={styles.status}>{status}</Text>
     <View style={styles.row}>
-      <Pressable onPress={()=>void enableMic(!microphoneEnabled)} style={[styles.action,microphoneEnabled&&styles.active]}><Text style={styles.actionText}>{microphoneEnabled?t("micOn"):t("micOff")}</Text></Pressable>
+      <Pressable onPress={()=>void setMic(!microphoneEnabled)} style={[styles.action,microphoneEnabled&&styles.active]}>
+        <Text style={styles.actionText}>{microphoneEnabled?t("micOn"):t("micOff")}</Text>
+      </Pressable>
       <Pressable onPress={onChatPress} style={styles.action}><Text style={styles.actionText}>CHAT</Text></Pressable>
-      <Pressable onPress={()=>void toggleSpeaker(!speakerEnabled)} style={[styles.action,speakerEnabled&&styles.active]}><Text style={styles.actionText}>{speakerEnabled?t("speakerOn"):t("speakerOff")}</Text></Pressable>
+      <Pressable onPress={()=>void setSpeaker(!speakerEnabled)} style={[styles.action,speakerEnabled&&styles.active]}>
+        <Text style={styles.actionText}>{speakerEnabled?t("speakerOn"):t("speakerOff")}</Text>
+      </Pressable>
     </View>
-    <Text style={styles.members}>{members.length?members.map(m=>m.id===memberId?m.displayName+" (YOU)":m.displayName).join(" · "):"Waiting for room members"}</Text>
+    <Text style={styles.members}>{members.length?members.map(m=>m.displayName).join(" · "):"Waiting for room members"}</Text>
   </View>;
 });
 
 RoomVoiceChat.displayName="RoomVoiceChat";
+LiveKitVoiceControls.displayName="LiveKitVoiceControls";
+
 const styles=StyleSheet.create({
   card:{backgroundColor:"#160D29",borderWidth:1,borderColor:"#4B3370",borderRadius:18,padding:14,marginTop:16},
   heading:{flexDirection:"row",alignItems:"center",justifyContent:"space-between"},
   title:{color:"#DCA7FF",fontSize:13,fontWeight:"900"},
   online:{color:"#9EEBFF",fontSize:10,fontWeight:"800"},
+  offline:{color:"#FFB3B3",fontSize:10,fontWeight:"800"},
   status:{color:"#C5BDD3",fontSize:11,marginTop:6,lineHeight:16},
   row:{flexDirection:"row",gap:7,marginTop:10},
   action:{flex:1,minHeight:46,borderRadius:13,backgroundColor:"#231836",borderWidth:1,borderColor:"#433054",alignItems:"center",justifyContent:"center"},
