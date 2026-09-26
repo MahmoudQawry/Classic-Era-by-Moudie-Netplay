@@ -1,6 +1,6 @@
 # 🎮 Classic Era by Moudie — NetPlay
 
-> **Old Equal Gold** — غرف لعب جماعي للألعاب الكلاسيكية: Famicom/NES، PlayStation 1، PSP، وSega Genesis.
+> **Old Equal Gold** — غرف لعب جماعي للألعاب الكلاسيكية: Famicom/NES، PlayStation 1، PSP، Sega Genesis، Nintendo 64، وPlayStation 2.
 
 **Classic Era by Moudie** تطبيق موبايل (أندرويد أولاً مع دعم ويب) يتيح للأصدقاء إنشاء غرف خاصة برمز دعوة للعب ألعاب المحاكاة الكلاسيكية عبر الإنترنت، مع دردشة نصية وصوتية داخل الغرفة.
 
