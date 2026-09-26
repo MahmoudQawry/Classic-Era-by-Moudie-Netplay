@@ -1,6 +1,6 @@
 # 🎮 Classic Era by Moudie — NetPlay
 
-> **Old Equal Gold** — غرف لعب جماعي للألعاب الكلاسيكية: Famicom/NES، PlayStation 1، PSP، وSega Genesis.
+> **Old Equal Gold** — غرف لعب جماعي للألعاب الكلاسيكية: Famicom/NES، PlayStation 1، PSP، Sega Genesis، Nintendo 64، وPlayStation 2.
 
 **Classic Era by Moudie** تطبيق موبايل (أندرويد أولاً مع دعم ويب) يتيح للأصدقاء إنشاء غرف خاصة برمز دعوة للعب ألعاب المحاكاة الكلاسيكية عبر الإنترنت، مع دردشة نصية وصوتية داخل الغرفة.
 
@@ -10,7 +10,7 @@
 
 - 🕹️ **أربعة أنظمة محاكاة**: Famicom/NES (FCEUmm) · PlayStation 1 (PCSX-ReARMed) · PSP (PPSSPP) · Sega Genesis (Genesis Plus GX)
 - 🌍 **ثلاث لغات كاملة**: 🇪🇬 العربية · 🇺🇸 English · 🇫🇷 Français — تُطبَّق على جميع الشاشات دون اختلاط
-- 🎙️ **صوت غرفة بأسلوب adaptive**: وضع «اضغط للتحدث» أو ميكروفون مفتوح، وقناة «الغرفة» (الجميع) أو «الفريق» (اللاعبون فقط)
+- 🎙️ **صوت غرفة Production عبر LiveKit SFU**: قناة «الغرفة» للجميع، مع TURN مدمج في مسار الإنتاج وإعادة اتصال تلقائية عند تغير الشبكة
 - 💬 دردشة نصية داخل الغرفة
 - 👥 حتى 8 أعضاء لكل غرفة (4 لاعبين + 4 مشاهدين — والمنس 2 + 6)
 - 🔒 رموز دعوة مخزّنة SHA-256، تحقق Zod، تحديد معدل الطلبات، ومقاعد يحسبها الخادم ضد الانتحال
@@ -24,7 +24,7 @@
 | التطبيق | Expo 54 · React Native 0.81 · Expo Router · Nativewind/Tailwind |
 | الخادم | Express · tRPC · Socket.IO (غرف + NetPlay عام) |
 | قاعدة البيانات | MySQL عبر Drizzle ORM |
-| الصوت | LiveKit (JWT قصير العمر) + قناة WebRTC مدمجة بديلة |
+| الصوت | LiveKit SFU + JWT قصير العمر + TURN/UDP وTURN/TLS |
 | المحاكاة الأصلية | وحدة Expo أصلية (Kotlin) + نوى Libretro (arm64) |
 
 ## 🚀 التشغيل
@@ -57,7 +57,7 @@ pnpm android
 |---|---|
 | `DATABASE_URL` | رابط MySQL لخدمة الغرف |
 | `ALLOWED_ORIGINS` | قائمة أصول ويب مسموحة مفصولة بفواصل (CORS). في الإنتاج يجب تحديد قائمة صريحة؛ wildcard غير مسموح به في وضع production. |
-| `LIVEKIT_URL` / مفاتيح LiveKit | لتفعيل صوت LiveKit؛ بدونه تُستخدم القناة المدمجة |
+| `LIVEKIT_URL` / مفاتيح LiveKit | المسار الإنتاجي الإلزامي للصوت؛ لا يوجد WebRTC Mesh بديل |
 
 ## 📦 مخرجات البناء
 

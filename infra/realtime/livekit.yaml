@@ -23,6 +23,8 @@ redis:
 
 # LiveKit uses the region-aware selector to keep a room close to the signaling
 # region while still allowing load-aware failover inside the global cluster.
+region: ${LIVEKIT_REGION}
+
 node_selector:
   kind: regionaware
   sysload_limit: 0.65
@@ -46,7 +48,12 @@ node_selector:
 # Optional embedded TURN/TLS. If using a dedicated Coturn deployment instead,
 # keep this disabled and advertise the regional TURN endpoints separately.
 turn:
-  enabled: false
+  enabled: true
+  domain: ${TURN_DOMAIN}
+  tls_port: 5349
+  udp_port: 3478
+  cert_file: ${TURN_CERT_FILE}
+  key_file: ${TURN_KEY_FILE}
 
 logging:
   level: info

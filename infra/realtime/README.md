@@ -10,12 +10,12 @@
 
 ## ما يلزم للنشر الفعلي
 
-1. استخدم خادم Linux دائمًا بعنوان عام وDocker. على منصة الاستضافة يجب تشغيل خدمة التطبيق التي تحمل WebSockets في وضع دائم (Reserved أو ما يعادله)، وليس وضعًا قد يوقف العملية؛ لأن NetPlay يحتاج اتصالًا مستمرًا.
+1. استخدم خادم Linux دائمًا بعنوان عام وDocker. على منصة الاستضافة يجب تشغيل خدمة التطبيق التي تحمل WebSockets وLiveKit token endpoint في وضع دائم (Reserved أو ما يعادله)، وليس وضعًا قد يوقف العملية؛ لأن NetPlay يحتاج اتصالًا مستمرًا.
 2. الأفضل للـNetPlay الحساس للزمن هو VPS/VM في منطقة قريبة من معظم اللاعبين، مثل الإمارات أو الخليج، مع عنوان عام ثابت. لا نحتاج Kubernetes أو بنية ضخمة في هذه المرحلة.
 3. انسخ `.env.example` إلى `.env` واستبدل جميع القيم بسرّيات طويلة وعنوان IP عام ونطاقين مع TLS.
-4. انسخ `turnserver.conf.template` إلى `turnserver.conf` واستبدل `REPLACE_WITH_*` بالقيم الحقيقية.
+4. وفّر شهادة TLS صحيحة لـTURN في `certs/turn.crt` و`certs/turn.key`، واضبط `TURN_DOMAIN` ليطابق الشهادة.
 5. اضبط `LIVEKIT_URL` و`LIVEKIT_API_KEY` و`LIVEKIT_API_SECRET` في خادم Moudie API، واجعل `rooms.mediaToken` هو المصدر الوحيد لرمز LiveKit.
-6. افتح منافذ TCP 7880 و7881، وUDP 50000–50100 لـ LiveKit، وTCP/UDP 3478 وTCP 5349 ومجال UDP 49160–49260 لـ TURN.
+6. افتح منافذ HTTPS/WebSocket خلف TLS، وTCP 7881، وUDP 3478، وTURN/TLS 5349، ونطاق UDP 50000–60000 لـLiveKit.
 7. شغّل `docker compose --env-file .env up -d`.
 8. عند بناء APK جديد، عيّن متغير GitHub Actions `NETPLAY_SERVICE_URL` إلى عنوان Socket.IO/REST الجديد. الكود يحتفظ بعنوان Manus القديم كـfallback حتى لا تنكسر النسخة الحالية قبل نقل الخادم.
 
@@ -23,7 +23,7 @@
 
 - لا تستخدم TURN عامًا مشتركًا كمسار أساسي.
 - لا تضع مفاتيح LiveKit أو TURN داخل APK أو Git.
-- استخدم TURN REST credentials قصيرة العمر؛ coturn يدعم `use-auth-secret` لهذا الغرض.
+- استخدم LiveKit embedded TURN/TLS يدير صلاحية الاتصال عبر جلسة LiveKit الموثقة؛ لا تُضع أي TURN secret داخل APK.
 - ثبّت إصدارات LiveKit وcoturn بدل `latest` لتجنب تغييرات تشغيلية مفاجئة.
 - اختبر RTT والجِتر وفقد الحزم من شبكات Wi-Fi و4G/5G قبل اعتماد المنطقة نهائيًا.
 - الهدف التشغيلي للعب: RTT منخفض ومستقر، لا مجرد سرعة تنزيل عالية.
@@ -31,3 +31,7 @@
 ## الأمان
 
 لا تحفظ `LIVEKIT_API_SECRET` أو `TURN_SHARED_SECRET` في Git أو داخل APK. جدّد الرموز عند إعادة الاتصال، وتأكد من أن المشاهدين لا يملكون صلاحية نشر الصوت أو إرسال مدخلات للمحاكي.
+
+## LiveKit الحالي
+
+المسار الرسمي للصوت هو LiveKit SFU فقط. WebRTC mesh القديم لم يعد مسارًا إنتاجيًا. LiveKit نفسه يتولى ICE/UDP ثم TURN/UDP ثم TCP ثم TURN/TLS عند الحاجة. يجب نشر شهادة TLS صحيحة لنطاق LiveKit ونطاق TURN قبل اعتبار الصوت Production.

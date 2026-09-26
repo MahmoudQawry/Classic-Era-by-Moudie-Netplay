@@ -1,63 +1,27 @@
 #!/usr/bin/env bash
 set -euo pipefail
 ABI="${1:-arm64-v8a}"
+SUPPORTED_ABIS=("armeabi-v7a" "arm64-v8a" "x86" "x86_64")
+if [[ ! " ${SUPPORTED_ABIS[*]} " =~ " ${ABI} " ]]; then echo "Unsupported Android ABI: ${ABI}" >&2; exit 2; fi
 TARGET="modules/moudie-emulator/android/src/main/jniLibs/${ABI}"
 ASSETS_TARGET="modules/moudie-emulator/android/src/main/assets/ppsspp"
 BASE_URL="https://buildbot.libretro.com/nightly/android/latest/${ABI}"
 SYSTEM_URL="https://buildbot.libretro.com/assets/system/PPSSPP.zip"
-if [[ "${ABI}" != "arm64-v8a" ]]; then echo "This project currently bundles verified prebuilt cores for arm64-v8a only." >&2; exit 2; fi
 mkdir -p "${TARGET}" "${ASSETS_TARGET}"
 TEMP_DIR="$(mktemp -d)"; trap 'rm -rf "${TEMP_DIR}"' EXIT
 fetch_core() { local remote_name="$1"; local local_name="$2"; local archive="${TEMP_DIR}/${local_name}.zip"; echo "Downloading ${remote_name}…"; curl --fail --location --retry 3 --retry-delay 2 -o "${archive}" "${BASE_URL}/${remote_name}_libretro_android.so.zip"; unzip -p "${archive}" "${remote_name}_libretro_android.so" > "${TARGET}/${local_name}_libretro_android.so"; test -s "${TARGET}/${local_name}_libretro_android.so"; }
 fetch_ppsspp_assets() { local archive="${TEMP_DIR}/PPSSPP.zip"; echo "Downloading official PPSSPP system assets…"; curl --fail --location --retry 3 --retry-delay 2 -o "${archive}" "${SYSTEM_URL}"; rm -rf "${ASSETS_TARGET}"; mkdir -p "${ASSETS_TARGET}"; unzip -q "${archive}" -d "${ASSETS_TARGET}"; if [[ -d "${ASSETS_TARGET}/PPSSPP" ]]; then shopt -s dotglob; mv "${ASSETS_TARGET}/PPSSPP"/* "${ASSETS_TARGET}/"; rmdir "${ASSETS_TARGET}/PPSSPP"; shopt -u dotglob; fi; test -f "${ASSETS_TARGET}/ppge_atlas.zim" || { echo "PPSSPP assets are incomplete." >&2; exit 3; }; }
 build_play_core() {
-  local play_source="${TEMP_DIR}/Play-"
+  local play_source="${TEMP_DIR}/Play-${ABI}"
   local play_build="${TEMP_DIR}/play-build"
   local ndk="${ANDROID_NDK_HOME:-${ANDROID_NDK:-}}"
   if [[ -z "${ndk}" || ! -f "${ndk}/build/cmake/android.toolchain.cmake" ]]; then echo "Android NDK with CMake toolchain is required to build the patched Play! core." >&2; exit 4; fi
   echo "Building patched Play! core from upstream source..."
   git clone --depth 1 --recurse-submodules --shallow-submodules https://github.com/jpd002/Play-.git "${play_source}"
 
-  python3 - "${play_source}/Source/ui_libretro/GSH_OpenGL_Libretro.cpp" <<'PY'
-from pathlib import Path
-import sys
-path = Path(sys.argv[1])
-text = path.read_text()
-text = text.replace(
-"""	if(g_hw_render.get_current_framebuffer)
-		m_presentFramebuffer = g_hw_render.get_current_framebuffer();
-""",
-"""	// Moudie frontend: Play!'s GS runs on the libretro/GL thread and presents
-	// directly into the GLSurfaceView default framebuffer. LibretroDroid's
-	// intermediate FBO is not used for this core because Play! owns the
-	// presentation pass and asynchronous GS state can otherwise leave the
-	// hand-off texture black even while the emulator/audio/input are alive.
-	m_presentFramebuffer = 0;
-""",1)
-text = text.replace(
-"""	if(g_hw_render.get_current_framebuffer)
-		m_presentFramebuffer = g_hw_render.get_current_framebuffer();
-	else
-		return;
-
-	CGSH_OpenGL::FlipImpl(dispInfo);
-""",
-"""	// Keep presentation on the Android window framebuffer for this frontend.
-	m_presentFramebuffer = 0;
-	CGSH_OpenGL::FlipImpl(dispInfo);
-""",1)
-text = text.replace(
-"""	if(g_video_cb)
-		g_video_cb(RETRO_HW_FRAME_BUFFER_VALID, GetCrtWidth() * g_res_factor, GetCrtHeight() * g_res_factor, 0);
-""",
-"""	// The framebuffer is already the Android GLSurfaceView default framebuffer.
-	// Do not invoke LibretroDroid's hardware-video callback here: that callback
-	// would run its own post-processing renderer and clear the framebuffer we
-	// just presented.
-""",1)
-if "Moudie frontend: Play!'s GS runs on the libretro/GL thread" not in text: raise SystemExit("Direct presentation patch was not applied")
-path.write_text(text)
-PY
+  # Keep Play!'s upstream GL presentation path intact. The Android bridge below
+  # only initializes JavaVM before LibretroDroid loads the core; changing the
+  # framebuffer ownership here can black-screen PS2 on some GPU drivers.
 
   python3 - "${play_source}/Source/ui_libretro/main_libretro.cpp" <<'PY'
 from pathlib import Path

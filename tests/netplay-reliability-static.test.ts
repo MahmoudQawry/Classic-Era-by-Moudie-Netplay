@@ -32,23 +32,16 @@ describe("NetPlay and voice reliability safeguards", () => {
     expect(worker).toContain('netplay:session-start');
   });
 
-  it("uses built-in WebRTC voice signaling without requiring LiveKit credentials", () => {
-    const worker = read("cloudflare-netplay/src/index.ts");
+  it("uses LiveKit SFU as the production voice transport", () => {
     const voice = read("components/room-voice-chat-reliable.native.tsx");
-    const manifest = read("android/app/src/main/AndroidManifest.xml");
-    expect(worker).toContain('voice:signal');
-    expect(worker).toContain('netplay:voice-status');
-    expect(voice).toContain("RTCPeerConnection");
-    expect(voice).toContain("mediaDevices.getUserMedia");
-    expect(voice).toContain("voice:signal");
-    expect(voice).toContain("netplay:voice-status");
-    expect(voice).not.toContain("LiveKitRoom");
-    expect(voice).not.toContain('voiceChannelRoom');
-    expect(voice).not.toContain('voiceChannelTeam');
-    expect(voice).toContain('onChatPress');
-    expect(voice).toContain('track.enabled=enabled');
-    expect(voice).toContain('EXPO_PUBLIC_TURN_URL');
-    expect(voice).toContain('stun:stun.cloudflare.com:3478');
-    expect(manifest).not.toContain("manusmoudienetplay");
+    const server = read("server/livekit.ts");
+    const app = read("android/app/src/main/java/com/app/moudienetplay/MainApplication.kt");
+    expect(voice).toContain("LiveKitRoom");
+    expect(voice).toContain("AudioSession.startAudioSession");
+    expect(voice).toContain("setMicrophoneEnabled");
+    expect(voice).toContain("selectAudioOutput");
+    expect(server).toContain("new AccessToken");
+    expect(server).toContain("roomJoin: true");
+    expect(app).toContain("LiveKitReactNative.setup");
   });
 });

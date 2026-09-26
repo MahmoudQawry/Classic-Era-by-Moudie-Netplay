@@ -59,6 +59,8 @@ repositories {
 dependencies {
   // Core binaries are added only after per-system compatibility and license review.
   implementation "androidx.activity:activity-ktx:1.10.1"
+  // Required by Discord Social SDK Android authentication flow.
+  implementation "androidx.browser:browser:1.8.0"
   implementation "com.github.swordfish90:libretrodroid:0.13.2"
   implementation "com.squareup.okhttp3:okhttp:4.12.0"
   implementation ("io.socket:socket.io-client:2.1.1") {

@@ -28,7 +28,7 @@ async function issueToken(runtime: LiveKitRuntime, input: {
   channel: LiveKitVoiceChannel;
 }): Promise<TokenResult> {
   const identity = `member-${input.memberId}`;
-  const canPublish = input.channel === "room" || input.role !== "spectator";
+  const canPublish = input.role !== "spectator";
   const token = new AccessToken(runtime.apiKey, runtime.apiSecret, {
     identity,
     name: input.displayName,
