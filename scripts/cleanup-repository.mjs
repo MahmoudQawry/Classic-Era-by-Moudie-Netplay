@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, rmSync } from "node:fs";
+import { existsSync, readdirSync, rmSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const root = process.cwd();
@@ -34,7 +34,7 @@ const sourceFiles = sourceRoots.flatMap((p)=>{
   if(!existsSync(full)) return [];
   return full.endsWith("/") ? walk(full) : (full.includes(".") ? [full] : walk(full));
 }).filter((p)=>textExtensions.has(p.slice(p.lastIndexOf("."))));
-const sourceText = sourceFiles.map((p)=>{try{return require("node:fs").readFileSync(p,"utf8")}catch{return ""}}).join("\n");
+const sourceText = sourceFiles.map((p)=>{try{return readFileSync(p,"utf8")}catch{return ""}}).join("\n");
 const mediaCandidates = mediaRoots.flatMap((r)=>walk(join(root,r))).filter((p)=>!sourceText.includes(p.replace(root+"/","")) && !sourceText.includes(p.replace(root+"/","@/")));
 const generated = safeGeneratedPaths.filter((p)=>existsSync(join(root,p)));
 
