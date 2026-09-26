@@ -122,6 +122,14 @@ jobs:
         run: python3 scripts/restore-plain-android-startup.py
       - name: 🔨 إصلاح صلاحيات Gradle
         run: chmod +x android/gradlew
+      - name: 🔐 إنشاء مفتاح توقيع مؤقت لـCI فقط
+        run: |
+          set -e
+          keytool -genkeypair -v -keystore /tmp/moudie-ci-release.keystore -storepass ci-only-change-me -alias moudie-ci -keypass ci-only-change-me -keyalg RSA -keysize 4096 -validity 2 -dname "CN=Classic Era CI, OU=Moudie, O=Moudie Netplay, C=AE"
+          echo "MOUDIE_RELEASE_STORE_FILE=/tmp/moudie-ci-release.keystore" >> "$GITHUB_ENV"
+          echo "MOUDIE_RELEASE_STORE_PASSWORD=ci-only-change-me" >> "$GITHUB_ENV"
+          echo "MOUDIE_RELEASE_KEY_ALIAS=moudie-ci" >> "$GITHUB_ENV"
+          echo "MOUDIE_RELEASE_KEY_PASSWORD=ci-only-change-me" >> "$GITHUB_ENV"
       - name: 🏗️ بناء APK مستقل (Release)
         run: |
           cd android
