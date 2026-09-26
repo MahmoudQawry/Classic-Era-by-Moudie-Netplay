@@ -27,7 +27,7 @@ const env = {
 const config: ExpoConfig = {
   name: env.appName,
   slug: env.appSlug,
-  version: "1.11.1",
+  version: "1.0.0",
   orientation: "default",
   icon: "./assets/images/classic-era-new-icon.png",
   scheme: env.scheme,
@@ -39,7 +39,7 @@ const config: ExpoConfig = {
     infoPlist: { ITSAppUsesNonExemptEncryption: false },
   },
   android: {
-    versionCode: 52,
+    versionCode: 1,
     adaptiveIcon: {
       backgroundColor: "#101827",
       foregroundImage: "./assets/images/classic-era-new-icon.png",
@@ -79,9 +79,10 @@ const config: ExpoConfig = {
     ["expo-secure-store", { configureAndroidBackup: true }],
     "expo-document-picker",
     "@livekit/react-native-expo-plugin",
+    "./plugins/with-discord-social-sdk",
     [
       "expo-build-properties",
-      { android: { buildArchs: ["arm64-v8a"], minSdkVersion: 24 } },
+      { android: { buildArchs: ["armeabi-v7a", "arm64-v8a", "x86", "x86_64"], minSdkVersion: 24 } },
     ],
   ],
   experiments: { typedRoutes: true, reactCompiler: true },
