@@ -76,16 +76,18 @@ const LiveKitVoiceControls=forwardRef<RoomVoiceChatHandle,ControlsProps>(functio
     const onParticipant=()=>update();
     room.on(RoomEvent.Connected,onConnected);
     room.on(RoomEvent.Disconnected,onDisconnected);
-    room.on(RoomEvent.Reconnecting,()=>setStatus("VOICE RECONNECTING"));
-    room.on(RoomEvent.Reconnected,()=>setStatus("VOICE CONNECTED"));
+    const onReconnecting=()=>setStatus("VOICE RECONNECTING");
+    const onReconnected=()=>setStatus("VOICE CONNECTED");
+    room.on(RoomEvent.Reconnecting,onReconnecting);
+    room.on(RoomEvent.Reconnected,onReconnected);
     room.on(RoomEvent.ParticipantConnected,onParticipant);
     room.on(RoomEvent.ParticipantDisconnected,onParticipant);
     room.on(RoomEvent.ConnectionQualityChanged,onParticipant);
     return ()=>{
       room.off(RoomEvent.Connected,onConnected);
       room.off(RoomEvent.Disconnected,onDisconnected);
-      room.off(RoomEvent.Reconnecting,()=>setStatus("VOICE RECONNECTING"));
-      room.off(RoomEvent.Reconnected,()=>setStatus("VOICE CONNECTED"));
+      room.off(RoomEvent.Reconnecting,onReconnecting);
+      room.off(RoomEvent.Reconnected,onReconnected);
       room.off(RoomEvent.ParticipantConnected,onParticipant);
       room.off(RoomEvent.ParticipantDisconnected,onParticipant);
       room.off(RoomEvent.ConnectionQualityChanged,onParticipant);
