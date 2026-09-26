@@ -6,34 +6,34 @@ import { useLanguage } from "@/lib/language";
 
 type Props = { children: ReactNode };
 
+const LOCAL_BOOT_VIDEO = require("@/assets/videos/classic-era-official-boot.mp4");
+
 export function MoudieLaunchIntro({ children }: Props) {
   const { t } = useLanguage();
   const [introVisible, setIntroVisible] = useState(true);
   const bootVideoUrl = process.env.EXPO_PUBLIC_BOOT_VIDEO_URL?.trim() || null;
-  const bootVideo = useVideoPlayer(bootVideoUrl, (player) => {
+  const bootVideoSource = bootVideoUrl || LOCAL_BOOT_VIDEO;
+  const bootVideo = useVideoPlayer(bootVideoSource, (player) => {
     player.muted = true;
     player.loop = false;
   });
 
   useEffect(() => {
-    if (!bootVideoUrl) {
-      const timer = setTimeout(() => setIntroVisible(false), 1800);
-      return () => clearTimeout(timer);
-    }
-    void bootVideo.replaceAsync(bootVideoUrl);
-    bootVideo.play();
-    const endSubscription = bootVideo.addListener("playToEnd", () => setIntroVisible(false));
-    return () => endSubscription.remove();
-  }, [bootVideo, bootVideoUrl]);
+    let active = true;
+    const endSubscription = bootVideo.addListener("playToEnd", () => {
+      if (active) setIntroVisible(false);
+    });
+    void bootVideo.play();
+    return () => {
+      active = false;
+      endSubscription.remove();
+    };
+  }, [bootVideo]);
 
   return <View style={styles.host}>
     {children}
     {introVisible && <View style={styles.screen} accessibilityLabel={t("introBootLabel")}>
-      {bootVideoUrl ? (
-        <VideoView player={bootVideo} style={styles.video} nativeControls={false} contentFit="cover" />
-      ) : (
-        <Image source={require("@/assets/images/classic-era-ui-background.jpg")} style={styles.video} resizeMode="cover" />
-      )}
+      <VideoView player={bootVideo} style={styles.video} nativeControls={false} contentFit="cover" />
       <View style={styles.overlay}><Text style={styles.brand}>MOUDIE NETPLAY</Text><Text style={styles.sub}>CLASSIC ERA</Text></View>
       <Pressable style={styles.skip} onPress={() => setIntroVisible(false)} accessibilityRole="button"><Text style={styles.skipText}>{t("introSkip")}</Text></Pressable>
     </View>}
