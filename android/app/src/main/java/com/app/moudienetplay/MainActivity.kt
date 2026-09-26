@@ -17,7 +17,13 @@ import expo.modules.ReactActivityDelegateWrapper
 class MainActivity : ReactActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     try {
-      runCatching {\n        val sdkClass = Class.forName("com.discord.socialsdk.DiscordSocialSdkInit")\n        sdkClass.getMethod("setEngineActivity", android.app.Activity::class.java).invoke(null, this)\n      }.onFailure { error ->\n        Log.i("MoudieDiscord", "Discord Social SDK binary not bundled; native bridge will remain inactive", error)\n      }\n      super.onCreate(null)
+      runCatching {
+        val sdkClass = Class.forName("com.discord.socialsdk.DiscordSocialSdkInit")
+        sdkClass.getMethod("setEngineActivity", android.app.Activity::class.java).invoke(null, this)
+      }.onFailure { error ->
+        Log.i("MoudieDiscord", "Discord Social SDK binary not bundled; native bridge will remain inactive", error)
+      }
+      super.onCreate(null)
     } catch (error: Throwable) {
       Log.e("MoudieStartup", "ReactActivity could not be created", error)
       throw error
