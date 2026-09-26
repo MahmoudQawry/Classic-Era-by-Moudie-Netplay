@@ -153,8 +153,13 @@ export async function updateMemberReadiness(input: { memberId: number; accessTok
   return true;
 }
 
-export async function activateRoom(roomId: number) {
+export async function activateRoom(roomId: number): Promise<boolean> {
   const db = await getDb();
   if (!db) throw new Error("خدمة الغرف غير متاحة حالياً.");
-  await db.update(gameRooms).set({ status: "active" }).where(eq(gameRooms.id, roomId));
+  // Conditional state transition: concurrent start requests cannot both succeed.
+  const result = await db
+    .update(gameRooms)
+    .set({ status: "active" })
+    .where(and(eq(gameRooms.id, roomId), eq(gameRooms.status, "waiting")));
+  return Number(result[0]?.affectedRows ?? 0) === 1;
 }

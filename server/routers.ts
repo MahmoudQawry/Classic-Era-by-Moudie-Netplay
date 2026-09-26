@@ -75,7 +75,9 @@ export const appRouter = router({
       if (!canStartOnlineSession(system, players.length) || players.some((member) => !member.isReady)) throw new Error(`يجب أن يكون من ${capacity.minPlayers} إلى ${capacity.maxPlayers} لاعبين نشطين جاهزين قبل البدء.`);
       const fingerprints = new Set(players.map((member) => member.gameFingerprint)); const versions = new Set(players.map((member) => member.coreVersion));
       if (fingerprints.size !== 1 || fingerprints.has(null) || versions.size !== 1 || versions.has(null)) throw new Error("يجب أن تتطابق اللعبة وإصدار المحرك عند جميع اللاعبين.");
-      await db.activateRoom(input.roomId); return { success: true };
+      const activated = await db.activateRoom(input.roomId);
+      if (!activated) throw new Error("بدأت الجلسة بالفعل أو تغيرت حالة الغرفة. حدّث الغرفة وحاول مرة أخرى.");
+      return { success: true };
     }),
   }),
 });
