@@ -64,15 +64,16 @@ jobs:
       - name: 🎮 تضمين أنوية المحاكيات الستة في الـ APK
         run: |
           chmod +x scripts/sync-libretro-cores.sh
-          ./scripts/sync-libretro-cores.sh arm64-v8a
+          for ABI in armeabi-v7a arm64-v8a x86 x86_64; do
+            ./scripts/sync-libretro-cores.sh "$ABI"
+          done
           python3 scripts/patch-six-core-catalog.py
           python3 scripts/patch-emulator-runtime.py
-          test -s modules/moudie-emulator/android/src/main/jniLibs/arm64-v8a/fceumm_libretro_android.so
-          test -s modules/moudie-emulator/android/src/main/jniLibs/arm64-v8a/pcsx_rearmed_libretro_android.so
-          test -s modules/moudie-emulator/android/src/main/jniLibs/arm64-v8a/ppsspp_libretro_android.so
-          test -s modules/moudie-emulator/android/src/main/jniLibs/arm64-v8a/genesis_plus_gx_libretro_android.so
-          test -s modules/moudie-emulator/android/src/main/jniLibs/arm64-v8a/parallel_n64_libretro_android.so
-          test -s modules/moudie-emulator/android/src/main/jniLibs/arm64-v8a/play_libretro_android.so
+          for ABI in armeabi-v7a arm64-v8a x86 x86_64; do
+            for CORE in fceumm pcsx_rearmed ppsspp genesis_plus_gx parallel_n64 play; do
+              test -s "modules/moudie-emulator/android/src/main/jniLibs/${ABI}/${CORE}_libretro_android.so"
+            done
+          done
           grep -q '"n64"' modules/moudie-emulator/android/src/main/java/expo/modules/moudieemulator/NativeCoreCatalog.kt
           grep -q '"ps2"' modules/moudie-emulator/android/src/main/java/expo/modules/moudieemulator/NativeCoreCatalog.kt
           grep -q 'System.currentTimeMillis()' modules/moudie-emulator/android/src/main/java/expo/modules/moudieemulator/UniversalLibretroPlayerActivity.kt
@@ -141,11 +142,13 @@ jobs:
           APK="android/app/build/outputs/apk/release/app-release.apk"
           rm -rf /tmp/moudie-apk-check
           mkdir -p /tmp/moudie-apk-check
-          unzip -q "$APK" 'lib/arm64-v8a/*' -d /tmp/moudie-apk-check
-          test -s /tmp/moudie-apk-check/lib/arm64-v8a/libmoudie_play_bridge.so
-          test -s /tmp/moudie-apk-check/lib/arm64-v8a/play_libretro_android.so
-          readelf -Ws /tmp/moudie-apk-check/lib/arm64-v8a/libmoudie_play_bridge.so | grep -q 'Java_expo_modules_moudieemulator_UniversalLibretroPlayerActivity_nativeInitializePlayJavaVm'
-          readelf -Ws /tmp/moudie-apk-check/lib/arm64-v8a/play_libretro_android.so | grep -q '_ZN9Framework7CJavaVM9SetJavaVMEP7_JavaVM'
+          unzip -q "$APK" 'lib/*' -d /tmp/moudie-apk-check
+          for ABI in armeabi-v7a arm64-v8a x86 x86_64; do
+            test -s "/tmp/moudie-apk-check/lib/${ABI}/libmoudie_play_bridge.so"
+            test -s "/tmp/moudie-apk-check/lib/${ABI}/play_libretro_android.so"
+            readelf -Ws "/tmp/moudie-apk-check/lib/${ABI}/libmoudie_play_bridge.so" | grep -q 'Java_expo_modules_moudieemulator_UniversalLibretroPlayerActivity_nativeInitializePlayJavaVm'
+            readelf -Ws "/tmp/moudie-apk-check/lib/${ABI}/play_libretro_android.so" | grep -q '_ZN9Framework7CJavaVM9SetJavaVMEP7_JavaVM'
+          done
           echo "Play! core contains the required CJavaVM::SetJavaVM symbol; runtime bootstrap is verified by the patched Play! source and build script."
       - name: 📦 نشر APK كإصدار اختبار قابل للتنزيل
         env:
