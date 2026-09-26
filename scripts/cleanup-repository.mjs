@@ -2,7 +2,7 @@ import { existsSync, readdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 
 const root = process.cwd();
-const args = new Set(process.argv.slice(2));
+const args = new Set(process.argv.slice(2).filter((arg) => arg !== "--"));
 const apply = args.has("--apply");
 
 const safeGeneratedPaths = [
@@ -19,9 +19,9 @@ const mediaRoots = ["assets/images", "assets/videos"];
 const sourceRoots = ["app","components","lib","modules","plugins","scripts","tests","server","shared","cloudflare-netplay","app.config.ts","package.json","README.md"];
 const textExtensions = new Set([".ts",".tsx",".js",".jsx",".json",".md",".xml",".kt",".java",".gradle",".properties",".yml",".yaml",".sh",".py",".css",".cpp",".h",".hpp"]);
 
-function walk(dir:string): string[] {
+function walk(dir) {
   if(!existsSync(dir)) return [];
-  const out:string[]=[];
+  const out=[];
   for(const entry of readdirSync(dir,{withFileTypes:true})){
     const p=join(dir,entry.name);
     if(entry.isDirectory()) out.push(...walk(p)); else out.push(p);
