@@ -9,7 +9,12 @@ services:
       - ./certs:/etc/livekit/certs:ro
     environment:
       LIVEKIT_KEYS: "${LIVEKIT_API_KEY}:${LIVEKIT_API_SECRET}"
-      LIVEKIT_REDIS_ADDRESS: "${REDIS_ADDRESS:-redis:6379}"
+      REDIS_ADDRESS: "${REDIS_ADDRESS:-redis:6379}"
+      REDIS_PASSWORD: "${REDIS_PASSWORD}"
+      TURN_DOMAIN: "${TURN_DOMAIN}"
+      TURN_CERT_FILE: "${TURN_CERT_FILE:-/etc/livekit/certs/turn.crt}"
+      TURN_KEY_FILE: "${TURN_KEY_FILE:-/etc/livekit/certs/turn.key}"
+      LIVEKIT_REGION: "${LIVEKIT_REGION:-me-central}"
 
   redis:
     image: redis:7-alpine
