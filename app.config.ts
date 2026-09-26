@@ -85,6 +85,7 @@ const config: ExpoConfig = {
       { android: { buildArchs: ["armeabi-v7a", "arm64-v8a", "x86", "x86_64"], minSdkVersion: 24 } },
     ],
   ],
+  extra: { discordApplicationId: process.env.DISCORD_APPLICATION_ID?.trim() ?? "" },
   experiments: { typedRoutes: true, reactCompiler: true },
 };
 
