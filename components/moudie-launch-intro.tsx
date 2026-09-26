@@ -1,25 +1,31 @@
-import { Image } from "react-native";
 import { useVideoPlayer, VideoView } from "expo-video";
 import { useEffect, useState, type ReactNode } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { ImageBackground, Pressable, StyleSheet, Text, View } from "react-native";
 import { useLanguage } from "@/lib/language";
 
 type Props = { children: ReactNode };
-
-const LOCAL_BOOT_VIDEO = require("@/assets/videos/classic-era-official-boot.mp4");
 
 export function MoudieLaunchIntro({ children }: Props) {
   const { t } = useLanguage();
   const [introVisible, setIntroVisible] = useState(true);
   const bootVideoUrl = process.env.EXPO_PUBLIC_BOOT_VIDEO_URL?.trim() || null;
-  const bootVideoSource = bootVideoUrl || LOCAL_BOOT_VIDEO;
-  const bootVideo = useVideoPlayer(bootVideoSource, (player) => {
+  const bootVideo = useVideoPlayer(bootVideoUrl, (player) => {
     player.muted = true;
     player.loop = false;
   });
 
   useEffect(() => {
     let active = true;
+    if (!bootVideoUrl) {
+      const fallbackTimer = setTimeout(() => {
+        if (active) setIntroVisible(false);
+      }, 1800);
+      return () => {
+        active = false;
+        clearTimeout(fallbackTimer);
+      };
+    }
+
     const endSubscription = bootVideo.addListener("playToEnd", () => {
       if (active) setIntroVisible(false);
     });
@@ -28,15 +34,30 @@ export function MoudieLaunchIntro({ children }: Props) {
       active = false;
       endSubscription.remove();
     };
-  }, [bootVideo]);
+  }, [bootVideo, bootVideoUrl]);
 
   return <View style={styles.host}>
     {children}
-    {introVisible && <View style={styles.screen} accessibilityLabel={t("introBootLabel")}>
-      <VideoView player={bootVideo} style={styles.video} nativeControls={false} contentFit="cover" />
-      <View style={styles.overlay}><Text style={styles.brand}>MOUDIE NETPLAY</Text><Text style={styles.sub}>CLASSIC ERA</Text></View>
-      <Pressable style={styles.skip} onPress={() => setIntroVisible(false)} accessibilityRole="button"><Text style={styles.skipText}>{t("introSkip")}</Text></Pressable>
-    </View>}
+    {introVisible && (
+      <View style={styles.screen} accessibilityLabel={t("introBootLabel")}>
+        {bootVideoUrl ? (
+          <VideoView player={bootVideo} style={styles.video} nativeControls={false} contentFit="cover" />
+        ) : (
+          <ImageBackground
+            source={require("@/assets/images/classic-era-ui-background.jpg")}
+            style={styles.video}
+            resizeMode="cover"
+          />
+        )}
+        <View style={styles.overlay}>
+          <Text style={styles.brand}>MOUDIE NETPLAY</Text>
+          <Text style={styles.sub}>CLASSIC ERA</Text>
+        </View>
+        <Pressable style={styles.skip} onPress={() => setIntroVisible(false)} accessibilityRole="button">
+          <Text style={styles.skipText}>{t("introSkip")}</Text>
+        </Pressable>
+      </View>
+    )}
   </View>;
 }
 
