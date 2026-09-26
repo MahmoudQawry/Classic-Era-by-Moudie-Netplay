@@ -23,6 +23,8 @@ redis:
 
 # LiveKit uses the region-aware selector to keep a room close to the signaling
 # region while still allowing load-aware failover inside the global cluster.
+region: ${LIVEKIT_REGION}
+
 node_selector:
   kind: regionaware
   sysload_limit: 0.65
