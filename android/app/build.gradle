@@ -177,8 +177,10 @@ android {
 dependencies {
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
-    implementation(files("libs/discord_partner_sdk.jar"))
-    implementation(files("libs/libwebrtc.jar"))
+    def discordSdkJar = file("libs/discord_partner_sdk.jar")
+    def discordWebrtcJar = file("libs/libwebrtc.jar")
+    if (discordSdkJar.exists()) implementation(files(discordSdkJar))
+    if (discordWebrtcJar.exists()) implementation(files(discordWebrtcJar))
 
     def isGifEnabled = (findProperty('expo.gif.enabled') ?: "") == "true";
     def isWebpEnabled = (findProperty('expo.webp.enabled') ?: "") == "true";
