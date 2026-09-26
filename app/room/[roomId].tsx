@@ -11,6 +11,7 @@ import { trpc } from "@/lib/trpc";
 import { useLanguage } from "@/lib/language";
 import { useRealtimeRoomSnapshot } from "@/lib/use-realtime-room-snapshot";
 import { roomCapacityFor } from "@/shared/room-capacity";
+import { updateDiscordRichPresence, clearDiscordRichPresence } from "@/lib/discord-social";
 
 const SYSTEM_LABEL: Record<string, string> = { psp: "PSP", nes: "Famicom / NES", sega: "Sega Genesis", ps1: "PlayStation 1", n64: "Nintendo 64", ps2: "PlayStation 2" };
 type MediaToken = { configured: boolean; url?: string; roomName?: string; token?: string; canPublish?: boolean; message?: string; teamMediaToken?: MediaToken | null };
@@ -46,7 +47,13 @@ export default function RoomScreen() {
   }, [credential, roomId]);
 
   const snapshotQuery = useRealtimeRoomSnapshot(roomId, credential, 4_000);
-  const snapshot = snapshotQuery.data; const roomMember = snapshot?.members.find((member) => member.id === credential?.memberId);
+  const snapshot = snapshotQuery.data;
+  useEffect(() => {
+    if (Platform.OS !== "android" || !snapshot) return;
+    const label = SYSTEM_LABEL[snapshot.room.system] ?? snapshot.room.system.toUpperCase();
+    updateDiscordRichPresence(label, snapshot.room.status === "waiting" ? "Waiting in room" : "Playing online", String(roomId), snapshot.members.filter((member) => member.role !== "spectator").length, 4);
+    return () => clearDiscordRichPresence();
+  }, [roomId, snapshot]); const roomMember = snapshot?.members.find((member) => member.id === credential?.memberId);
   const share = async () => { if (!snapshot) return; haptic.light(); await Share.share({ message: `${t("rmSharePrefix")} ${snapshot.room.name} · ${t("rmShareCodeLabel")}: ${snapshot.room.joinCode}` }); };
 
   if (credential === undefined || snapshotQuery.isLoading) return <ScreenContainer className="items-center justify-center"><ActivityIndicator color="#62C2EB" size="large" /></ScreenContainer>;
