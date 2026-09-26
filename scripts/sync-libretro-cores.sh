@@ -1,17 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 ABI="${1:-arm64-v8a}"
+SUPPORTED_ABIS=("armeabi-v7a" "arm64-v8a" "x86" "x86_64")
+if [[ ! " ${SUPPORTED_ABIS[*]} " =~ " ${ABI} " ]]; then echo "Unsupported Android ABI: ${ABI}" >&2; exit 2; fi
 TARGET="modules/moudie-emulator/android/src/main/jniLibs/${ABI}"
 ASSETS_TARGET="modules/moudie-emulator/android/src/main/assets/ppsspp"
 BASE_URL="https://buildbot.libretro.com/nightly/android/latest/${ABI}"
 SYSTEM_URL="https://buildbot.libretro.com/assets/system/PPSSPP.zip"
-if [[ "${ABI}" != "arm64-v8a" ]]; then echo "This project currently bundles verified prebuilt cores for arm64-v8a only." >&2; exit 2; fi
 mkdir -p "${TARGET}" "${ASSETS_TARGET}"
 TEMP_DIR="$(mktemp -d)"; trap 'rm -rf "${TEMP_DIR}"' EXIT
 fetch_core() { local remote_name="$1"; local local_name="$2"; local archive="${TEMP_DIR}/${local_name}.zip"; echo "Downloading ${remote_name}…"; curl --fail --location --retry 3 --retry-delay 2 -o "${archive}" "${BASE_URL}/${remote_name}_libretro_android.so.zip"; unzip -p "${archive}" "${remote_name}_libretro_android.so" > "${TARGET}/${local_name}_libretro_android.so"; test -s "${TARGET}/${local_name}_libretro_android.so"; }
 fetch_ppsspp_assets() { local archive="${TEMP_DIR}/PPSSPP.zip"; echo "Downloading official PPSSPP system assets…"; curl --fail --location --retry 3 --retry-delay 2 -o "${archive}" "${SYSTEM_URL}"; rm -rf "${ASSETS_TARGET}"; mkdir -p "${ASSETS_TARGET}"; unzip -q "${archive}" -d "${ASSETS_TARGET}"; if [[ -d "${ASSETS_TARGET}/PPSSPP" ]]; then shopt -s dotglob; mv "${ASSETS_TARGET}/PPSSPP"/* "${ASSETS_TARGET}/"; rmdir "${ASSETS_TARGET}/PPSSPP"; shopt -u dotglob; fi; test -f "${ASSETS_TARGET}/ppge_atlas.zim" || { echo "PPSSPP assets are incomplete." >&2; exit 3; }; }
 build_play_core() {
-  local play_source="${TEMP_DIR}/Play-"
+  local play_source="${TEMP_DIR}/Play-${ABI}"
   local play_build="${TEMP_DIR}/play-build"
   local ndk="${ANDROID_NDK_HOME:-${ANDROID_NDK:-}}"
   if [[ -z "${ndk}" || ! -f "${ndk}/build/cmake/android.toolchain.cmake" ]]; then echo "Android NDK with CMake toolchain is required to build the patched Play! core." >&2; exit 4; fi
