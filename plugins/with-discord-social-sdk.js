@@ -8,6 +8,11 @@ module.exports = function withDiscordSocialSdk(config) {
     const mainApplication = mod.modResults.manifest.application?.[0];
     if (!mainApplication) return mod;
 
+    const queries = mod.modResults.manifest.queries ?? [];
+    const discordQuery = queries.some((query) => query.package?.some((entry) => entry.$?.["android:name"] === "com.discord"));
+    if (!discordQuery) queries.push({ package: [{ $: { "android:name": "com.discord" } }] });
+    mod.modResults.manifest.queries = queries;
+
     const activities = mainApplication.activity ?? [];
     const exists = activities.some(
       (activity) => activity.$?.["android:name"] === "com.discord.socialsdk.AuthenticationActivity",
