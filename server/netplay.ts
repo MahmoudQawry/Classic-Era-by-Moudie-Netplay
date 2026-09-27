@@ -431,7 +431,7 @@ export function registerNetplayServer(server: HttpServer) {
 
     socket.on("netplay:session-start-request", async (payload: SessionStartPayload) => {
       if (session.clientKind !== "room-ui" || session.role !== "host") return;
-      const system = payload?.system === "ps1" || payload?.system === "nes" || payload?.system === "psp" || payload?.system === "sega" ? payload.system : null;
+      const system = payload?.system === "ps1" || payload?.system === "nes" || payload?.system === "psp" || payload?.system === "sega" || payload?.system === "n64" || payload?.system === "ps2" ? payload.system : null;
       if (!system) return;
       const roomSnapshot = await db.getRoomSnapshot(session.roomId).catch(() => undefined);
       const capacity = roomSnapshot ? roomCapacityFor(roomSnapshot.room.system as NetplaySystem) : null;
@@ -680,6 +680,38 @@ export function registerNetplayServer(server: HttpServer) {
       socket.data.universalCoreVersion = coreVersion;
       getFrameTracker(session.roomId).delete(session.memberId);
       const peers = Array.from(io.sockets.adapter.rooms.get(channel) ?? []).map((socketId) => io.sockets.sockets.get(socketId)).filter((p): p is NonNullable<typeof p> => Boolean(p));
+      const readyPlayerIds = new Set(peers
+        .filter((peer) => {
+          const peerSession = peer.data.session as NetplaySession | undefined;
+          return (peerSession?.role === "host" || peerSession?.role === "player") && peerSession.clientKind === "universal-player" && peer.data.universalSystem === system && peer.data.universalFingerprint === fingerprint && peer.data.universalCoreVersion === coreVersion;
+        })
+        .map((peer) => (peer.data.session as NetplaySession).memberId));
+      const requiredPlayerIds = pending.barrier.playerMemberIds;
+      const host = peers.find((peer) => (peer.data.session as NetplaySession | undefined)?.role === "host" && readyPlayerIds.has((peer.data.session as NetplaySession).memberId));
+      if (!host || requiredPlayerIds.some((memberId) => !readyPlayerIds.has(memberId))) {
+        socket.emit("netplay:universal-waiting", { message: "Waiting for the other player to choose the same game file.", connectedCount: readyPlayerIds.size, requiredCount: requiredPlayerIds.length });
+        return;
+      }
+      io.to(channel).emit("netplay:universal-session-bootstrap", { system, fingerprint, hostMemberId: (host.data.session as NetplaySession).memberId, playerMemberIds: requiredPlayerIds, inputDelay: roomInputDelays.get(session.roomId) ?? 3 });
+    });
+
+    // Native universal-player clients use the Cloudflare protocol's session-ready
+    // event. Keep the Socket.IO fallback path semantically identical so a service
+    // failover cannot leave N64/PS2 (or the other universal cores) stuck in waiting.
+    socket.on("netplay:session-ready", (payload: SessionReadyPayload) => {
+      if (session.clientKind !== "universal-player" || session.role === "spectator") return;
+      const system = payload?.system === "psp" || payload?.system === "sega" || payload?.system === "n64" || payload?.system === "ps2" ? payload.system : null;
+      const fingerprint = typeof payload?.fingerprint === "string" ? payload.fingerprint.toLowerCase() : "";
+      const coreVersion = typeof payload?.coreVersion === "string" ? payload.coreVersion.trim() : "";
+      const pending = pendingSessions.get(session.roomId);
+      if (!system || !/^[a-f0-9]{64}$/.test(fingerprint) || !coreVersion || pending?.system !== system || pending.barrier.fingerprint !== fingerprint || pending.barrier.coreVersion !== coreVersion) return;
+      socket.data.universalSystem = system;
+      socket.data.universalFingerprint = fingerprint;
+      socket.data.universalCoreVersion = coreVersion;
+      getFrameTracker(session.roomId).delete(session.memberId);
+      const peers = Array.from(io.sockets.adapter.rooms.get(channel) ?? [])
+        .map((socketId) => io.sockets.sockets.get(socketId))
+        .filter((peer): peer is NonNullable<typeof peer> => Boolean(peer));
       const readyPlayerIds = new Set(peers
         .filter((peer) => {
           const peerSession = peer.data.session as NetplaySession | undefined;
