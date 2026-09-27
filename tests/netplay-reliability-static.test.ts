@@ -23,6 +23,16 @@ describe("NetPlay and voice reliability safeguards", () => {
     expect(universal).not.toContain('IO.socket(');
   });
 
+  it("keeps the Socket.IO fallback aligned with native universal-player sessions", () => {
+    const server = read("server/netplay.ts");
+    const transport = read("modules/moudie-emulator/android/src/main/java/expo/modules/moudieemulator/CloudflareNetplayWebSocket.kt");
+    expect(server).toContain('session.clientKind !== "universal-player"');
+    expect(server).toContain('payload?.system === "n64" || payload?.system === "ps2"');
+    expect(server).toContain('socket.on("netplay:universal-input"');
+    expect(transport).toContain("scheduleReconnect()");
+    expect(transport).toContain("coerceAtMost(10_000L)");
+  });
+
   it("keeps bounded adaptive delay and frame/state relay semantics", () => {
     const quality = read("modules/moudie-emulator/android/src/main/java/expo/modules/moudieemulator/NetplayQualityMonitor.kt");
     const worker = read("cloudflare-netplay/src/index.ts");
