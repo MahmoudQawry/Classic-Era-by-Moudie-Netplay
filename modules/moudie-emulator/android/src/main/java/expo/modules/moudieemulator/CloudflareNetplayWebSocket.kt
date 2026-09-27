@@ -27,6 +27,7 @@ class CloudflareNetplayWebSocket(
   private val url=serverUrl.trimEnd('/').replaceFirst(Regex("^http:"),"ws:").replaceFirst(Regex("^https:"),"wss:")+"/ws/room/$roomId"
   private var ws:WebSocket?=null
   private var running=false
+  private var reconnectAttempt=0
   private var seq=0L
   private val pending=HashMap<Long,Long>()
   private var lastRtt:Long?=null
@@ -44,12 +45,28 @@ class CloudflareNetplayWebSocket(
     }
   }
 
+  private val reconnect=object:Runnable{
+    override fun run(){
+      if(!running || ws!=null) return
+      connectInternal()
+    }
+  }
+
   fun connect(){
-    if(ws!=null)return
+    if(running && ws!=null) return
     running=true
+    reconnectAttempt=0
+    handler.removeCallbacks(reconnect)
+    connectInternal()
+  }
+
+  private fun connectInternal(){
+    if(!running || ws!=null) return
     val request=Request.Builder().url(url).build()
     ws=client.newWebSocket(request,object:WebSocketListener(){
       override fun onOpen(webSocket:WebSocket,response:okhttp3.Response){
+        reconnectAttempt=0
+        handler.removeCallbacks(reconnect)
         webSocket.send(JSONObject().put("event","auth").put("payload",JSONObject().put("roomId",roomId).put("memberId",memberId).put("memberToken",memberToken)).toString())
         handler.post(probe)
       }
@@ -77,12 +94,29 @@ class CloudflareNetplayWebSocket(
           if(event.isNotBlank())handler.post{onEvent(event,payload)}
         }catch(e:Exception){handler.post{onError(e.message?:"Invalid realtime packet")}}
       }
-      override fun onFailure(webSocket:WebSocket,t:Throwable,response:okhttp3.Response?){handler.post{onError(t.message?:"Realtime connection failed")};handler.post(onDisconnected)}
-      override fun onClosed(webSocket:WebSocket,code:Int,reason:String){handler.post(onDisconnected)}
+      override fun onFailure(webSocket:WebSocket,t:Throwable,response:okhttp3.Response?){
+        if(ws===webSocket) ws=null
+        handler.post{onError(t.message?:"Realtime connection failed")}
+        handler.post(onDisconnected)
+        scheduleReconnect()
+      }
+      override fun onClosed(webSocket:WebSocket,code:Int,reason:String){
+        if(ws===webSocket) ws=null
+        handler.post(onDisconnected)
+        if(running && code != 1000) scheduleReconnect()
+      }
     })
+  }
+
+  private fun scheduleReconnect(){
+    if(!running || ws!=null) return
+    reconnectAttempt=(reconnectAttempt+1).coerceAtMost(8)
+    val delay=(250L shl (reconnectAttempt-1)).coerceAtMost(10_000L)
+    handler.removeCallbacks(reconnect)
+    handler.postDelayed(reconnect,delay)
   }
   fun send(event:String,payload:JSONObject=JSONObject()){
     ws?.send(JSONObject().put("event",event).put("payload",payload).toString())
   }
-  fun close(){running=false;handler.removeCallbacks(probe);pending.clear();ws?.close(1000,"done");ws=null;client.dispatcher.executorService.shutdown();client.connectionPool.evictAll()}
+  fun close(){running=false;reconnectAttempt=0;handler.removeCallbacks(probe);handler.removeCallbacks(reconnect);pending.clear();ws?.close(1000,"done");ws=null;client.connectionPool.evictAll()}
 }
