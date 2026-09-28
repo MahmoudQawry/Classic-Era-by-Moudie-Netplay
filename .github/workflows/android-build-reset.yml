@@ -204,6 +204,32 @@ jobs:
             readelf -Ws "/tmp/moudie-apk-check/lib/${ABI}/play_libretro_android.so" | grep -q '_ZN9Framework7CJavaVM9SetJavaVMEP7_JavaVM'
           done
           echo "Play! core contains the required CJavaVM::SetJavaVM symbol; runtime bootstrap is verified by the patched Play! source and build script."
+      - name: ✅ التحقق من دعم أندرويد 8 حتى الأحدث داخل ملف APK نفسه
+        run: |
+          set -e
+          APK="android/app/build/outputs/apk/release/app-release.apk"
+          AAPT=$(ls -d "${ANDROID_HOME:-/usr/local/lib/android/sdk}"/build-tools/*/aapt2 2>/dev/null | sort -V | tail -1)
+          if [ -z "$AAPT" ]; then
+            echo "ERROR: aapt2 was not found, cannot verify the built package."
+            exit 1
+          fi
+          echo "Using: $AAPT"
+          "$AAPT" dump badging "$APK" > /tmp/apk-badging.txt
+          head -3 /tmp/apk-badging.txt
+          MINSDK=$(grep -oE "sdkVersion:'[0-9]+'" /tmp/apk-badging.txt | grep -oE "[0-9]+" | head -1)
+          TARGETSDK=$(grep -oE "targetSdkVersion:'[0-9]+'" /tmp/apk-badging.txt | grep -oE "[0-9]+" | head -1)
+          VERSIONCODE=$(grep -oE "versionCode='[0-9]+'" /tmp/apk-badging.txt | grep -oE "[0-9]+" | head -1)
+          VERSIONNAME=$(grep -oE "versionName='[^']+'" /tmp/apk-badging.txt | head -1)
+          echo "Package check: minSdk=$MINSDK targetSdk=$TARGETSDK versionCode=$VERSIONCODE $VERSIONNAME"
+          test "$MINSDK" = "26" || { echo "ERROR: minSdkVersion must be 26 so Android 8.0 can install the package."; exit 1; }
+          test "$TARGETSDK" -ge 35 || { echo "ERROR: targetSdkVersion is too old for current Android releases."; exit 1; }
+          test "$VERSIONCODE" -ge 2 || { echo "ERROR: versionCode must be at least 2 for this update."; exit 1; }
+          grep -q "largeHeap='true'" /tmp/apk-badging.txt || echo "NOTE: largeHeap is declared in the manifest source; aapt2 badging may not list it."
+          for ABI in armeabi-v7a arm64-v8a x86 x86_64; do
+            grep -q "$ABI" /tmp/apk-badging.txt || { echo "ERROR: missing native code for $ABI"; exit 1; }
+          done
+          echo "Package verification passed: Android 8.0 (API 26) through the current release."
+
       - name: 📦 نشر APK كإصدار اختبار قابل للتنزيل
         env:
           GH_TOKEN: ${{ github.token }}
