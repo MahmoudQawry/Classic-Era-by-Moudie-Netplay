@@ -65,6 +65,9 @@ class PS1PlayerActivity : ComponentActivity() {
     private const val JITTER_BUFFER_FRAMES = 4
     private const val RESYNC_TIMEOUT_MS = 5000L
     private const val FRAME_HISTORY_CLEANUP_THRESHOLD = 60
+    private const val MIN_NETPLAY_DELAY_FRAMES = 2L
+    private const val MAX_NETPLAY_DELAY_FRAMES = 45L
+    private const val STABLE_SAMPLES_BEFORE_SHRINK = 5
     private val PS1_LOCKSTEP_KEYS = intArrayOf(
       KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN,
       KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT,
@@ -111,6 +114,7 @@ class PS1PlayerActivity : ComponentActivity() {
   private var lockstepNetplay = false
   private var netplayInputDelayFrames = NETPLAY_INPUT_DELAY_FRAMES
   private var netplayQuality = NetplayQuality()
+  private var stableQualitySamples = 0
   private var sessionStartTimeMs = 0L
   private var predictedFrames = 0
   private var lastRemoteMasks = mutableMapOf<Int, Int>()
@@ -272,6 +276,14 @@ class PS1PlayerActivity : ComponentActivity() {
     stopLockstep()
     stopBootstrapRetry()
     netplayClient?.close()
+    netplayClient = null
+    synchronized(remoteFrameMasks) { remoteFrameMasks.clear() }
+    synchronized(localFrameMasks) { localFrameMasks.clear() }
+    appliedMasksByPort.clear()
+    lastRemoteMasks.clear()
+    localPressedKeys.clear()
+    // Drop the copied game image and any interrupted write once the session ends.
+    MoudieStorageMaintenance.run(this)
     onOverlayAction = null
     super.onDestroy()
   }
@@ -306,14 +318,32 @@ class PS1PlayerActivity : ComponentActivity() {
       onStatus = { message -> runOnUiThread { showToast(message) } },
       onQuality = { quality -> runOnUiThread {
         netplayQuality = quality
+        // Only the relay-confirmed delay is played. Requests are advisory and
+        // rate limited inside the client, so the two devices cannot drift.
         val recommended = quality.recommendedInputDelayFrames()
         if (lockstepActive.get()) {
-          if (recommended != netplayInputDelayFrames) {
-            val reason = if (recommended > netplayInputDelayFrames) "quality" else "stable"
-            netplayClient?.requestDelayIncrease(recommended, reason)
+          if (recommended > netplayInputDelayFrames) {
+            stableQualitySamples = 0
+            netplayClient?.requestDelayIncrease(recommended, "quality")
+          } else if (recommended < netplayInputDelayFrames) {
+            stableQualitySamples += 1
+            if (stableQualitySamples >= STABLE_SAMPLES_BEFORE_SHRINK) {
+              stableQualitySamples = 0
+              netplayClient?.requestDelayIncrease(recommended, "stable")
+            }
+          } else {
+            stableQualitySamples = 0
           }
         } else {
           netplayInputDelayFrames = recommended
+        }
+        updateMetricPill(null)
+      } },
+      onDelayUpdate = { confirmed -> runOnUiThread {
+        val bounded = confirmed.coerceIn(MIN_NETPLAY_DELAY_FRAMES, MAX_NETPLAY_DELAY_FRAMES)
+        if (bounded != netplayInputDelayFrames) {
+          netplayInputDelayFrames = bounded
+          showToast("Synchronized input delay: $bounded frames.")
         }
         updateMetricPill(null)
       } },
@@ -495,12 +525,9 @@ class PS1PlayerActivity : ComponentActivity() {
             lastFrameReceivedAt = now
             consecutiveDesyncs++
             if (consecutiveDesyncs > 3) {
-              // Increase input delay adaptively (adaptive)
-              if (netplayInputDelayFrames < 8) {
-                netplayInputDelayFrames++
-                netplayClient?.requestDelayIncrease(netplayInputDelayFrames, "high-prediction")
-                showToast("Increased input buffer to ${netplayInputDelayFrames} frames for stability")
-              }
+              // Ask the relay authority for a wider window. The confirmed value
+              // arrives as netplay:delay-update and is applied there.
+              netplayClient?.requestDelayIncrease(netplayInputDelayFrames + 2, "high-prediction")
               consecutiveDesyncs = 0
             }
           }

@@ -126,6 +126,13 @@ class FamicomCompatPlayerActivity : ComponentActivity() {
     super.onPause()
   }
 
+  override fun onDestroy() {
+    // The copied ROM and any interrupted write are re-creatable cache content;
+    // removing them here keeps long play sessions from filling the cache.
+    MoudieStorageMaintenance.run(this)
+    super.onDestroy()
+  }
+
   private fun createHeader(gameFile: File): LinearLayout = LinearLayout(this).apply {
     gravity = Gravity.CENTER_VERTICAL
     setPadding(dp(10), dp(7), dp(10), dp(7))

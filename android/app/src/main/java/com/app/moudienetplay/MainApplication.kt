@@ -7,6 +7,8 @@ import android.content.ComponentCallbacks2
 import android.content.res.Configuration
 import android.os.Build
 import android.util.Log
+import java.io.File
+import java.io.FileOutputStream
 
 import com.facebook.react.PackageList
 import com.facebook.react.ReactApplication
@@ -56,7 +58,21 @@ class MainApplication : Application(), ReactApplication {
     }
     val priorUncaughtHandler = Thread.getDefaultUncaughtExceptionHandler()
     Thread.setDefaultUncaughtExceptionHandler { thread, error ->
-      Log.e("MoudieStartup", "Uncaught startup failure on ${thread.name}", error)
+      Log.e("MoudieStartup", "Uncaught failure on ${thread.name}", error)
+      // Record the failure in the same bounded diagnostics file the emulator
+      // writes, so an app that "closed itself" during a heavy session (for
+      // example PlayStation 2) leaves a readable reason on the device.
+      runCatching {
+        val target = File(filesDir, "moudie-session.log")
+        if (target.isFile && target.length() > 192L * 1024L) {
+          target.writeText(target.readLines().takeLast(200).joinToString("\n", postfix = "\n"))
+        }
+        FileOutputStream(target, true).use { output ->
+          val head = error.stackTrace.take(4).joinToString(" | ") { "${it.className}.${it.methodName}:${it.lineNumber}" }
+          output.write("${java.util.Date()} CRASH thread=${thread.name} type=${error.javaClass.name} $head\n".toByteArray())
+          output.fd.sync()
+        }
+      }
       priorUncaughtHandler?.uncaughtException(thread, error)
     }
     DefaultNewArchitectureEntryPoint.releaseLevel = try {

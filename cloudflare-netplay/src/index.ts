@@ -11,6 +11,30 @@ const enc = new TextEncoder();
 const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const SYSTEMS = new Set<System>(["psp","nes","sega","ps1","n64","ps2"]);
 
+/**
+ * Lockstep input-delay authority.
+ *
+ * The Android clients size the delay window from the measured round trip plus
+ * jitter and can legitimately need more than eight frames on a distant relay
+ * (at 60 FPS, 45 frames is ~750 ms). The relay therefore has to accept the same
+ * range the clients advertise, otherwise an adaptive request is silently
+ * discarded and the two devices keep different delays - which is exactly what a
+ * lockstep session cannot survive.
+ */
+const MIN_INPUT_DELAY = 2;
+const MAX_INPUT_DELAY = 45;
+const DEFAULT_INPUT_DELAY = 3;
+/** Minimum time between accepted changes, so two devices cannot ping-pong. */
+const DELAY_CHANGE_COOLDOWN_MS = 2500;
+/** Upper bound on retained member rows per room, so joins cannot pile up. */
+const MAX_RETAINED_MEMBERS = 40;
+
+function clampInputDelay(value:unknown):number {
+  const delay = Number(value);
+  if(!Number.isInteger(delay) || delay < MIN_INPUT_DELAY || delay > MAX_INPUT_DELAY) return DEFAULT_INPUT_DELAY;
+  return delay;
+}
+
 function json(data:unknown, init:ResponseInit={}) { return new Response(JSON.stringify(data), { ...init, headers: { "content-type":"application/json; charset=utf-8", ...(init.headers||{}) } }); }
 function ok(data:unknown) { return json({ result:{ data:{ json:data } } }); }
 function fail(message:string,status=400) { return json({ error:{ json:{ message } } }, {status}); }
@@ -71,8 +95,10 @@ export class NetplayRoom extends DurableObject<Env> {
     if(!room || room.system!==requested.system) return false;
     const startAt=Date.now()+3000;
     const playerMemberIds=players.map(x=>x.id);
-    const inputDelay=Number(this.metaValue("session-input-delay")||"3");
-    const payload={system:requested.system,startAt,playerMemberIds,inputDelay:Number.isInteger(inputDelay)&&inputDelay>=2&&inputDelay<=8?inputDelay:3};
+    const inputDelay=clampInputDelay(this.metaValue("session-input-delay")||DEFAULT_INPUT_DELAY);
+    const payload={system:requested.system,startAt,playerMemberIds,inputDelay};
+    this.setMeta("session-input-delay",String(inputDelay));
+    this.setMeta("session-delay-updated-at",String(Date.now()));
     this.setMeta("session-start-request","");
     this.setMeta("session-started-at",String(startAt));
     const packet=JSON.stringify({event:"netplay:session-start",payload});
@@ -94,8 +120,31 @@ export class NetplayRoom extends DurableObject<Env> {
     if(joinAs==="spectator"&&spectators>=room.maxSpectators) throw new Error("اكتملت مقاعد المشاهدين.");
     const id=Math.max(...ms.map(m=>m.id))+1; const t=token();
     this.sql.exec("INSERT INTO members VALUES(?,?,?,?,?,?,?)",id,displayName,joinAs,0,null,null,await sha(t));
+    this.pruneMembers();
     room.updatedAt=Date.now(); this.save(room);
     return {roomId:room.id,memberId:id,memberToken:t,role:joinAs};
+  }
+  /**
+   * Bounded room membership. Every join inserts a row; without this pass a room
+   * that is opened and left many times keeps every historic spectator forever,
+   * which is exactly the kind of data pile-up that makes a long-lived room slow.
+   * Only offline, non-host rows beyond the newest window are removed, so an
+   * active player or the host is never dropped.
+   */
+  private pruneMembers() {
+    const online=new Set<number>();
+    for(const ws of this.ctx.getWebSockets()){
+      const a=(ws as any).deserializeAttachment() as any;
+      const memberId=Number(a?.memberId);
+      if(Number.isSafeInteger(memberId)) online.add(memberId);
+    }
+    const offline=this.members().filter(m=>m.id!==1 && !online.has(m.id)).sort((l,r)=>r.id-l.id);
+    const survivors=new Set(offline.slice(0,MAX_RETAINED_MEMBERS-1).map(m=>m.id));
+    for(const member of offline){
+      if(survivors.has(member.id)) continue;
+      this.sql.exec("DELETE FROM members WHERE id=?",member.id);
+      const acks=this.sessionAcks(); if(acks.delete(member.id)) this.setSessionAcks(acks);
+    }
   }
   async snapshot(memberId:number,memberToken:string) {
     await this.auth(memberId,memberToken); const room=this.room(); if(!room) throw new Error("الغرفة لم تعد موجودة.");
@@ -158,14 +207,35 @@ export class NetplayRoom extends DurableObject<Env> {
 
       if(msg?.event==="netplay:delay-request"){
         if(member.role==="spectator") return;
-        const delay=Number(msg.payload?.delay);
+        const requested=Number(msg.payload?.delay);
         const reason=String(msg.payload?.reason||"");
-        if(!Number.isInteger(delay)||delay<2||delay>8) return;
-        const current=Number(this.metaValue("session-input-delay")||"3");
-        if(delay>current || (delay<current && reason==="stable")){
-          this.setMeta("session-input-delay",String(delay));
-          this.broadcast({event:"netplay:delay-update",payload:{delay,requestedBy:member.id}});
+        if(!Number.isInteger(requested)||requested<MIN_INPUT_DELAY||requested>MAX_INPUT_DELAY){
+          server.send(JSON.stringify({event:"netplay:delay-update",payload:{
+            delay:clampInputDelay(this.metaValue("session-input-delay")||DEFAULT_INPUT_DELAY),
+            accepted:false,reason:"out-of-range",requestedBy:member.id
+          }}));
+          return;
         }
+        const current=clampInputDelay(this.metaValue("session-input-delay")||DEFAULT_INPUT_DELAY);
+        const updatedAt=Number(this.metaValue("session-delay-updated-at")||"0");
+        const coolingDown=Number.isFinite(updatedAt) && Date.now()-updatedAt < DELAY_CHANGE_COOLDOWN_MS;
+        // An increase is always safe for lockstep, but it must not be requested
+        // repeatedly by the two devices inside the cooldown window. A decrease is
+        // only accepted when the requester reports a stable link and the window
+        // has passed, so the session cannot flap between two delays.
+        const isIncrease=requested>current;
+        const isDecrease=requested<current && reason==="stable";
+        if(coolingDown || (!isIncrease && !isDecrease) || requested===current){
+          server.send(JSON.stringify({event:"netplay:delay-update",payload:{
+            delay:current,accepted:false,reason:coolingDown?"cooldown":"unchanged",requestedBy:member.id
+          }}));
+          return;
+        }
+        this.setMeta("session-input-delay",String(requested));
+        this.setMeta("session-delay-updated-at",String(Date.now()));
+        this.broadcast({event:"netplay:delay-update",payload:{
+          delay:requested,accepted:true,reason:reason||"network-adaptation",requestedBy:member.id
+        }});
         return;
       }
 
@@ -214,7 +284,8 @@ export class NetplayRoom extends DurableObject<Env> {
           if(previousSignature!==signature){
             this.clearSessionAcks();
             this.setMeta("session-signature",signature);
-            this.setMeta("session-input-delay","3");
+            this.setMeta("session-input-delay",String(DEFAULT_INPUT_DELAY));
+            this.setMeta("session-delay-updated-at","0");
           }
         } else {
           const acks=this.sessionAcks(); acks.delete(member.id); this.setSessionAcks(acks);

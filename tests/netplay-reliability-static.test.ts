@@ -38,7 +38,8 @@ describe("NetPlay and voice reliability safeguards", () => {
     const worker = read("cloudflare-netplay/src/index.ts");
     expect(quality).toContain("MAX_INPUT_DELAY_FRAMES");
     expect(quality).toContain("frames.coerceIn(2L, MAX_INPUT_DELAY_FRAMES)");
-    expect(worker).toContain('inputDelay:3');
+    expect(worker).toContain("const payload={system:requested.system,startAt,playerMemberIds,inputDelay}");
+    expect(worker).toContain("clampInputDelay");
     expect(worker).toContain('netplay:session-start');
   });
 

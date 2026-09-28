@@ -37,11 +37,11 @@ describe("six-emulator release matrix",()=>{
   });
 
   it("uses one application version across package, Expo, and Android",()=>{
-    expect(read("package.json")).toContain('"version": "1.0.0"');
-    expect(read("app.config.ts")).toContain('version: "1.0.0"');
-    expect(read("android/app/build.gradle")).toContain('versionName "1.0.0"');
-    expect(read("app.config.ts")).toContain("versionCode: 1");
-    expect(read("android/app/build.gradle")).toContain("versionCode 1");
+    expect(read("package.json")).toContain('"version": "1.0.1"');
+    expect(read("app.config.ts")).toContain('version: "1.0.1"');
+    expect(read("android/app/build.gradle")).toContain('versionName "1.0.1"');
+    expect(read("app.config.ts")).toContain("versionCode: 2");
+    expect(read("android/app/build.gradle")).toContain("versionCode 2");
   });
 
   it("does not reintroduce the PS2 framebuffer override",()=>{

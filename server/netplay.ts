@@ -95,7 +95,17 @@ export function registerNetplayServer(server: HttpServer) {
   const ps1InputHistory = new Map<number, RoomFrameHistory>();
   const universalInputHistory = new Map<string, RoomFrameHistory>();
   const roomInputDelays = new Map<number, number>();
+  const roomDelayUpdatedAt = new Map<number, number>();
   const memberInputRate = new Map<string, { count: number; windowStart: number }>();
+
+  /** Lockstep window bounds. Kept identical to the Cloudflare relay, the Android
+   * NetplayQualityMonitor and lib/netplay-quality.ts so a recommendation is
+   * never silently clamped by a different component. */
+  const MIN_INPUT_DELAY = 2;
+  const MAX_INPUT_DELAY = 45;
+  const DEFAULT_INPUT_DELAY = 3;
+  /** One accepted change per window prevents the two devices from flapping. */
+  const DELAY_CHANGE_COOLDOWN_MS = 2500;
 
   /** Authoritative snapshots are the largest objects on the server (up to ~4.5 MB
    * each). They must never outlive the session that produced them. */
@@ -130,6 +140,7 @@ export function registerNetplayServer(server: HttpServer) {
     roomFrameTrackers.delete(roomId);
     ps1InputHistory.delete(roomId);
     roomInputDelays.delete(roomId);
+    roomDelayUpdatedAt.delete(roomId);
     roomDisposers.delete(roomId);
   }
 
@@ -356,17 +367,41 @@ export function registerNetplayServer(server: HttpServer) {
       }
     });
 
-    // Adaptive input delay negotiation (adaptive)
+    // Adaptive input delay negotiation.
+    // The relay is the single authority for the lockstep window: it must accept
+    // the same 2..45 range the Android clients advertise, change it at most once
+    // per cooldown window, and always answer with the authoritative value so a
+    // refused request makes the device converge instead of retrying forever.
     socket.on("netplay:delay-request", (payload: DelayUpdatePayload) => {
       if (session.role === "spectator") return;
-      const delay = Number(payload?.delay);
-      if (!Number.isInteger(delay) || delay < 2 || delay > 45) return;
-      const currentDelay = roomInputDelays.get(session.roomId) ?? 3;
-      // Only allow increasing delay, or decreasing if all agree it's stable
-      if (delay > currentDelay || (delay < currentDelay && payload?.reason === "stable")) {
-        roomInputDelays.set(session.roomId, delay);
-        io.to(channel).emit("netplay:delay-update", { delay, requestedBy: session.memberId, reason: payload?.reason ?? "network-adaptation" });
+      const requested = Number(payload?.delay);
+      const reason = typeof payload?.reason === "string" ? payload.reason : "";
+      const currentDelay = roomInputDelays.get(session.roomId) ?? DEFAULT_INPUT_DELAY;
+      if (!Number.isInteger(requested) || requested < MIN_INPUT_DELAY || requested > MAX_INPUT_DELAY) {
+        socket.emit("netplay:delay-update", { delay: currentDelay, accepted: false, reason: "out-of-range", requestedBy: session.memberId });
+        return;
       }
+      const updatedAt = roomDelayUpdatedAt.get(session.roomId) ?? 0;
+      const coolingDown = Date.now() - updatedAt < DELAY_CHANGE_COOLDOWN_MS;
+      const isIncrease = requested > currentDelay;
+      const isDecrease = requested < currentDelay && reason === "stable";
+      if (requested === currentDelay || coolingDown || (!isIncrease && !isDecrease)) {
+        socket.emit("netplay:delay-update", {
+          delay: currentDelay,
+          accepted: false,
+          reason: coolingDown ? "cooldown" : "unchanged",
+          requestedBy: session.memberId,
+        });
+        return;
+      }
+      roomInputDelays.set(session.roomId, requested);
+      roomDelayUpdatedAt.set(session.roomId, Date.now());
+      io.to(channel).emit("netplay:delay-update", {
+        delay: requested,
+        accepted: true,
+        requestedBy: session.memberId,
+        reason: reason || "network-adaptation",
+      });
     });
 
     // Desync detection reporting
@@ -461,7 +496,8 @@ export function registerNetplayServer(server: HttpServer) {
       roomFrameTrackers.delete(session.roomId);
       ps1InputHistory.delete(session.roomId);
       universalInputHistory.delete(`${session.roomId}:${system}`);
-      roomInputDelays.set(session.roomId, 3); // Reset to default for new session
+      roomInputDelays.set(session.roomId, DEFAULT_INPUT_DELAY); // Reset to default for new session
+      roomDelayUpdatedAt.set(session.roomId, 0);
       pendingSessions.set(session.roomId, { system, barrier, createdAt: Date.now() });
       io.to(channel).emit("netplay:session-start", { system, ...barrier, inputDelay: 3 });
     });

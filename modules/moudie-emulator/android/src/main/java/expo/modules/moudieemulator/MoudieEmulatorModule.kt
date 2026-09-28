@@ -60,6 +60,49 @@ class MoudieEmulatorModule : Module() {
       getPs1LaunchStatus()
     }
 
+    /**
+     * Measured device envelope (RAM, heap class, cores, OpenGL ES level) plus
+     * whether PlayStation 2 can run safely. Used by the room screen so a device
+     * limit is explained before a session starts instead of during play.
+     */
+    Function("getDeviceProfile") {
+      val context = appContext.reactContext
+      if (context == null) {
+        mapOf("ps2Supported" to false, "ps2Message" to "The device profile is available after the app is visible on screen.")
+      } else {
+        MoudieDeviceProfile.describe(context)
+      }
+    }
+
+    /**
+     * Bounded diagnostics for the last emulator sessions: measured FPS, free
+     * memory and thermal level with the exit reason. Explains a PS2 session that
+     * slowed down and then closed itself.
+     */
+    Function("getSessionDiagnostics") {
+      val context = appContext.reactContext
+      if (context == null) {
+        mapOf("lines" to emptyList<String>(), "previousSessionUnclean" to false)
+      } else {
+        mapOf(
+          "lines" to MoudieSessionLog.report(context),
+          "previousSessionUnclean" to MoudieSessionLog.previousSessionUnclean(context),
+        )
+      }
+    }
+
+    /** Safe on-demand cleanup of re-creatable emulator cache content. */
+    AsyncFunction("maintainStorage") {
+      val context = appContext.reactContext ?: throw IllegalStateException("Storage maintenance needs a visible app.")
+      val report = MoudieStorageMaintenance.run(context)
+      mapOf(
+        "reclaimedMb" to (report.reclaimedBytes / (1024L * 1024L)).toInt(),
+        "removedFiles" to report.removedFiles,
+        "cacheMb" to (report.cacheBytes / (1024L * 1024L)).toInt(),
+        "message" to "Reclaimed ${report.reclaimedBytes / (1024L * 1024L)} MB from ${report.removedFiles} temporary file(s). Saved games, ROMs and BIOS files were not touched.",
+      )
+    }
+
     AsyncFunction("setFamicomFocusLandscape") { active: Boolean ->
       val activity = appContext.currentActivity ?: return@AsyncFunction
       activity.runOnUiThread {

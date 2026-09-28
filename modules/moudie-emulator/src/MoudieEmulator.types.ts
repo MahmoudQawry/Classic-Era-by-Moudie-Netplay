@@ -40,3 +40,27 @@ export type MoudieEmulatorViewProps = {
 };
 
 export const EMULATOR_SYSTEMS: EmulatorSystem[] = ["nes", "ps1", "psp", "sega", "n64", "ps2"];
+
+export type EmulatorDeviceProfile = {
+  totalRamGb?: number;
+  availableRamMb?: number;
+  cpuCores?: number;
+  glEsVersion?: string;
+  largeHeap?: boolean;
+  lowRamDevice?: boolean;
+  ps2Supported: boolean;
+  ps2Warning?: string | null;
+  ps2Message: string;
+};
+
+export type EmulatorSessionDiagnostics = {
+  lines: string[];
+  previousSessionUnclean: boolean;
+};
+
+export type EmulatorStorageReport = {
+  reclaimedMb: number;
+  removedFiles: number;
+  cacheMb: number;
+  message: string;
+};
