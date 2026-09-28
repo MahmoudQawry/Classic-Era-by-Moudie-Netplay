@@ -8,7 +8,7 @@ import java.io.File
  *
  * Never removes ROMs, BIOS files, save states, or controller layouts.
  *
- * The emulator's own caches (`cache/moudie-*-games`, `files/moudie-*/states`) are
+ * The emulator's own caches (`cache/moudie-*-games`, `files/moudie-<id>/states`) are
  * owned by the native emulator module: it knows which copy is currently playing
  * and prunes by budget there. This class therefore leaves those directories
  * alone instead of deleting a game image out from under a running session.
