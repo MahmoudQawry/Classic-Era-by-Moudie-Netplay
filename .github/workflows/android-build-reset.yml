@@ -1,17 +1,17 @@
 name: Android Build Zero Counter
 
+# The previous rolling APK was withdrawn at the owner's request.
+# Keep this workflow paused until the source of the approved 1.11.2 APK is
+# identified and verified. Do not publish a guessed source tree under its name.
 on:
-  push:
-    branches: [main, release/deep-hardening-2026-09-26]
-  pull_request:
-    branches: [main]
   workflow_dispatch:
-run-name: Android Build Zero Counter
+run-name: Android build paused — approved source pending
 permissions:
-  contents: write
+  contents: read
   issues: write
 jobs:
   build:
+    if: ${{ false }}
     runs-on: ubuntu-latest
     env:
       # Never bake a stale hosting URL into the APK. Configure repository variables
@@ -204,17 +204,12 @@ jobs:
             readelf -Ws "/tmp/moudie-apk-check/lib/${ABI}/play_libretro_android.so" | grep -q '_ZN9Framework7CJavaVM9SetJavaVMEP7_JavaVM'
           done
           echo "Play! core contains the required CJavaVM::SetJavaVM symbol; runtime bootstrap is verified by the patched Play! source and build script."
-      - name: 📦 نشر APK كإصدار اختبار قابل للتنزيل
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -e
-          TAG="android-test-latest"
-          APK="android/app/build/outputs/apk/release/app-release.apk"
-          BUILD_NO=$((GITHUB_RUN_NUMBER - 1))
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" "$APK" --clobber
-          else
-            gh release create "$TAG" "$APK" --title "Classic Era by Moudie — Android Build $BUILD_NO" --notes "Automated verified Android APK build from commit $GITHUB_SHA." --prerelease --target "$GITHUB_SHA"
-          fi
-          echo "APK release: $(gh release view "$TAG" --json url --jq .url)" >> "$GITHUB_STEP_SUMMARY"
+      # Even after the build is explicitly re-enabled, output stays an artifact.
+      # Publishing a release requires a separately reviewed, immutable source tag.
+      - name: Preserve build output for review only
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-review-${{ github.sha }}
+          path: android/app/build/outputs/apk/release/app-release.apk
+          retention-days: 7
+          if-no-files-found: error

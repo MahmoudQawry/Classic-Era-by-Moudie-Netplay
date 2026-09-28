@@ -21,7 +21,8 @@
     "path": ".github/workflows/android-build-reset.yml",
     "disable_attempt": "HTTP 403: Resource not accessible by integration",
     "state_after_attempt": "active",
-    "active_runs_at_withdrawal": []
+    "active_runs_at_withdrawal": [],
+    "local_config_containment": "Manual-only trigger, build explicitly paused, contents read-only, release overwrite removed. Requires merge into the default branch to affect its workflow."
   },
   "archive_inspection_runs": [
     36449562131,
@@ -105,5 +106,6 @@
       ]
     }
   ],
-  "rollback_status": "awaiting identification of requested approximately 72 MB version; application source not changed"
+  "rollback_status": "Approved APK identified as 1.11.2 (versionCode 53), SHA-256 bde99a4dfcac736c08d4f59b62cf6018e2a7bae2b71f08a8fcf16df3e34d4806. Matching source remains unverified; application source has not been rolled back.",
+  "approved_apk_reference": "releases/1.11.2-approved-apk.json"
 }
