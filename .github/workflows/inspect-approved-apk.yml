@@ -18,7 +18,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       RECOVERY_RELEASE_ID: '398429541'
       RECOVERY_TAG: recovery-input-1.11.2-20260928
-      RECOVERY_DIR: ${{ runner.temp }}/approved-apk
+      RECOVERY_DIR: ${{ github.workspace }}/.recovery
     steps:
       - uses: actions/checkout@v4
         with:
