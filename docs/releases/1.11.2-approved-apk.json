@@ -1,0 +1,111 @@
+{
+  "schema_version": 1,
+  "inspected_on": "2026-09-28",
+  "approved_by": "repository owner, via the APK supplied in this session",
+  "filename": "Classic-Era-1.11.2-arm64-test.apk",
+  "bytes": 60468101,
+  "sha256": "bde99a4dfcac736c08d4f59b62cf6018e2a7bae2b71f08a8fcf16df3e34d4806",
+  "package": "com.app.moudienetplay",
+  "version_name": "1.11.2",
+  "version_code": 53,
+  "min_sdk": 24,
+  "target_sdk": 36,
+  "abis": [
+    "arm64-v8a"
+  ],
+  "source": {
+    "status": "unverified",
+    "git_commit": null,
+    "reason": "No source revision for version 1.11.2 has been identified in available branch, tag, or pull-request history. APK identity is verified; source equivalence is not.",
+    "original_current_source": "5cc28cb74d0222e71dee1c9c2f266bb1c7425abd"
+  },
+  "inspection_run": "https://github.com/MahmoudQawry/Classic-Era-by-Moudie-Netplay/actions/runs/36451865792",
+  "signature": {
+    "verified": true,
+    "scheme": "v2",
+    "certificate_kind": "Android Debug",
+    "certificate_sha256": "fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c",
+    "source_stamp_verified": false
+  },
+  "emulator_cores": [
+    {
+      "path": "lib/arm64-v8a/fceumm_libretro_android.so",
+      "bytes": 2878064,
+      "sha256": "38659530f800032ed6ed46ea0cdf167a38326e0ecd9afa09a3c08130020d85af"
+    },
+    {
+      "path": "lib/arm64-v8a/genesis_plus_gx_libretro_android.so",
+      "bytes": 11073912,
+      "sha256": "ef8ca1df538d5904707edd083d19df1927da767f1be5425624f61c527bc2b71a"
+    },
+    {
+      "path": "lib/arm64-v8a/parallel_n64_libretro_android.so",
+      "bytes": 5504792,
+      "sha256": "18a51ffaf64abd2a2d5bcf13c96ca4d1f2f87f1e60413a774c0ff80802733336"
+    },
+    {
+      "path": "lib/arm64-v8a/pcsx_rearmed_libretro_android.so",
+      "bytes": 1582960,
+      "sha256": "0902ec4f7ecc3d4e8cf117b627c2a0320cbefe531feda6baf37baa6ce0e9b4a2"
+    },
+    {
+      "path": "lib/arm64-v8a/play_libretro_android.so",
+      "bytes": 5421264,
+      "sha256": "b3fa96ee29977336e738588db812d1cbb11fb5ef406eec0a03e6222221a560d9"
+    },
+    {
+      "path": "lib/arm64-v8a/ppsspp_libretro_android.so",
+      "bytes": 19500376,
+      "sha256": "4467496bc612929bdd419dd01ffb18ccfe9ca534e48130ef7416c28c35160acf"
+    }
+  ],
+  "javascript_bundle": {
+    "path": "assets/index.android.bundle",
+    "bytes": 3265940,
+    "sha256": "e5df0821ea162b8b972ea3089d87b1c110b5251982082dbe21ccc596bb4afe4e"
+  },
+  "dex_files": [
+    {
+      "path": "classes.dex",
+      "bytes": 9217156,
+      "sha256": "a7b01bb3a872500c770e754e9c7eb943e393ceae6f3e38be3166aff42c3bf790"
+    },
+    {
+      "path": "classes2.dex",
+      "bytes": 8813028,
+      "sha256": "ad8241847094a36be05ee45a5292323c6a31755aa2628547fb692921c579e0de"
+    },
+    {
+      "path": "classes3.dex",
+      "bytes": 10018192,
+      "sha256": "1e4e70521b723f2b1095e6781b40a669ba81fbdf3ec32d015808308b739eefe2"
+    }
+  ],
+  "permissions": [
+    "uses-permission: name='android.permission.ACCESS_NETWORK_STATE'",
+    "uses-permission: name='android.permission.BLUETOOTH' maxSdkVersion='30'",
+    "uses-permission: name='android.permission.BLUETOOTH_ADMIN'",
+    "uses-permission: name='android.permission.BLUETOOTH_CONNECT'",
+    "uses-permission: name='android.permission.CAMERA'",
+    "uses-permission: name='android.permission.CHANGE_NETWORK_STATE'",
+    "uses-permission: name='android.permission.INTERNET'",
+    "uses-permission: name='android.permission.MODIFY_AUDIO_SETTINGS'",
+    "uses-permission: name='android.permission.POST_NOTIFICATIONS'",
+    "uses-permission: name='android.permission.READ_EXTERNAL_STORAGE'",
+    "uses-permission: name='android.permission.RECORD_AUDIO'",
+    "uses-permission: name='android.permission.SYSTEM_ALERT_WINDOW'",
+    "uses-permission: name='android.permission.VIBRATE'",
+    "uses-permission: name='android.permission.WAKE_LOCK'",
+    "uses-permission: name='android.permission.WRITE_EXTERNAL_STORAGE'",
+    "uses-permission: name='android.permission.FOREGROUND_SERVICE'",
+    "uses-permission: name='android.permission.USE_BIOMETRIC'",
+    "uses-permission: name='android.permission.USE_FINGERPRINT'",
+    "uses-permission: name='com.app.moudienetplay.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION'"
+  ],
+  "validation_limits": [
+    "The original APK has not been modified or re-signed.",
+    "No on-device gameplay, voice, connectivity or installation tests were performed.",
+    "APK contents cannot establish the corresponding server or original TypeScript/Kotlin source tree.",
+    "Do not publish a new build as this approved binary unless its SHA-256 matches the reference."
+  ]
+}

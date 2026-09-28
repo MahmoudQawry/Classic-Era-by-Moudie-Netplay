@@ -1,0 +1,111 @@
+{
+  "checked_on": "2026-09-28",
+  "repository": "MahmoudQawry/Classic-Era-by-Moudie-Netplay",
+  "working_branch": "arena/01a0e8c3-classic-era-by-moudie-netplay",
+  "original_source_commit": "5cc28cb74d0222e71dee1c9c2f266bb1c7425abd",
+  "withdrawn_release": {
+    "id": 393292923,
+    "tag": "android-test-latest",
+    "tag_source_commit": "6c204714e8053c75f760973c589b7a2b277f1218",
+    "asset_id": 595186635,
+    "asset_name": "app-release.apk",
+    "bytes": 124339371,
+    "MiB": 118.579,
+    "sha256": "56ee80ca87afc9d4583faa94a1d5dc4a701ead723f725c83e1bed4b567791b32",
+    "last_uploaded_at": "2026-09-28T10:55:52Z",
+    "release_deleted": true,
+    "remote_tag_deleted": true
+  },
+  "publisher": {
+    "workflow_id": 363719180,
+    "path": ".github/workflows/android-build-reset.yml",
+    "disable_attempt": "HTTP 403: Resource not accessible by integration",
+    "state_after_attempt": "active",
+    "active_runs_at_withdrawal": [],
+    "local_config_containment": "Manual-only trigger, build explicitly paused, contents read-only, release overwrite removed. Requires merge into the default branch to affect its workflow."
+  },
+  "archive_inspection_runs": [
+    36449562131,
+    36449821408
+  ],
+  "inspected_archives": [
+    {
+      "source_commit": "0f32998f8f6f63eb242de6827e0faeb2f61fb65e",
+      "source_run": 36105129941,
+      "artifact_id": 10851161099,
+      "bytes": 58133494,
+      "MiB": 55.44,
+      "sha256": "26b0c3ed41fdb253ecbbd20c394cc49eab527bd80a3985f637e2a090e87f0629",
+      "abis": [
+        "arm64-v8a"
+      ],
+      "cores": [
+        "fceumm_libretro_android.so",
+        "genesis_plus_gx_libretro_android.so",
+        "parallel_n64_libretro_android.so",
+        "pcsx_rearmed_libretro_android.so",
+        "play_libretro_android.so",
+        "ppsspp_libretro_android.so"
+      ]
+    },
+    {
+      "source_commit": "2e9cbbe7dd619e21265a4318182480d4c1b43b20",
+      "source_run": 35813919796,
+      "artifact_id": 10731220343,
+      "bytes": 62585992,
+      "MiB": 59.687,
+      "sha256": "09212f06c41e03de078b74e8c34b7f3d5b84ae98a2869014aa088ec6e35c6fc0",
+      "abis": [
+        "arm64-v8a"
+      ],
+      "cores": [
+        "fceumm_libretro_android.so",
+        "genesis_plus_gx_libretro_android.so",
+        "parallel_n64_libretro_android.so",
+        "pcsx_rearmed_libretro_android.so",
+        "play_libretro_android.so",
+        "ppsspp_libretro_android.so"
+      ]
+    },
+    {
+      "source_commit": "e83972b66bad49a42e07bf8b195f4cc288cf5154",
+      "source_run": 35818573034,
+      "artifact_id": 10733005946,
+      "bytes": 61083100,
+      "MiB": 58.253,
+      "sha256": "bab52ccc21c60258b7e2c70a91d01487a69c1540c8af835cceb4af3753b6b2a7",
+      "abis": [
+        "arm64-v8a"
+      ],
+      "cores": [
+        "fceumm_libretro_android.so",
+        "genesis_plus_gx_libretro_android.so",
+        "parallel_n64_libretro_android.so",
+        "pcsx_rearmed_libretro_android.so",
+        "play_libretro_android.so",
+        "ppsspp_libretro_android.so"
+      ]
+    },
+    {
+      "source_commit": "6455c4641e88c00e0c4e94f27f1e799fcdb6cef1",
+      "source_run": 35528494745,
+      "artifact_id": 10610098834,
+      "bytes": 63086508,
+      "MiB": 60.164,
+      "sha256": "4f19ea6d8e6b1b8261c940757871dc32ea77c415619d9098d26c88d4001e4765",
+      "abis": [
+        "arm64-v8a"
+      ],
+      "cores": [
+        "fceumm_libretro_android.so",
+        "genesis_plus_gx_libretro_android.so",
+        "parallel_n64_libretro_android.so",
+        "pcsx_rearmed_libretro_android.so",
+        "play_libretro_android.so",
+        "ppsspp_libretro_android.so"
+      ]
+    }
+  ],
+  "rollback_status": "Approved APK identified as 1.11.2 (versionCode 53), SHA-256 bde99a4dfcac736c08d4f59b62cf6018e2a7bae2b71f08a8fcf16df3e34d4806. Matching source remains unverified; application source has not been rolled back.",
+  "approved_apk_reference": "releases/1.11.2-approved-apk.json"
+}
