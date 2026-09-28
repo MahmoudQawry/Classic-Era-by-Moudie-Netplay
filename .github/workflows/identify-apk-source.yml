@@ -3,7 +3,7 @@ name: Identify approved APK source (temporary)
 on:
   push:
     branches: [arena/01a0e928-classic-era-by-moudie-netplay]
-    paths: [.github/workflows/identify-apk-source.yml, .github/scripts/identify_apk_source.py]
+    paths: [.github/workflows/identify-apk-source.yml, .github/scripts/**]
 
 permissions:
   contents: write
@@ -28,7 +28,11 @@ jobs:
           gh api -H "Accept: application/octet-stream" \
             "repos/$GITHUB_REPOSITORY/releases/assets/595870907" > /tmp/approved.apk
           ls -l /tmp/approved.apk
+      - name: Install TypeScript parser
+        run: mkdir -p /tmp/tsx && cd /tmp/tsx && npm i -s typescript@5
       - name: Rank candidate commits
+        env:
+          TS_PATH: /tmp/tsx/node_modules/typescript
         run: python3 .github/scripts/identify_apk_source.py /tmp/approved.apk /tmp/result.json
       - name: Store result in a private draft
         run: |

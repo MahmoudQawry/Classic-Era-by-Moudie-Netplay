@@ -1,106 +1,66 @@
 """Temporary forensic helper: rank candidate commits against the approved APK.
 
-The APK is only read (never executed, modified or re-signed). The JavaScript
-bundle is Hermes bytecode whose string storage is a contiguous blob, so we
-check each source string literal for substring presence (ASCII as latin-1,
-non-ASCII as UTF-16LE, which is how Hermes stores them).
+The APK is only read (never executed, modified or re-signed). Hermes stores
+strings in one contiguous blob (ASCII as latin-1, others as UTF-16LE), so each
+source literal is checked for substring presence.
 """
-import json, os, re, subprocess, sys, zipfile, hashlib
+import hashlib, json, os, subprocess, sys, zipfile
 from datetime import datetime, timezone
 
-APK = sys.argv[1]
-OUT = sys.argv[2]
-EXPECTED = "bde99a4dfcac736c08d4f59b62cf6018e2a7bae2b71f08a8fcf16df3e34d4806"
-assert hashlib.sha256(open(APK, "rb").read()).hexdigest() == EXPECTED, "checksum mismatch"
-
-z = zipfile.ZipFile(APK)
-blob = z.read("assets/index.android.bundle")
-app_config_raw = z.read("assets/app.config").decode("utf-8", "replace")
-
+APK, OUT = sys.argv[1], sys.argv[2]
+assert hashlib.sha256(open(APK, "rb").read()).hexdigest() == "bde99a4dfcac736c08d4f59b62cf6018e2a7bae2b71f08a8fcf16df3e34d4806"
+blob = zipfile.ZipFile(APK).read("assets/index.android.bundle")
 CLIENT = ("app/", "components/", "hooks/", "lib/", "constants/", "shared/")
 EXT = (".ts", ".tsx", ".js", ".jsx")
-LIT = re.compile(r'"((?:[^"\\\n]|\\.){6,200})"|\'((?:[^\'\\\n]|\\.){6,200})\'')
+git = lambda *a: subprocess.check_output(["git", *a], text=True)
 
+def norm_cfg(c):
+    try:
+        s = subprocess.check_output(["git", "show", f"{c}:app.config.ts"], text=True, stderr=subprocess.DEVNULL)
+    except subprocess.CalledProcessError:
+        return None
+    return "\n".join(l for l in s.splitlines() if 'version: "' not in l and "versionCode:" not in l)
 
-def git(*a):
-    return subprocess.check_output(["git", *a], text=True)
+ref = norm_cfg("b7181d5")
+cands = [c for c in git("rev-list", "--all", "--since=2026-09-10").split() if norm_cfg(c) == ref]
+print("candidates", len(cands))
 
+trees, blobs = {}, set()
+for c in cands:
+    files = {}
+    for line in git("ls-tree", "-r", c).splitlines():
+        meta, p = line.split("\t", 1)
+        if p.startswith(CLIENT) and p.endswith(EXT) and ".web." not in p and ".test." not in p:
+            files[p] = meta.split()[2]
+    trees[c] = files
+    blobs |= set(files.values())
+os.makedirs("/tmp/blobs", exist_ok=True)
+for b in blobs:
+    with open(f"/tmp/blobs/{b}", "wb") as fh:
+        fh.write(subprocess.check_output(["git", "cat-file", "blob", b]))
+subprocess.check_call(["node", ".github/scripts/extract_literals.cjs", "/tmp/blobs", "/tmp/lits.json"])
+lits = {k: set(v) for k, v in json.load(open("/tmp/lits.json")).items()}
 
 def present(s):
-    try:
-        if s.isascii():
-            return s.encode("latin-1") in blob
-        return s.encode("utf-16-le") in blob
-    except Exception:
-        return False
+    return (s.encode("latin-1") if s.isascii() else s.encode("utf-16-le")) in blob
 
-
-blob_cache = {}
-
-
-def literals_for_blob(sha):
-    if sha in blob_cache:
-        return blob_cache[sha]
-    src = subprocess.check_output(["git", "cat-file", "blob", sha]).decode("utf-8", "replace")
-    # strip line comments crudely (comments are not shipped)
-    src = re.sub(r"(?m)^\s*//.*$", "", src)
-    out = set()
-    for m in LIT.finditer(src):
-        s = m.group(1) or m.group(2)
-        if "\\" in s or "${" in s:
-            continue
-        if s.startswith(("./", "../", "@/")):
-            continue  # import specifiers are not kept as strings
-        out.add(s)
-    blob_cache[sha] = out
-    return out
-
-
-def commit_literals(c):
-    lits = set()
-    for line in git("ls-tree", "-r", c).splitlines():
-        meta, path = line.split("\t", 1)
-        if path.startswith(CLIENT) and path.endswith(EXT) and ".web." not in path:
-            lits |= literals_for_blob(meta.split()[2])
-    return lits
-
-
-since = os.environ.get("SINCE", "2026-09-17T00:00:00Z")
-until = os.environ.get("UNTIL", "2026-09-26T13:06:00Z")
-revs = git("rev-list", "--all", f"--since={since}", f"--until={until}").split()
-print("candidates:", len(revs))
-
-per = {c: commit_literals(c) for c in revs}
-union = set().union(*per.values())
-inter = set.intersection(*per.values())
+per = {c: set().union(*(lits[b] for b in f.values())) for c, f in trees.items()}
+union, inter = set().union(*per.values()), set.intersection(*per.values())
 variable = union - inter
 pres = {s: present(s) for s in variable}
-
+base_missing = sum(1 for s in inter if not present(s))
 rows = []
-for c, lits in per.items():
-    var = lits & variable
-    missing = sorted(s for s in var if not pres[s])
-    extra = sorted(s for s in variable - lits if pres[s])
-    info = git("log", "-1", "--format=%h|%cI|%s", c).strip().split("|", 2)
-    rows.append({"commit": c, "short": info[0], "date": info[1], "subject": info[2],
-                 "missing": len(missing), "extra": len(extra), "score": len(missing) + len(extra),
-                 "missing_sample": missing[:15], "extra_sample": extra[:15]})
+for c, L in per.items():
+    miss = sorted(s for s in L & variable if not pres[s])
+    extra = sorted(s for s in variable - L if pres[s])
+    h, d, subj = git("log", "-1", "--format=%h|%cI|%s", c).strip().split("|", 2)
+    rows.append(dict(commit=c, short=h, date=d, subject=subj, missing=len(miss), extra=len(extra),
+                     score=len(miss) + len(extra), missing_sample=miss[:25], extra_sample=extra[:25]))
 rows.sort(key=lambda r: (r["score"], r["date"]))
-for r in rows[:5]:
-    r["branches"] = [b.strip() for b in git("branch", "-r", "--contains", r["commit"]).splitlines()][:6]
-
-result = {
-    "generated": datetime.now(timezone.utc).isoformat(),
-    "window": [since, until],
-    "candidates": len(revs),
-    "variable_literals": len(variable),
-    "app_config": json.loads(app_config_raw) if app_config_raw.strip().startswith("{") else app_config_raw,
-    "top": rows[:12],
-}
-body = json.dumps(result, ensure_ascii=False, indent=1)
-if len(body) > 120000:
-    for r in result["top"][5:]:
-        r.pop("missing_sample", None); r.pop("extra_sample", None)
-    body = json.dumps(result, ensure_ascii=False, indent=1)[:120000]
-open(OUT, "w").write(body)
-print(body[:4000])
+for r in rows[:8]:
+    r["branches"] = [b.strip() for b in git("branch", "-r", "--contains", r["commit"]).splitlines()][:8]
+res = dict(generated=datetime.now(timezone.utc).isoformat(), candidates=len(cands), variable=len(variable),
+           common=len(inter), common_missing=base_missing, top=rows[:25])
+body = json.dumps(res, ensure_ascii=False, indent=1)
+open(OUT, "w").write(body[:124000])
+print(body[:3000])
