@@ -1,0 +1,136 @@
+name: Inspect user-approved APK
+
+on:
+  push:
+    branches: [arena/01a0e8c3-classic-era-by-moudie-netplay]
+    paths: [.github/workflows/inspect-approved-apk.yml]
+
+# Temporary recovery task. The download URL lives only in a private draft,
+# never in this workflow, git history, or the public build log.
+permissions:
+  contents: write
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RECOVERY_RELEASE_ID: '398429541'
+      RECOVERY_TAG: recovery-input-1.11.2-20260928
+      RECOVERY_DIR: ${{ runner.temp }}/approved-apk
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Fetch and inspect the approved binary without executing it
+        run: |
+          mkdir -p "$RECOVERY_DIR"
+          gh api "repos/$GITHUB_REPOSITORY/releases/$RECOVERY_RELEASE_ID" > "$RECOVERY_DIR/private-request.json"
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          import re
+          import subprocess
+          import urllib.parse
+          import urllib.request
+          import zipfile
+          from pathlib import Path
+
+          root = Path(os.environ['RECOVERY_DIR'])
+          release = json.loads((root / 'private-request.json').read_text())
+          assert release['draft'] is True, 'Recovery input must remain private'
+          request = json.loads(release['body'])
+          url = request['download_url']
+          parsed = urllib.parse.urlparse(url)
+          assert parsed.scheme == 'https' and parsed.hostname == 'dl.dropboxusercontent.com'
+          print('::add-mask::' + url)
+          apk = root / 'Classic-Era-1.11.2-arm64-test.apk'
+          try:
+              with urllib.request.urlopen(url, timeout=120) as response, apk.open('wb') as output:
+                  total = 0
+                  while chunk := response.read(1024 * 1024):
+                      total += len(chunk)
+                      assert total <= 200 * 1024 * 1024, 'APK exceeds recovery size limit'
+                      output.write(chunk)
+          except Exception as error:
+              raise SystemExit('Approved APK download failed: ' + type(error).__name__)
+          assert zipfile.is_zipfile(apk), 'Download is not an APK/ZIP'
+          tools = Path(os.environ['ANDROID_HOME']) / 'build-tools'
+          aapt = sorted(tools.glob('*/aapt'))[-1]
+          apksigner = aapt.parent / 'apksigner'
+          badging = subprocess.check_output([str(aapt), 'dump', 'badging', str(apk)], text=True)
+          signing = subprocess.check_output([str(apksigner), 'verify', '--verbose', '--print-certs', str(apk)], text=True)
+          package_line = next(line for line in badging.splitlines() if line.startswith('package:'))
+          package = dict(re.findall(r"(\w+)='([^']*)'", package_line))
+          sdk = {}
+          for label in ['sdkVersion', 'targetSdkVersion']:
+              match = re.search(r'^' + label + r":'([^']*)'", badging, re.M)
+              sdk[label] = match.group(1) if match else None
+          objects = {}
+          for line in subprocess.check_output(['git', 'rev-list', '--objects', '--all'], text=True).splitlines():
+              sha, _, name = line.partition(' ')
+              if name:
+                  objects.setdefault(sha, []).append(name)
+          with apk.open('rb') as stream:
+              sha256 = hashlib.file_digest(stream, 'sha256').hexdigest()
+          metadata = {
+              'filename': apk.name,
+              'bytes': apk.stat().st_size,
+              'MiB': round(apk.stat().st_size / 1048576, 6),
+              'sha256': sha256,
+              'package': package,
+              'sdk': sdk,
+              'signing': signing,
+              'permissions': [line for line in badging.splitlines() if line.startswith('uses-permission:')],
+              'libraries': [],
+              'dex': [],
+              'app_assets': [],
+              'matched_git_assets': [],
+              'potential_source_markers': [],
+          }
+          with zipfile.ZipFile(apk) as z:
+              assert z.testzip() is None, 'Corrupt APK ZIP'
+              metadata['entry_count'] = len(z.infolist())
+              metadata['abis'] = sorted({n.split('/')[1] for n in z.namelist() if n.startswith('lib/') and n.endswith('.so')})
+              for info in z.infolist():
+                  name = info.filename
+                  if info.is_dir():
+                      continue
+                  if name.startswith('lib/') or name.endswith('.dex') or name.startswith('assets/') or name.startswith('res/'):
+                      data = z.read(info)
+                      digest = hashlib.sha256(data).hexdigest()
+                      record = {'path': name, 'bytes': len(data), 'sha256': digest}
+                      if name.startswith('lib/'):
+                          metadata['libraries'].append(record)
+                      elif name.endswith('.dex'):
+                          metadata['dex'].append(record)
+                      elif name.startswith('assets/') and not name.startswith('assets/ppsspp/'):
+                          metadata['app_assets'].append(record)
+                      blob = hashlib.sha1(b'blob ' + str(len(data)).encode() + b'\0' + data).hexdigest()
+                      matches = objects.get(blob, [])
+                      meaningful = [p for p in matches if p.startswith('assets/') or p.startswith('android/app/src/main/res/')]
+                      if meaningful:
+                          metadata['matched_git_assets'].append({**record, 'git_blob': blob, 'source_paths': meaningful})
+                      if name == 'assets/index.android.bundle':
+                          metadata['bundle_magic'] = data[:16].hex()
+                          metadata['bundle_service_origins'] = sorted({m.decode('ascii', errors='ignore') for m in re.findall(rb'https?://[a-zA-Z0-9_.:-]+', data) if b'moudie' in m.lower() or b'classic' in m.lower()})
+                          metadata['bundle_feature_markers'] = {s: s.encode() in data for s in ['1.11.2', '1.11.1', '1.0.0.1', '1.0.1', 'EXPO_PUBLIC_BOOT_VIDEO_URL', 'discordApplicationId', 'Discord', 'LiveKit', 'getDeviceDefaultInputDelay', 'netplay:session-ready', 'netplay:voice-status']}
+                  if any(word in name.lower() for word in ['commit', 'git.properties', 'build-info', 'app.config', 'app.manifest', 'expo-updates']):
+                      metadata['potential_source_markers'].append(name)
+          text = json.dumps(metadata, ensure_ascii=False, indent=2)
+          assert len(text) < 120000, 'Inspection summary is unexpectedly large'
+          (root / 'inspection.json').write_text(text + '\n')
+          (root / 'release-update.json').write_text(json.dumps({'body': text, 'draft': True, 'prerelease': True, 'name': 'Approved APK inspection — not published'}))
+          summary = {key: metadata[key] for key in ['filename', 'bytes', 'MiB', 'sha256', 'package', 'sdk', 'abis', 'bundle_feature_markers']}
+          print('::notice title=Approved APK identity::' + json.dumps(summary))
+          PY
+      - name: Preserve the unmodified APK in the private recovery draft
+        run: |
+          gh release upload "$RECOVERY_TAG" "$RECOVERY_DIR/Classic-Era-1.11.2-arm64-test.apk" "$RECOVERY_DIR/inspection.json"
+          gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/$RECOVERY_RELEASE_ID" --input "$RECOVERY_DIR/release-update.json" --jq '{id,draft,name}'
+      - name: Remove private input from the runner
+        if: always()
+        run: rm -f "$RECOVERY_DIR/private-request.json"
