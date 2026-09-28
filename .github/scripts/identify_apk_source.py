@@ -22,7 +22,8 @@ def norm_cfg(c):
     return "\n".join(l for l in s.splitlines() if 'version: "' not in l and "versionCode:" not in l)
 
 ref = norm_cfg("b7181d5")
-cands = [c for c in git("rev-list", "--all", "--since=2026-09-10").split() if norm_cfg(c) == ref]
+cands = git("rev-list", "--all", "--since=2026-09-17", "--until=2026-09-26T13:06:00Z").split()
+cfg_match = {c: norm_cfg(c) == ref for c in cands}
 print("candidates", len(cands))
 
 trees, blobs = {}, set()
@@ -54,13 +55,38 @@ for c, L in per.items():
     miss = sorted(s for s in L & variable if not pres[s])
     extra = sorted(s for s in variable - L if pres[s])
     h, d, subj = git("log", "-1", "--format=%h|%cI|%s", c).strip().split("|", 2)
-    rows.append(dict(commit=c, short=h, date=d, subject=subj, missing=len(miss), extra=len(extra),
+    rows.append(dict(cfg=cfg_match[c], commit=c, short=h, date=d, subject=subj, missing=len(miss), extra=len(extra),
                      score=len(miss) + len(extra), missing_sample=miss[:25], extra_sample=extra[:25]))
 rows.sort(key=lambda r: (r["score"], r["date"]))
 for r in rows[:8]:
     r["branches"] = [b.strip() for b in git("branch", "-r", "--contains", r["commit"]).splitlines()][:8]
-res = dict(generated=datetime.now(timezone.utc).isoformat(), candidates=len(cands), variable=len(variable),
-           common=len(inter), common_missing=base_missing, top=rows[:25])
+# per-file: which historical version of each client file best matches the bundle
+paths = {}
+for f in trees.values():
+    for p_, b in f.items():
+        paths.setdefault(p_, set()).add(b)
+best_top = rows[0]["commit"]
+perfile = []
+for p_, bs in paths.items():
+    bs = list(bs)
+    if len(bs) < 2:
+        continue
+    u = set().union(*(lits[b] for b in bs)); i = set.intersection(*(lits[b] for b in bs)); v = u - i
+    sc = []
+    for b in bs:
+        m = [s_ for s_ in lits[b] & v if not present(s_)]
+        e = [s_ for s_ in v - lits[b] if present(s_)]
+        sc.append((len(m) + len(e), b, m[:6], e[:6]))
+    sc.sort(key=lambda x: x[0])
+    top_blob = trees[best_top].get(p_)
+    top_score = next((x[0] for x in sc if x[1] == top_blob), None)
+    if top_blob is None or top_score != sc[0][0]:
+        first = git("log", "--all", "--format=%h %cI %s", "--find-object=" + sc[0][1], "-1").strip()
+        perfile.append(dict(path=p_, best=sc[0][0], best_blob=sc[0][1], best_first=first, top_commit_score=top_score,
+                            top_missing=next((x[2] for x in sc if x[1] == top_blob), None),
+                            top_extra=next((x[3] for x in sc if x[1] == top_blob), None)))
+res = dict(perfile=perfile, generated=datetime.now(timezone.utc).isoformat(), candidates=len(cands), variable=len(variable),
+           common=len(inter), common_missing=base_missing, top=rows[:30])
 body = json.dumps(res, ensure_ascii=False, indent=1)
 open(OUT, "w").write(body[:124000])
 print(body[:3000])
