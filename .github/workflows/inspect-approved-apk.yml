@@ -34,6 +34,8 @@ jobs:
           import os
           import re
           import subprocess
+          import sys
+          sys.excepthook = lambda kind, error, trace: print('::error title=APK inspection diagnostic::' + kind.__name__ + ': ' + str(error).replace('\n', ' ')[:700])
           import urllib.parse
           import urllib.request
           import zipfile
@@ -44,7 +46,9 @@ jobs:
           assert release['draft'] is True, 'Recovery input must remain private'
           request = json.loads(release['body'])
           apk = root / 'Classic-Era-1.11.2-arm64-test.apk'
-          subprocess.run(['gh', 'release', 'download', os.environ['RECOVERY_TAG'], '--pattern', apk.name, '--dir', str(root)], check=True)
+          asset = next(a for a in release['assets'] if a['name'] == apk.name)
+          with apk.open('wb') as output:
+              subprocess.run(['gh', 'api', '-H', 'Accept: application/octet-stream', f"repos/{os.environ['GITHUB_REPOSITORY']}/releases/assets/{asset['id']}"], stdout=output, check=True)
           with apk.open('rb') as stream:
               assert hashlib.file_digest(stream, 'sha256').hexdigest() == 'bde99a4dfcac736c08d4f59b62cf6018e2a7bae2b71f08a8fcf16df3e34d4806', 'Approved APK checksum changed'
           assert zipfile.is_zipfile(apk), 'Download is not an APK/ZIP'
