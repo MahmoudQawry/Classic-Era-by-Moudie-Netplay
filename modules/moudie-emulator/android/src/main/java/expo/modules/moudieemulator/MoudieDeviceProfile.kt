@@ -5,6 +5,7 @@ import android.app.ActivityManager
 import android.content.Context
 import android.os.Build
 import android.os.PowerManager
+import java.util.Locale
 
 /**
  * One place that answers "can this phone actually run this core?".
@@ -81,7 +82,7 @@ object MoudieDeviceProfile {
       return "PlayStation 2 requires OpenGL ES 3.2 or higher. This device reports OpenGL ES ${snapshot.glesLabel}, so the game was blocked instead of crashing the app."
     }
     if (snapshot.totalRamBytes < PS2_HARD_FLOOR_TOTAL_RAM_BYTES) {
-      return "PlayStation 2 needs a device with at least 4 GB of RAM. This device reports %.1f GB, which is far below the supported minimum, so the system would end the session as soon as the game loads.".format(snapshot.totalRamGb)
+      return String.format(Locale.US, "PlayStation 2 needs a device with at least 4 GB of RAM. This device reports %.1f GB, which is far below the supported minimum, so the system would end the session as soon as the game loads.", snapshot.totalRamGb)
     }
     if (snapshot.lowRamDevice) {
       return "This device is reported as a low-RAM device by Android, so PlayStation 2 emulation cannot be run reliably here."
@@ -100,7 +101,7 @@ object MoudieDeviceProfile {
   fun ps2WarningReason(context: Context): String? {
     val snapshot = snapshot(context)
     if (snapshot.totalRamBytes < PS2_MINIMUM_TOTAL_RAM_BYTES) {
-      return "This device reports %.1f GB of usable RAM (4 GB devices reserve part of it). PlayStation 2 can run here, but the app will watch memory and save your progress if Android needs the memory back.".format(snapshot.totalRamGb)
+      return String.format(Locale.US, "This device reports %.1f GB of usable RAM (4 GB devices reserve part of it). PlayStation 2 can run here, but the app will watch memory and save your progress if Android needs the memory back.", snapshot.totalRamGb)
     }
     return null
   }
@@ -145,14 +146,14 @@ object MoudieDeviceProfile {
     val blocking = ps2BlockingReason(context)
     val warning = if (blocking == null) ps2WarningReason(context) else null
     return mapOf(
-      "totalRamGb" to "%.1f".format(snapshot.totalRamGb).toDouble(),
+      "totalRamGb" to snapshot.totalRamGb,
       "availableRamMb" to (snapshot.availableRamBytes / (1024L * 1024L)).toInt(),
       "cpuCores" to snapshot.cpuCores,
       "glEsVersion" to snapshot.glesLabel,
       "largeHeap" to snapshot.largeHeap,
       "lowRamDevice" to snapshot.lowRamDevice,
       "ps2Supported" to (blocking == null),
-      "ps2Warning" to warning,
+      "ps2Warning" to (warning ?: ""),
       "ps2Message" to (blocking ?: warning ?: "This device meets the PlayStation 2 requirements."),
     )
   }

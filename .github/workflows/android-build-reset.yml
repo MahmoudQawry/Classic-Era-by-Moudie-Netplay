@@ -9,6 +9,7 @@ on:
 run-name: Android Build Zero Counter
 permissions:
   contents: write
+  issues: write
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -134,10 +135,51 @@ jobs:
           echo "MOUDIE_RELEASE_STORE_PASSWORD=ci-only-change-me" >> "$GITHUB_ENV"
           echo "MOUDIE_RELEASE_KEY_ALIAS=moudie-ci" >> "$GITHUB_ENV"
           echo "MOUDIE_RELEASE_KEY_PASSWORD=ci-only-change-me" >> "$GITHUB_ENV"
-      - name: 🏗️ بناء APK مستقل (Release)
+      - name: 🩺 فحص ترجمة Kotlin قبل البناء الكامل
+        id: kotlincheck
         run: |
+          set -o pipefail
           cd android
-          ./gradlew assembleRelease --no-daemon -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=512m" -Dorg.gradle.daemon=false
+          ./gradlew :moudie-emulator:compileReleaseKotlin :app:compileReleaseKotlin --no-daemon -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=512m" 2>&1 | tee /tmp/gradle-build.log
+      - name: 🏗️ بناء APK مستقل (Release)
+        id: gradle
+        run: |
+          set -o pipefail
+          cd android
+          ./gradlew assembleRelease --no-daemon -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=512m" -Dorg.gradle.daemon=false 2>&1 | tee -a /tmp/gradle-build.log
+      - name: 🧾 نشر تشخيص فشل البناء في تذكرة قابلة للقراءة
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          LOG=/tmp/gradle-build.log
+          test -f "$LOG" || LOG=/dev/null
+          TITLE="Android build diagnostics auto"
+          BODY=/tmp/build-diagnostics.md
+          {
+            echo "### فشل بناء Android"
+            echo ""
+            echo "- run: \`$GITHUB_RUN_ID\`"
+            echo "- commit: \`$GITHUB_SHA\`"
+            echo "- workflow step: \`${{ steps.gradle.outcome || steps.kotlincheck.outcome }}\`"
+            echo ""
+            echo '```'
+            grep -nE '^(e: |w: .*(error|Error)|> Task .*FAILED|FAILURE:|Execution failed|Caused by:)|\.kt: ?\(|error:' "$LOG" | head -120
+            echo '```'
+            echo ""
+            echo "آخر 60 سطراً من سجل Gradle:"
+            echo ""
+            echo '```'
+            tail -60 "$LOG"
+            echo '```'
+          } > "$BODY"
+          NUMBER=$(gh issue list --state open --search "in:title $TITLE" --json number,title --jq ".[] | select(.title == \"$TITLE\") | .number" | head -1)
+          if [ -n "$NUMBER" ]; then
+            gh issue comment "$NUMBER" --body-file "$BODY" || true
+          else
+            gh issue create --title "$TITLE" --body-file "$BODY" || true
+          fi
       - name: 🚫 فحص الكلمات والعناوين المحظورة من APK
         run: |
           set -e

@@ -33,6 +33,7 @@ object MoudieSessionLog {
   private fun logFile(context: Context) = File(context.filesDir, LOG_FILE)
   private fun markerFile(context: Context) = File(context.filesDir, MARKER_FILE)
 
+  @Synchronized
   fun startSession(context: Context, system: String, gameName: String, details: String) {
     lastSampleAt = 0L
     val previous = readMarker(context)
@@ -48,6 +49,7 @@ object MoudieSessionLog {
     writeMarker(context, "system=$system started=${timestampFormat.format(Date())}")
   }
 
+  @Synchronized
   fun sample(context: Context, fps: Long, system: String) {
     val now = System.currentTimeMillis()
     if (now - lastSampleAt < SAMPLE_INTERVAL_MS) return
@@ -61,8 +63,10 @@ object MoudieSessionLog {
     )
   }
 
+  @Synchronized
   fun note(context: Context, message: String) = append(context, "NOTE $message")
 
+  @Synchronized
   fun endSession(context: Context, reason: String) {
     markerFile(context).delete()
     append(context, "SESSION END reason=$reason")
@@ -78,6 +82,7 @@ object MoudieSessionLog {
     file.readLines().takeLast(MAX_REPORT_LINES)
   }.getOrDefault(emptyList())
 
+  @Synchronized
   private fun append(context: Context, line: String) {
     runCatching {
       val file = logFile(context)
