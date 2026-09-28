@@ -1,0 +1,65 @@
+name: Inspect archived Android APK
+
+on:
+  push:
+    branches: [arena/01a0e8c3-classic-era-by-moudie-netplay]
+    paths: [.github/workflows/inspect-archived-apk.yml]
+
+# Recovery inspection only: no checkout, rebuilding, deployment or publication.
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Download preserved pre-hardening build
+        uses: actions/download-artifact@v4
+        with:
+          artifact-ids: '10851161099'
+          run-id: '36105129941'
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/archived-apk
+      - name: Verify archived APK and expose recovery metadata
+        env:
+          ARCHIVE_DIR: ${{ runner.temp }}/archived-apk
+        run: |
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          import re
+          import zipfile
+          from pathlib import Path
+
+          root = Path(os.environ['ARCHIVE_DIR'])
+          apks = list(root.rglob('*.apk'))
+          metadata = list(root.rglob('apk-sha256.txt'))
+          assert len(apks) == 1 and len(metadata) == 1, 'Unexpected artifact contents'
+          apk = apks[0]
+          size = apk.stat().st_size
+          sha = hashlib.file_digest(apk.open('rb'), 'sha256').hexdigest()
+          recorded = metadata[0].read_text()
+          assert re.search(r'^' + sha + r'\s', recorded, re.M), 'Archived checksum mismatch'
+          assert f'APK bytes: {size}' in recorded, 'Archived size mismatch'
+          with zipfile.ZipFile(apk) as z:
+              assert z.testzip() is None, 'Corrupt APK ZIP'
+              libs = sorted(n for n in z.namelist() if n.startswith('lib/') and n.endswith('.so'))
+              abis = sorted({n.split('/')[1] for n in libs})
+              cores = sorted(Path(n).name for n in libs if '_libretro_android.so' in n)
+          report = {
+              'source_commit': '0f32998f8f6f63eb242de6827e0faeb2f61fb65e',
+              'source_run': 36105129941,
+              'artifact_id': 10851161099,
+              'bytes': size,
+              'MiB': round(size / 1048576, 3),
+              'sha256': sha,
+              'abis': abis,
+              'cores': cores,
+          }
+          print('::notice title=Verified archived APK::' + json.dumps(report))
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
+              summary.write('## Verified archived APK\n\n```json\n' + json.dumps(report, indent=2) + '\n```\n')
+          PY
