@@ -188,7 +188,7 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
       if (profile.availableRamBytes < PS2_LOW_FREE_RAM_BYTES) {
         showToast("Low free memory (%.1f GB free). Close other apps if the session slows down.".format(profile.availableRamBytes.toDouble() / (1024.0 * 1024.0 * 1024.0)))
       }
-      MoudieSessionLog.note(this, "PS2 device profile ram=%.1fGB gles=${profile.glesLabel} heap=${profile.memoryClassMb}/${profile.largeMemoryClassMb}MB largeHeap=${profile.largeHeap}")
+      MoudieSessionLog.note(this, "PS2 device profile ram=${"%.1f".format(profile.totalRamGb)}GB gles=${profile.glesLabel} heap=${profile.memoryClassMb}/${profile.largeMemoryClassMb}MB largeHeap=${profile.largeHeap}")
     }
     // Play! is built with a libretro-specific Android bootstrap that calls
     // JNI_GetCreatedJavaVMs() from retro_init(). This initializes CJavaVM inside
@@ -238,7 +238,7 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
     setContentView(root)
     root.post { applyAspectRatio(); restoreScreen(); enableScreenEditor(); if (editMode) showEditorBar() }
     val sessionProfile = MoudieDeviceProfile.snapshot(this)
-    MoudieSessionLog.startSession(this, definition.system, gameFile.name, "ram=%.1fGB free=${sessionProfile.availableRamBytes / (1024L * 1024L)}MB cores=${sessionProfile.cpuCores} gles=${sessionProfile.glesLabel}")
+    MoudieSessionLog.startSession(this, definition.system, gameFile.name, "ram=${"%.1f".format(sessionProfile.totalRamGb)}GB free=${sessionProfile.availableRamBytes / (1024L * 1024L)}MB cores=${sessionProfile.cpuCores} gles=${sessionProfile.glesLabel}")
     connectNetplayIfConfigured()
   }
 
