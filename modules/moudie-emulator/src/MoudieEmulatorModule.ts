@@ -1,5 +1,5 @@
 import { NativeModule, requireNativeModule } from "expo";
-import type { EmulatorCoreCapability, EmulatorDeviceProfile, EmulatorRuntimeStatus, EmulatorSessionDiagnostics, EmulatorStorageReport, EmulatorSystem, MoudieEmulatorModuleEvents, PreparedLocalGame } from "./MoudieEmulator.types";
+import type { EmulatorCoreCapability, EmulatorRuntimeStatus, EmulatorSystem, MoudieEmulatorModuleEvents, PreparedLocalGame } from "./MoudieEmulator.types";
 
 export type PS1NetplayOptions = { serverUrl: string; roomId: number; memberId: number; memberToken: string; fingerprint: string; player: 1 | 2 | 3 | 4 };
 export type UniversalNetplayOptions = { serverUrl: string; roomId: number; memberId: number; memberToken: string; system: EmulatorSystem; fingerprint: string; coreVersion: string; player: 1 | 2 | 3 | 4 };
@@ -21,12 +21,6 @@ declare class MoudieEmulatorModule extends NativeModule<MoudieEmulatorModuleEven
   launchFamicomFocusGame(uri: string, fileName: string, options?: PlayerLaunchOptions): Promise<void>;
   setFamicomFocusLandscape(active: boolean): Promise<void>;
   installPS1Bios(uri: string, fileName: string): Promise<Record<string, { required: boolean; available: boolean; files?: string[]; message: string }>>;
-  /** Measured RAM, heap class, cores and OpenGL ES level plus PS2 readiness. */
-  getDeviceProfile(): EmulatorDeviceProfile;
-  /** Bounded record of the last emulator sessions (FPS, free RAM, thermal, exit reason). */
-  getSessionDiagnostics(): EmulatorSessionDiagnostics;
-  /** Safe cleanup of re-creatable emulator cache content. */
-  maintainStorage(): Promise<EmulatorStorageReport>;
 }
 
 function unavailableModule(): MoudieEmulatorModule {
@@ -48,9 +42,6 @@ function unavailableModule(): MoudieEmulatorModule {
     launchFamicomFocusGame: reject,
     setFamicomFocusLandscape: reject,
     installPS1Bios: reject,
-    getDeviceProfile: () => ({ ps2Supported: false, ps2Message: unavailable }) as EmulatorDeviceProfile,
-    getSessionDiagnostics: () => ({ lines: [], previousSessionUnclean: false }) as EmulatorSessionDiagnostics,
-    maintainStorage: reject,
   } as unknown as MoudieEmulatorModule;
 }
 

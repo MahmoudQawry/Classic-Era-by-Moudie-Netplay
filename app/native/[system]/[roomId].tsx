@@ -39,10 +39,6 @@ export default function NativeRoomScreen() {
   const [picking, setPicking] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [mediaToken, setMediaToken] = useState<{ configured: boolean; url?: string; roomName?: string; token?: string; canPublish?: boolean; message?: string; teamMediaToken?: any } | null>(null);
-  const [deviceProfile, setDeviceProfile] = useState<{ ps2Supported: boolean; ps2Message: string; ps2Warning?: string | null; totalRamGb?: number; cpuCores?: number; glEsVersion?: string } | null>(null);
-  const [diagnostics, setDiagnostics] = useState<{ lines: string[]; previousSessionUnclean: boolean } | null>(null);
-  const [showReport, setShowReport] = useState(false);
-  const [maintaining, setMaintaining] = useState(false);
   const statusText = status === null ? t(meta.statusKey) : status;
   const socketRef = useRef<ReturnType<typeof createNetplaySocket> | null>(null);
   const voiceChatRef = useRef<RoomVoiceChatHandle | null>(null);
@@ -53,26 +49,6 @@ export default function NativeRoomScreen() {
   const mediaTokenMutation = trpc.rooms.mediaToken.useMutation();
 
   useEffect(() => { if (Number.isFinite(numericRoomId)) getRoomCredential(numericRoomId).then(setCredential); }, [numericRoomId]);
-  useEffect(() => {
-    if (Platform.OS === "web") return;
-    // Measured device capability and the last session's exit reason: a phone
-    // that is below the PS2 envelope is told before a session starts, and a
-    // session that was ended by the system leaves a readable reason here.
-    try { setDeviceProfile(MoudieEmulatorModule.getDeviceProfile()); } catch { setDeviceProfile(null); }
-    try { setDiagnostics(MoudieEmulatorModule.getSessionDiagnostics()); } catch { setDiagnostics(null); }
-  }, []);
-  const runStorageMaintenance = async () => {
-    try {
-      setMaintaining(true);
-      await MoudieEmulatorModule.maintainStorage();
-      setDiagnostics(MoudieEmulatorModule.getSessionDiagnostics());
-      setStatus(t("storageCleanupDone"));
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : t("tryAgain"));
-    } finally {
-      setMaintaining(false);
-    }
-  };
   useEffect(() => {
     if (!credential || Platform.OS === "web") return;
     let cancelled = false;
@@ -144,27 +120,11 @@ export default function NativeRoomScreen() {
     <View style={styles.card}><Text style={styles.file}>{game?.name || t("fcNoGame")}</Text><Text style={styles.fileInfo}>{assignedPlayer ? `${t("rmPlayerShort")} ${assignedPlayer}` : t("segSpectatorSlot")}</Text></View>
     <Pressable onPress={chooseGame} disabled={picking} style={({ pressed }) => [styles.primary, { backgroundColor: meta.color }, (pressed || picking) && styles.disabled]}>{picking ? <ActivityIndicator color="#071018" /> : <Text style={styles.primaryText}>{game ? t("fcChangeFile") : t("segChooseFile")}</Text>}</Pressable>
     <View style={styles.settings}><Text style={styles.settingsTitle}>{t("lsSettingsTitle")}</Text><Text style={styles.label}>{t("lsPlayOrientation")}</Text><View style={styles.row}>{(["portrait", "landscape"] as const).map((value) => <Pressable key={value} onPress={() => setOrientation(value)} style={[styles.option, orientation === value && { borderColor: meta.color }]}><Text style={styles.optionText}>{value.toUpperCase()}</Text></Pressable>)}</View><Text style={styles.label}>{t("lsScreenRatio")}</Text><View style={styles.row}>{(["fit", "4:3", "16:9"] as const).map((value) => <Pressable key={value} onPress={() => setAspectRatio(value)} style={[styles.option, aspectRatio === value && { borderColor: meta.color }]}><Text style={styles.optionText}>{value === "fit" ? "FIT" : value}</Text></Pressable>)}</View>{game && <Pressable onPress={() => launch(false, true)} style={styles.configure}><Text style={styles.configureText}>{orientation === "portrait" ? t("pspConfigurePortrait") : t("pspConfigureLandscape")}</Text></Pressable>}</View>
-    {system === "ps2" && deviceProfile && <View style={[styles.status, deviceProfile.ps2Supported ? styles.readyInfo : styles.blockedInfo]}>
-      <Text style={styles.statusTitle}>{t("deviceProfileTitle")}</Text>
-      <Text style={styles.statusText}>{deviceProfile.ps2Supported
-        ? `${t("deviceProfileReady")} · RAM ${deviceProfile.totalRamGb ?? "?"} GB · ${deviceProfile.cpuCores ?? "?"} cores · OpenGL ES ${deviceProfile.glEsVersion ?? "?"}`
-        : `${t("deviceProfileBlocked")}: ${deviceProfile.ps2Message}`}{deviceProfile.ps2Supported && deviceProfile.ps2Warning ? ` · ${deviceProfile.ps2Warning}` : ""}</Text>
-    </View>}
-    {Platform.OS !== "web" && deviceProfile && system !== "ps2" && !deviceProfile.ps2Supported && <View style={styles.status}><Text style={styles.statusTitle}>{t("deviceProfileTitle")}</Text><Text style={styles.statusText}>{deviceProfile.ps2Message}</Text></View>}
     <View style={styles.status}><Text style={styles.statusTitle}>{t("fcNetplayStatus")}</Text><Text style={styles.statusText}>{statusText}</Text></View>
-    {Platform.OS !== "web" && <View style={styles.status}>
-      <Text style={styles.statusTitle}>{t("sessionReport")}</Text>
-      <Text style={styles.statusText}>{diagnostics && diagnostics.lines.length > 0
-        ? (diagnostics.previousSessionUnclean ? t("sessionReportUnclean") : diagnostics.lines[diagnostics.lines.length - 1])
-        : t("sessionReportEmpty")}</Text>
-      <Pressable onPress={() => setShowReport((value) => !value)} style={styles.configure}><Text style={styles.configureText}>{showReport ? t("sessionReportHide") : t("sessionReportShow")}</Text></Pressable>
-      {showReport && diagnostics?.lines.map((line, index) => <Text key={`${index}-${line.slice(0, 12)}`} style={styles.reportLine}>{line}</Text>)}
-      <Pressable onPress={runStorageMaintenance} disabled={maintaining} style={[styles.configure, maintaining && styles.disabled]}><Text style={styles.configureText}>{t("storageCleanup")}</Text></Pressable>
-    </View>}
     {game && connected && assignedPlayer && <Pressable onPress={markReady} disabled={ready} style={({ pressed }) => [styles.ready, (pressed || ready) && styles.disabled]}><Text style={styles.readyText}>{ready ? t("fcReadyConfirmed") : t("pspReady2")}</Text></Pressable>}
     {canStart && <Pressable onPress={requestStart} style={({ pressed }) => [styles.start, pressed && styles.disabled]}><Text style={styles.startText}>{t("segStartSession")}</Text></Pressable>}
     {Platform.OS !== "web" && <><RoomChat socket={connected ? socketRef.current : null} title={`${meta.title} · ${t("roomChat")}`} /><RoomVoiceChat ref={voiceChatRef} mediaToken={mediaToken} teamMediaToken={mediaToken?.teamMediaToken} socket={connected ? socketRef.current : null} memberRole={snapshotQuery.data?.members.find((member) => member.id === credential?.memberId)?.role} memberId={credential?.memberId} members={snapshotQuery.data?.members ?? []} /></>}
   </ScrollView></ScreenContainer>;
 }
 
-const styles = StyleSheet.create({ content: { paddingVertical: 10, paddingBottom: 30 }, top: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" }, back: { color: "#B2C9DD", fontSize: 13, fontWeight: "900" }, chip: { fontSize: 11, fontWeight: "900", backgroundColor: "#14273A", borderRadius: 99, paddingHorizontal: 10, paddingVertical: 6 }, eyebrow: { fontSize: 11, fontWeight: "900", letterSpacing: 1.1, marginTop: 22 }, title: { color: "#F4F8FD", fontSize: 28, fontWeight: "900", marginTop: 4 }, copy: { color: "#B6C6D7", fontSize: 12, lineHeight: 19, marginTop: 8 }, card: { minHeight: 120, marginTop: 19, borderRadius: 20, backgroundColor: "#0D1C2B", borderColor: "#284A67", borderWidth: 1, alignItems: "center", justifyContent: "center", padding: 16 }, file: { color: "#F4F8FD", fontSize: 15, fontWeight: "900", textAlign: "center" }, fileInfo: { color: "#94B9D0", fontSize: 10, marginTop: 7 }, primary: { minHeight: 53, borderRadius: 16, marginTop: 14, alignItems: "center", justifyContent: "center" }, primaryText: { color: "#071018", fontSize: 12, fontWeight: "900" }, settings: { marginTop: 15, borderRadius: 17, borderColor: "#294C69", borderWidth: 1, backgroundColor: "#102337", padding: 14 }, settingsTitle: { color: "#DDF5FF", fontSize: 12, fontWeight: "900" }, label: { color: "#94BDD5", fontSize: 10, fontWeight: "900", marginTop: 12 }, row: { flexDirection: "row", gap: 8, marginTop: 7 }, option: { flex: 1, minHeight: 38, alignItems: "center", justifyContent: "center", borderRadius: 10, borderWidth: 1, borderColor: "#39566D", backgroundColor: "#14293A" }, optionText: { color: "#EFF8FD", fontSize: 10, fontWeight: "900" }, configure: { minHeight: 44, marginTop: 13, alignItems: "center", justifyContent: "center", borderRadius: 12, backgroundColor: "#224A64" }, configureText: { color: "#DCF7FF", fontSize: 10, fontWeight: "900" }, status: { marginTop: 15, borderRadius: 16, backgroundColor: "#14263A", borderColor: "#2C5371", borderWidth: 1, padding: 13 }, statusTitle: { color: "#7BE8FF", fontSize: 10, fontWeight: "900" }, statusText: { color: "#C8D8E4", fontSize: 11, lineHeight: 17, marginTop: 6 }, ready: { minHeight: 52, marginTop: 11, borderRadius: 16, backgroundColor: "#4BD08E", alignItems: "center", justifyContent: "center" }, readyText: { color: "#08291A", fontSize: 12, fontWeight: "900" }, start: { minHeight: 54, marginTop: 10, borderRadius: 16, backgroundColor: "#73E9FF", alignItems: "center", justifyContent: "center" }, startText: { color: "#071018", fontSize: 12, fontWeight: "900" }, disabled: { opacity: .55 }, readyInfo: { borderColor: "#3F8F6B" }, blockedInfo: { borderColor: "#A85A5A" }, reportLine: { color: "#9FB6C6", fontSize: 9, marginTop: 4, fontVariant: ["tabular-nums"] } });
+const styles = StyleSheet.create({ content: { paddingVertical: 10, paddingBottom: 30 }, top: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" }, back: { color: "#B2C9DD", fontSize: 13, fontWeight: "900" }, chip: { fontSize: 11, fontWeight: "900", backgroundColor: "#14273A", borderRadius: 99, paddingHorizontal: 10, paddingVertical: 6 }, eyebrow: { fontSize: 11, fontWeight: "900", letterSpacing: 1.1, marginTop: 22 }, title: { color: "#F4F8FD", fontSize: 28, fontWeight: "900", marginTop: 4 }, copy: { color: "#B6C6D7", fontSize: 12, lineHeight: 19, marginTop: 8 }, card: { minHeight: 120, marginTop: 19, borderRadius: 20, backgroundColor: "#0D1C2B", borderColor: "#284A67", borderWidth: 1, alignItems: "center", justifyContent: "center", padding: 16 }, file: { color: "#F4F8FD", fontSize: 15, fontWeight: "900", textAlign: "center" }, fileInfo: { color: "#94B9D0", fontSize: 10, marginTop: 7 }, primary: { minHeight: 53, borderRadius: 16, marginTop: 14, alignItems: "center", justifyContent: "center" }, primaryText: { color: "#071018", fontSize: 12, fontWeight: "900" }, settings: { marginTop: 15, borderRadius: 17, borderColor: "#294C69", borderWidth: 1, backgroundColor: "#102337", padding: 14 }, settingsTitle: { color: "#DDF5FF", fontSize: 12, fontWeight: "900" }, label: { color: "#94BDD5", fontSize: 10, fontWeight: "900", marginTop: 12 }, row: { flexDirection: "row", gap: 8, marginTop: 7 }, option: { flex: 1, minHeight: 38, alignItems: "center", justifyContent: "center", borderRadius: 10, borderWidth: 1, borderColor: "#39566D", backgroundColor: "#14293A" }, optionText: { color: "#EFF8FD", fontSize: 10, fontWeight: "900" }, configure: { minHeight: 44, marginTop: 13, alignItems: "center", justifyContent: "center", borderRadius: 12, backgroundColor: "#224A64" }, configureText: { color: "#DCF7FF", fontSize: 10, fontWeight: "900" }, status: { marginTop: 15, borderRadius: 16, backgroundColor: "#14263A", borderColor: "#2C5371", borderWidth: 1, padding: 13 }, statusTitle: { color: "#7BE8FF", fontSize: 10, fontWeight: "900" }, statusText: { color: "#C8D8E4", fontSize: 11, lineHeight: 17, marginTop: 6 }, ready: { minHeight: 52, marginTop: 11, borderRadius: 16, backgroundColor: "#4BD08E", alignItems: "center", justifyContent: "center" }, readyText: { color: "#08291A", fontSize: 12, fontWeight: "900" }, start: { minHeight: 54, marginTop: 10, borderRadius: 16, backgroundColor: "#73E9FF", alignItems: "center", justifyContent: "center" }, startText: { color: "#071018", fontSize: 12, fontWeight: "900" }, disabled: { opacity: .55 } });

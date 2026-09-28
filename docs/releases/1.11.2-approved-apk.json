@@ -1,0 +1,53 @@
+{
+  "schema_version": 2,
+  "role": "Baseline reference for every future change",
+  "approved_apk": {
+    "filename": "Classic-Era-1.11.2-arm64-test.apk",
+    "bytes": 60468101,
+    "mib": 57.67,
+    "sha256": "bde99a4dfcac736c08d4f59b62cf6018e2a7bae2b71f08a8fcf16df3e34d4806",
+    "package": "com.app.moudienetplay",
+    "version_name": "1.11.2",
+    "version_code": 53,
+    "min_sdk": 24,
+    "target_sdk": 36,
+    "compile_sdk": 36,
+    "expo_sdk": "54.0.0",
+    "abis": [
+      "arm64-v8a"
+    ],
+    "signing_certificate_sha256": "fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c",
+    "signing_note": "Signed with android/app/debug.keystore from the source tree (React Native template debug key).",
+    "emulator_cores": [
+      "fceumm",
+      "pcsx_rearmed",
+      "ppsspp",
+      "genesis_plus_gx",
+      "parallel_n64",
+      "play"
+    ],
+    "javascript_bundle_sha256": "e5df0821ea162b8b972ea3089d87b1c110b5251982082dbe21ccc596bb4afe4e",
+    "private_copy": "Draft release 'Approved APK inspection — not published' (asset id 595870907)"
+  },
+  "source": {
+    "status": "identified-by-forensic-match",
+    "git_commit": "7c1bd8e862140da93c631ed77c6b0ee03cb20809",
+    "branch": "branding-refresh-and-repair-plan (PR #26)",
+    "commit_date": "2026-09-22T03:23:08+04:00",
+    "method": [
+      "Embedded assets/app.config equals app.config.ts at this commit except version 1.11.1->1.11.2 and versionCode 52->53.",
+      "Hermes bundle strings compared with 535 commits (all branches and PR heads, 2026-09-17..2026-09-26); this commit ranked first.",
+      "Every client source file at this commit is the best-matching historical version of that file.",
+      "android/app/debug.keystore at this commit has the exact signing certificate of the APK."
+    ],
+    "known_differences": [
+      "'rgba(3, 10, 20, 0.52)' (components/screen-container.tsx) is absent from the APK bundle.",
+      "'THREE' (lib/netplay-protocol.ts) was not found as a standalone string in the bundle."
+    ]
+  },
+  "this_release": {
+    "version_name": "1.0.0.1",
+    "version_code": 54,
+    "note": "versionCode 54 > 53 so it installs as an update over the approved 1.11.2 build when signed with the same key."
+  }
+}

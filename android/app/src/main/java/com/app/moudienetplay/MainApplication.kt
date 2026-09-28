@@ -7,8 +7,6 @@ import android.content.ComponentCallbacks2
 import android.content.res.Configuration
 import android.os.Build
 import android.util.Log
-import java.io.File
-import java.io.FileOutputStream
 
 import com.facebook.react.PackageList
 import com.facebook.react.ReactApplication
@@ -20,9 +18,6 @@ import com.facebook.react.common.ReleaseLevel
 import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint
 import com.facebook.react.defaults.DefaultReactNativeHost
 
-import com.livekit.reactnative.LiveKitReactNative
-import com.livekit.reactnative.audio.AudioType
-
 import expo.modules.ApplicationLifecycleDispatcher
 import expo.modules.ReactNativeHostWrapper
 
@@ -33,7 +28,8 @@ class MainApplication : Application(), ReactApplication {
       object : DefaultReactNativeHost(this) {
         override fun getPackages(): List<ReactPackage> =
             PackageList(this).packages.apply {
-              add(DiscordSocialPackage())
+              // Packages that cannot be autolinked yet can be added manually here, for example:
+              // add(MyReactNativePackage())
             }
 
           override fun getJSMainModuleName(): String = ".expo/.virtual-metro-entry"
@@ -58,21 +54,7 @@ class MainApplication : Application(), ReactApplication {
     }
     val priorUncaughtHandler = Thread.getDefaultUncaughtExceptionHandler()
     Thread.setDefaultUncaughtExceptionHandler { thread, error ->
-      Log.e("MoudieStartup", "Uncaught failure on ${thread.name}", error)
-      // Record the failure in the same bounded diagnostics file the emulator
-      // writes, so an app that "closed itself" during a heavy session (for
-      // example PlayStation 2) leaves a readable reason on the device.
-      runCatching {
-        val target = File(filesDir, "moudie-session.log")
-        if (target.isFile && target.length() > 192L * 1024L) {
-          target.writeText(target.readLines().takeLast(200).joinToString("\n", postfix = "\n"))
-        }
-        FileOutputStream(target, true).use { output ->
-          val head = error.stackTrace.take(4).joinToString(" | ") { "${it.className}.${it.methodName}:${it.lineNumber}" }
-          output.write("${java.util.Date()} CRASH thread=${thread.name} type=${error.javaClass.name} $head\n".toByteArray())
-          output.fd.sync()
-        }
-      }
+      Log.e("MoudieStartup", "Uncaught startup failure on ${thread.name}", error)
       priorUncaughtHandler?.uncaughtException(thread, error)
     }
     DefaultNewArchitectureEntryPoint.releaseLevel = try {
@@ -80,8 +62,6 @@ class MainApplication : Application(), ReactApplication {
     } catch (e: IllegalArgumentException) {
       ReleaseLevel.STABLE
     }
-    LiveKitReactNative.setup(this, AudioType.CommunicationAudioType())
-    RuntimeCleanup.run(this)
     loadReactNative(this)
     ApplicationLifecycleDispatcher.onApplicationCreate(this)
   }
@@ -90,7 +70,7 @@ class MainApplication : Application(), ReactApplication {
     super.onTrimMemory(level)
     if (level >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) {
       // Discard only small temporary cache files; ROMs, saves, and user files are preserved.
-      RuntimeCleanup.run(this)
+      cacheDir.listFiles()?.filter { it.isFile && it.length() < 8L * 1024 * 1024 }?.forEach { it.delete() }
     }
   }
 

@@ -23,36 +23,32 @@ describe("NetPlay and voice reliability safeguards", () => {
     expect(universal).not.toContain('IO.socket(');
   });
 
-  it("keeps the Socket.IO fallback aligned with native universal-player sessions", () => {
-    const server = read("server/netplay.ts");
-    const transport = read("modules/moudie-emulator/android/src/main/java/expo/modules/moudieemulator/CloudflareNetplayWebSocket.kt");
-    expect(server).toContain('session.clientKind !== "universal-player"');
-    expect(server).toContain('payload?.system === "n64" || payload?.system === "ps2"');
-    expect(server).toContain('socket.on("netplay:universal-input"');
-    expect(transport).toContain("scheduleReconnect()");
-    expect(transport).toContain("coerceAtMost(10_000L)");
-  });
-
   it("keeps bounded adaptive delay and frame/state relay semantics", () => {
     const quality = read("modules/moudie-emulator/android/src/main/java/expo/modules/moudieemulator/NetplayQualityMonitor.kt");
     const worker = read("cloudflare-netplay/src/index.ts");
     expect(quality).toContain("MAX_INPUT_DELAY_FRAMES");
     expect(quality).toContain("frames.coerceIn(2L, MAX_INPUT_DELAY_FRAMES)");
-    expect(worker).toContain("const payload={system:requested.system,startAt,playerMemberIds,inputDelay}");
-    expect(worker).toContain("clampInputDelay");
+    expect(worker).toContain('inputDelay:3');
     expect(worker).toContain('netplay:session-start');
   });
 
-  it("uses LiveKit SFU as the production voice transport", () => {
+  it("uses built-in WebRTC voice signaling without requiring LiveKit credentials", () => {
+    const worker = read("cloudflare-netplay/src/index.ts");
     const voice = read("components/room-voice-chat-reliable.native.tsx");
-    const server = read("server/livekit.ts");
-    const app = read("android/app/src/main/java/com/app/moudienetplay/MainApplication.kt");
-    expect(voice).toContain("LiveKitRoom");
-    expect(voice).toContain("AudioSession.startAudioSession");
-    expect(voice).toContain("setMicrophoneEnabled");
-    expect(voice).toContain("selectAudioOutput");
-    expect(server).toContain("new AccessToken");
-    expect(server).toContain("roomJoin: true");
-    expect(app).toContain("LiveKitReactNative.setup");
+    const manifest = read("android/app/src/main/AndroidManifest.xml");
+    expect(worker).toContain('voice:signal');
+    expect(worker).toContain('netplay:voice-status');
+    expect(voice).toContain("RTCPeerConnection");
+    expect(voice).toContain("mediaDevices.getUserMedia");
+    expect(voice).toContain("voice:signal");
+    expect(voice).toContain("netplay:voice-status");
+    expect(voice).not.toContain("LiveKitRoom");
+    expect(voice).not.toContain('voiceChannelRoom');
+    expect(voice).not.toContain('voiceChannelTeam');
+    expect(voice).toContain('onChatPress');
+    expect(voice).toContain('track.enabled=enabled');
+    expect(voice).toContain('EXPO_PUBLIC_TURN_URL');
+    expect(voice).toContain('stun:stun.cloudflare.com:3478');
+    expect(manifest).not.toContain("manusmoudienetplay");
   });
 });

@@ -17,15 +17,6 @@ class Ps1NetplayClient(
   private val onDelayUpdate:((delay:Long)->Unit)?=null,
 ){
   private var transport:CloudflareNetplayWebSocket?=null
-
-  private var lastDelayRequestAt=0L
-  private var delayRequestInFlight=false
-  private companion object {
-    const val MIN_INPUT_DELAY=2L
-    const val MAX_INPUT_DELAY=45L
-    const val DELAY_REQUEST_COOLDOWN_MS=2500L
-    const val DELAY_REQUEST_TIMEOUT_MS=4000L
-  }
   fun connect(){
     if(transport!=null)return
     transport=CloudflareNetplayWebSocket(config.serverUrl,config.roomId,config.memberId,config.memberToken,
@@ -33,7 +24,7 @@ class Ps1NetplayClient(
       onConnected={transport?.send("netplay:ps1-ready",JSONObject().put("fingerprint",config.fingerprint).put("coreVersion",config.coreVersion));onStatus("PS1 channel connected. adaptive sync active.")},
       onDisconnected={onStatus("PS1 paused; auto-reconnecting...")},
       onError={onStatus("PS1 realtime: "+it)},
-      onQuality={quality->onQuality(quality)},
+      onQuality={quality->onQuality(quality);onDelayUpdate?.invoke(quality.recommendedDelay)},
     )
     transport?.connect()
   }
@@ -48,7 +39,7 @@ class Ps1NetplayClient(
       "netplay:chat"->{val text=p.optString("text","").trim();if(text.isNotEmpty())onChat(p.optString("displayName","Other player"),text)}
       "netplay:desync-detected"->onStatus(p.optString("message","Desync detected - resyncing"))
       "netplay:frame-rejected"->onStatus("Sync: slowing down, device ahead")
-      "netplay:delay-update"->{val d=p.optLong("delay",-1L);if(d in MIN_INPUT_DELAY..MAX_INPUT_DELAY){delayRequestInFlight=false;onDelayUpdate?.invoke(d)}}
+      "netplay:delay-update"->{val d=p.optLong("delay",-1L);if(d in 2..45)onDelayUpdate?.invoke(d)}
     }
   }
   fun sendInputFrame(frame:Long,mask:Int){if(frame>=0&&mask in 0..0xffff)transport?.send("netplay:ps1-input",JSONObject().put("frame",frame).put("mask",mask))}
@@ -62,19 +53,7 @@ class Ps1NetplayClient(
     transport?.send("netplay:session-start-request",JSONObject().put("system","ps1"))
   }
   fun sendChat(text:String){val safe=text.trim().take(400);if(safe.isNotEmpty())transport?.send("netplay:chat",JSONObject().put("text",safe))}
-  /**
-   * Requests an authoritative lockstep window change; the relay answers with
-   * netplay:delay-update, which is the only value the client applies.
-   */
-  fun requestDelayIncrease(delay:Long,reason:String){
-    if(delay !in MIN_INPUT_DELAY..MAX_INPUT_DELAY) return
-    val now=android.os.SystemClock.elapsedRealtime()
-    if(delayRequestInFlight && now-lastDelayRequestAt<DELAY_REQUEST_TIMEOUT_MS) return
-    if(now-lastDelayRequestAt<DELAY_REQUEST_COOLDOWN_MS) return
-    lastDelayRequestAt=now
-    delayRequestInFlight=true
-    transport?.send("netplay:delay-request",JSONObject().put("delay",delay).put("reason",reason))
-  }
+  fun requestDelayIncrease(delay:Long,reason:String){if(delay in 2..45)transport?.send("netplay:delay-request",JSONObject().put("delay",delay).put("reason",reason))}
   fun reportDesync(frame:Long,predictedFrames:Int){transport?.send("netplay:desync-report",JSONObject().put("frame",frame).put("predictedFrames",predictedFrames))}
   fun close(){transport?.close();transport=null}
 }

@@ -64,12 +64,6 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
     private const val JITTER_BUFFER_FRAMES = 4
     private const val RESYNC_TIMEOUT_MS = 5000L
     private const val FRAME_HISTORY_CLEANUP_THRESHOLD = 60
-    private const val MIN_NETPLAY_DELAY_FRAMES = 2L
-    private const val MAX_NETPLAY_DELAY_FRAMES = 45L
-    private const val STABLE_SAMPLES_BEFORE_SHRINK = 5
-    private const val MEMORY_CHECK_INTERVAL_MS = 5_000L
-    private const val PS2_LOW_FREE_RAM_BYTES = 1500L * 1024L * 1024L
-    private const val CRITICAL_FREE_RAM_BYTES = 500L * 1024L * 1024L
     @Volatile var onOverlayAction: ((action: String, muted: Boolean) -> Unit)? = null
   }
 
@@ -111,9 +105,6 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
   private var nextLockstepFrame = 0L
   private var netplayInputDelayFrames = NETPLAY_INPUT_DELAY_FRAMES
   private var netplayQuality = NetplayQuality()
-  private var stableQualitySamples = 0
-  private var lastMemoryCheckAt = 0L
-  private var memoryPressureNotified = false
   // adaptive improved sync
   private var sessionStartTimeMs = 0L
   private var predictedFrames = 0
@@ -147,12 +138,7 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
       val elapsed = t - frameStarted
       if (elapsed >= 1_000_000_000L) {
         val emulatorElapsed = if (emulatorFrameStarted == 0L) elapsed else t - emulatorFrameStarted
-        val measuredFps = (emulatorFrameCount * 1_000_000_000L / max(1L, emulatorElapsed)).coerceAtMost(120L)
-        updateMetric(measuredFps)
-        if (::definition.isInitialized) {
-          MoudieSessionLog.sample(this@UniversalLibretroPlayerActivity, measuredFps, definition.system)
-          monitorMemoryPressure()
-        }
+        updateMetric((emulatorFrameCount * 1_000_000_000L / max(1L, emulatorElapsed)).coerceAtMost(120L))
         frameStarted = t; frameCount = 0
         emulatorFrameCount = 0
         emulatorFrameStarted = t
@@ -176,19 +162,9 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
     val core = File(intent.getStringExtra(EXTRA_CORE_PATH).orEmpty())
     if (!gameFile.isFile || !gameFile.canRead()) { showError("Could not read the game file. Choose it again from the library."); return }
     if (!core.isFile || core.length() == 0L) { showError("Could not load ${definition.coreName}. Reinstall the complete APK."); return }
-    if (definition.system == "ps2") {
-      val blocking = MoudieDeviceProfile.ps2BlockingReason(this)
-      if (blocking != null) {
-        MoudieSessionLog.note(this, "PS2 session refused: $blocking")
-        showError(blocking)
-        return
-      }
-      MoudieDeviceProfile.ps2WarningReason(this)?.let { warning -> showToast(warning) }
-      val profile = MoudieDeviceProfile.snapshot(this)
-      if (profile.availableRamBytes < PS2_LOW_FREE_RAM_BYTES) {
-        showToast("Low free memory (%.1f GB free). Close other apps if the session slows down.".format(profile.availableRamBytes.toDouble() / (1024.0 * 1024.0 * 1024.0)))
-      }
-      MoudieSessionLog.note(this, "PS2 device profile ram=${"%.1f".format(profile.totalRamGb)}GB gles=${profile.glesLabel} heap=${profile.memoryClassMb}/${profile.largeMemoryClassMb}MB largeHeap=${profile.largeHeap}")
+    if (definition.system == "ps2" && !supportsPlayPs2Graphics()) {
+      showError("PlayStation 2 requires OpenGL ES 3.2 or higher on Android. This device reports an older graphics level, so the game was blocked instead of crashing the app.")
+      return
     }
     // Play! is built with a libretro-specific Android bootstrap that calls
     // JNI_GetCreatedJavaVMs() from retro_init(). This initializes CJavaVM inside
@@ -206,10 +182,7 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
       systemDirectory = system.absolutePath; savesDirectory = saves.absolutePath
       shader = if (definition.system == "ps2") ShaderConfig.Default else ShaderConfig.Sharp
       preferLowLatencyAudio = definition.system != "ps2"
-      rumbleEventsEnabled = definition.system != "ps2"
-      // Rendering an unchanged frame again is pure heat and battery on a phone:
-      // Play! already produced identical output, so skip the presentation pass.
-      skipDuplicateFrames = definition.system == "ps2"
+      rumbleEventsEnabled = true
       variables = if (definition.system == "ps2") arrayOf(
         Variable("play_res_multi", "1"),
         Variable("play_presentation_mode", "Fit Screen"),
@@ -237,85 +210,12 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
     addMenu()
     setContentView(root)
     root.post { applyAspectRatio(); restoreScreen(); enableScreenEditor(); if (editMode) showEditorBar() }
-    val sessionProfile = MoudieDeviceProfile.snapshot(this)
-    MoudieSessionLog.startSession(this, definition.system, gameFile.name, "ram=${"%.1f".format(sessionProfile.totalRamGb)}GB free=${sessionProfile.availableRamBytes / (1024L * 1024L)}MB cores=${sessionProfile.cpuCores} gles=${sessionProfile.glesLabel}")
     connectNetplayIfConfigured()
   }
 
   override fun onResume() { super.onResume(); Choreographer.getInstance().postFrameCallback(frameMeter) }
   override fun onPause() { Choreographer.getInstance().removeFrameCallback(frameMeter); releaseAll(); analogStick?.releaseAxis(); super.onPause() }
-  override fun onDestroy() {
-    stopLockstep()
-    pendingSessionStart = null
-    netplayHandler.removeCallbacks(retryPendingNetplayState)
-    netplayClient?.close()
-    netplayClient = null
-    releaseNetplayBuffers()
-    onOverlayAction = null
-    if (::definition.isInitialized) {
-      MoudieSessionLog.endSession(this, "clean-exit system=${definition.system}")
-      MoudieStorageMaintenance.run(this)
-    }
-    super.onDestroy()
-  }
-
-  /** Drops every per-frame NetPlay buffer so a long session cannot pile up state. */
-  private fun releaseNetplayBuffers() {
-    synchronized(localFrameMasks) { localFrameMasks.clear() }
-    synchronized(localFrameAnalogs) { localFrameAnalogs.clear() }
-    synchronized(remoteFrameMasks) { remoteFrameMasks.clear() }
-    synchronized(remoteFrameAnalogs) { remoteFrameAnalogs.clear() }
-    lastRemoteMasks.clear()
-    appliedMasksByPort.clear()
-    localPressedKeys.clear()
-    pressedTouchKeys.clear()
-  }
-
-  /**
-   * PlayStation 2 keeps a large amount of state outside the Java heap, so the
-   * only warning the app gets before Android reclaims the process is a low
-   * "available memory" reading. When that happens the caches and frame buffers
-   * are released first; if the pressure continues, the game state is written to
-   * a save slot and the session is ended by the app instead of by the system, so
-   * the player keeps both the save and an explanation.
-   */
-  private fun monitorMemoryPressure() {
-    if (!::definition.isInitialized) return
-    val now = android.os.SystemClock.elapsedRealtime()
-    if (now - lastMemoryCheckAt < MEMORY_CHECK_INTERVAL_MS) return
-    lastMemoryCheckAt = now
-    if (!MoudieDeviceProfile.ps2MemoryPressure(this)) return
-    MoudieStorageMaintenance.run(this)
-    releaseNetplayBuffers()
-    val profile = MoudieDeviceProfile.snapshot(this)
-    MoudieSessionLog.note(this, "Memory pressure free=${profile.availableRamBytes / (1024L * 1024L)}MB lowRam=${profile.lowRamDevice}")
-    if (memoryPressureNotified) return
-    memoryPressureNotified = true
-    showToast("Low memory: caches and NetPlay buffers released to protect the session.")
-    if (profile.availableRamBytes < CRITICAL_FREE_RAM_BYTES) {
-      saveStateForSafety()
-    }
-  }
-
-  /** Best-effort autosave used when the process is at risk of being killed. */
-  private fun saveStateForSafety() {
-    Thread {
-      val saved = runCatching {
-        val state = retroView.serializeState()
-        if (state.isEmpty()) return@runCatching false
-        val target = stateFile(selectedStateSlot)
-        val temporary = File(target.parentFile, "${target.name}.tmp")
-        FileOutputStream(temporary).use { output -> output.write(state); output.fd.sync() }
-        if (!temporary.renameTo(target)) { temporary.copyTo(target, overwrite = true); temporary.delete() }
-        true
-      }.getOrElse { error ->
-        MoudieSessionLog.note(this, "Autosave failed: ${error.message ?: error::class.java.simpleName}")
-        false
-      }
-      if (saved) MoudieSessionLog.note(this, "Autosave written to slot S$selectedStateSlot because of memory pressure")
-      runOnUiThread { if (saved) showToast("Game state saved to slot S$selectedStateSlot before memory ran out.") }
-    }.start()
-  }
+  override fun onDestroy() { stopLockstep(); pendingSessionStart = null; netplayHandler.removeCallbacks(retryPendingNetplayState); netplayClient?.close(); onOverlayAction = null; super.onDestroy() }
   override fun onKeyDown(k: Int, e: KeyEvent): Boolean { sendLocalKey(KeyEvent.ACTION_DOWN, k); return super.onKeyDown(k, e) }
   override fun onKeyUp(k: Int, e: KeyEvent): Boolean { sendLocalKey(KeyEvent.ACTION_UP, k); return super.onKeyUp(k, e) }
   override fun onGenericMotionEvent(e: MotionEvent?): Boolean { if (e != null) { retroView.sendMotionEvent(GLRetroView.MOTION_SOURCE_DPAD, e.getAxisValue(MotionEvent.AXIS_HAT_X), e.getAxisValue(MotionEvent.AXIS_HAT_Y), localPlayerIndex); retroView.sendMotionEvent(GLRetroView.MOTION_SOURCE_ANALOG_LEFT, e.getAxisValue(MotionEvent.AXIS_X), e.getAxisValue(MotionEvent.AXIS_Y), localPlayerIndex); retroView.sendMotionEvent(GLRetroView.MOTION_SOURCE_ANALOG_RIGHT, e.getAxisValue(MotionEvent.AXIS_Z), e.getAxisValue(MotionEvent.AXIS_RZ), localPlayerIndex) }; return super.onGenericMotionEvent(e) }
@@ -361,33 +261,14 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
       onStatus = { message -> runOnUiThread { showToast(message) } },
       onQuality = { quality -> runOnUiThread {
         netplayQuality = quality
-        // The relay owns the lockstep window. This device only *asks* for a
-        // change; the value it plays with is whatever netplay:delay-update
-        // confirms, so both devices always advance with the same window.
         val recommended = quality.recommendedInputDelayFrames()
         if (lockstepActive.get()) {
-          if (recommended > netplayInputDelayFrames) {
-            stableQualitySamples = 0
-            netplayClient?.requestDelayIncrease(recommended, "quality")
-          } else if (recommended < netplayInputDelayFrames) {
-            stableQualitySamples += 1
-            if (stableQualitySamples >= STABLE_SAMPLES_BEFORE_SHRINK) {
-              stableQualitySamples = 0
-              netplayClient?.requestDelayIncrease(recommended, "stable")
-            }
-          } else {
-            stableQualitySamples = 0
+          if (recommended != netplayInputDelayFrames) {
+            val reason = if (recommended > netplayInputDelayFrames) "quality" else "stable"
+            netplayClient?.requestDelayIncrease(recommended, reason)
           }
         } else {
           netplayInputDelayFrames = recommended
-        }
-        updateMetric(null)
-      } },
-      onDelayUpdate = { confirmed -> runOnUiThread {
-        val bounded = confirmed.coerceIn(MIN_NETPLAY_DELAY_FRAMES, MAX_NETPLAY_DELAY_FRAMES)
-        if (bounded != netplayInputDelayFrames) {
-          netplayInputDelayFrames = bounded
-          showToast("Synchronized input delay: $bounded frames.")
         }
         updateMetric(null)
       } },
@@ -529,11 +410,9 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
           netplayClient?.reportDesync(nextLockstepFrame, 1)
           lastRemoteFrameWaitStartedAt = now
           consecutiveDesyncs++
-          if (consecutiveDesyncs > 1) {
-            // Ask the relay for a wider window instead of changing the local
-            // value: a private change here would desynchronize this device from
-            // its peer until the next resync.
-            netplayClient?.requestDelayIncrease(netplayInputDelayFrames + 2, "lockstep-stall")
+          if (consecutiveDesyncs > 1 && netplayInputDelayFrames < 8) {
+            netplayInputDelayFrames++
+            netplayClient?.requestDelayIncrease(netplayInputDelayFrames, "lockstep-stall")
             consecutiveDesyncs = 0
           }
         }
@@ -795,17 +674,7 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
     stateActionInProgress = true
     showToast(startMessage)
     Thread {
-      val result = runCatching(action).recoverCatching { error ->
-        // A 4 GB phone can run out of memory while serializing a PS2 state; that
-        // must surface as a message, not as an exit from the whole app.
-        if (error is OutOfMemoryError) {
-          MoudieSessionLog.note(this, "Save/load aborted: OutOfMemoryError")
-          MoudieStorageMaintenance.run(this)
-          Runtime.getRuntime().gc()
-          throw IllegalStateException("Not enough free memory to complete the save or load action. Close other apps and try again.")
-        }
-        throw error
-      }
+      val result = runCatching(action)
       runOnUiThread { stateActionInProgress = false; showToast(result.getOrElse { it.message ?: "Could not complete the state action." }) }
     }.start()
   }

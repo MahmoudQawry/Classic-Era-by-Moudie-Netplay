@@ -9,16 +9,6 @@ export type NetplayQuality = {
   packetLossStreak?: number;
 };
 
-/**
- * Identical lockstep window bounds to the Cloudflare relay, the Express relay,
- * the Android NetplayQualityMonitor and both native NetPlay clients. A mismatch
- * here is what silently discarded an adaptive recommendation.
- */
-export const MIN_INPUT_DELAY_FRAMES = 2;
-export const MAX_INPUT_DELAY_FRAMES = 45;
-/** Minimum gap between delay requests; the relay enforces the same window. */
-export const DELAY_REQUEST_COOLDOWN_MS = 2500;
-
 const emptyQuality = (): NetplayQuality => ({
   rttMs: null,
   jitterMs: null,
@@ -34,18 +24,13 @@ export function formatNetplayQuality(quality: NetplayQuality): string {
   return `PING ${quality.rttMs}ms · ${quality.grade}${delayInfo}`;
 }
 
-/**
- * Sizes the lockstep window from the measured relay path instead of fixed
- * buckets: player -> relay -> peer needs the round trip plus jitter headroom,
- * and a very distant relay can legitimately need far more than the old 8-frame
- * ceiling. Mirrors NetplayQuality.recommendedInputDelayFrames() on Android.
- */
-export function calculateRecommendedDelay(rtt: number, jitter: number, loss: number): number {
-  if (!Number.isFinite(rtt) || rtt <= 0) return 3;
-  const safetyMs = loss >= 8 ? 40 : loss >= 3 ? 28 : jitter >= 50 ? 24 : 16;
-  const effectiveTransitMs = rtt + jitter * 1.5 + safetyMs;
-  const frames = Math.ceil(effectiveTransitMs / (1000 / 60)) + 1;
-  return Math.max(MIN_INPUT_DELAY_FRAMES, Math.min(MAX_INPUT_DELAY_FRAMES, frames));
+function calculateRecommendedDelay(rtt: number, jitter: number, loss: number): number {
+  if (rtt <= 50 && jitter <= 10 && loss < 1) return 2;
+  if (rtt <= 80 && jitter <= 20 && loss < 2) return 3;
+  if (rtt <= 120 && jitter <= 30 && loss <= 3) return 4;
+  if (rtt <= 180 && jitter <= 45 && loss <= 5) return 5;
+  if (rtt <= 250 && jitter <= 60) return 6;
+  return 7;
 }
 
 function calculateGrade(rtt: number | null, jitter: number | null, loss: number | null): NetplayQuality["grade"] {
@@ -70,8 +55,6 @@ export function startNetplayQualityMonitor(socket: Socket, onQuality: (quality: 
   let smoothedRtt: number | null = null;
   let smoothedJitter: number | null = null;
   let lastRequestedDelay: number | null = null;
-  let lastDelayRequestAt = 0;
-  let authoritativeDelay: number | null = null;
   const pending = new Map<number, number>();
   const outcomes: boolean[] = [];
   let lossStreak = 0;
@@ -89,26 +72,11 @@ export function startNetplayQualityMonitor(socket: Socket, onQuality: (quality: 
   };
 
   const requestDelayIfNeeded = (recommendedDelay: number) => {
-    const bounded = Math.max(MIN_INPUT_DELAY_FRAMES, Math.min(MAX_INPUT_DELAY_FRAMES, Math.round(recommendedDelay)));
+    const bounded = Math.max(2, Math.min(8, Math.round(recommendedDelay)));
     if (lastRequestedDelay === bounded || !socket.connected) return;
-    const now = Date.now();
-    // One request per cooldown window: the two devices must not trade delay
-    // changes back and forth while the measured link is unchanged.
-    if (now - lastDelayRequestAt < DELAY_REQUEST_COOLDOWN_MS) return;
     const reason = lastRequestedDelay !== null && bounded < lastRequestedDelay ? "stable" : "network-adaptation";
-    lastDelayRequestAt = now;
-    lastRequestedDelay = bounded;
     socket.emit(delayEvent, { delay: bounded, reason });
-  };
-
-  // The relay is the authority: adopt the confirmed value and never keep asking
-  // for something the relay has already refused.
-  const onDelayUpdate = (payload: { delay?: unknown; accepted?: unknown }) => {
-    const confirmed = Math.round(Number(payload?.delay));
-    if (!Number.isFinite(confirmed)) return;
-    const bounded = Math.max(MIN_INPUT_DELAY_FRAMES, Math.min(MAX_INPUT_DELAY_FRAMES, confirmed));
     lastRequestedDelay = bounded;
-    authoritativeDelay = bounded;
   };
 
   const publish = () => {
@@ -116,7 +84,7 @@ export function startNetplayQualityMonitor(socket: Socket, onQuality: (quality: 
     const rtt = smoothedRtt === null ? null : Math.round(smoothedRtt);
     const jitter = smoothedJitter === null ? null : Math.round(smoothedJitter);
     const grade = calculateGrade(rtt, jitter, loss);
-    const recommendedDelay = rtt !== null ? calculateRecommendedDelay(rtt, jitter ?? 0, loss ?? 0) : authoritativeDelay ?? 3;
+    const recommendedDelay = rtt !== null ? calculateRecommendedDelay(rtt, jitter ?? 0, loss ?? 0) : 3;
 
     onQuality({
       rttMs: rtt,
@@ -170,14 +138,12 @@ export function startNetplayQualityMonitor(socket: Socket, onQuality: (quality: 
   };
 
   socket.on(pongEvent, onPong);
-  socket.on("netplay:delay-update", onDelayUpdate);
   tick();
   const timer = setInterval(tick, 1_200);
 
   return () => {
     clearInterval(timer);
     socket.off(pongEvent, onPong);
-    socket.off("netplay:delay-update", onDelayUpdate);
   };
 }
 

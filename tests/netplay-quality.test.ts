@@ -23,12 +23,7 @@ describe("NetPlay quality monitor", () => {
     vi.advanceTimersByTime(42);
     socket.receive("netplay:quality-pong", { sequence: initialProbe.sequence });
     expect(updates.mock.lastCall?.[0]).toMatchObject({ rttMs: 42, grade: "STABLE" });
-    // The window is sized from the measured path (42 ms RTT + safety headroom at
-    // 60 FPS) instead of a fixed bucket, and it must stay inside 2..45.
-    const request = socket.emitted.find((entry) => entry.event === "netplay:delay-request")?.payload as { delay: number; reason: string };
-    expect(request.delay).toBeGreaterThanOrEqual(2);
-    expect(request.delay).toBeLessThanOrEqual(45);
-    expect(request.reason).toBe("network-adaptation");
+    expect(socket.emitted.some((entry) => entry.event === "netplay:delay-request" && (entry.payload as { delay: number }).delay === 2)).toBe(true);
     stop();
     vi.useRealTimers();
   });

@@ -20,15 +20,6 @@ class UniversalNetplayClient(
   private val onDelayUpdate:((delay:Long)->Unit)?=null,
 ){
   private var transport:CloudflareNetplayWebSocket?=null
-
-  private var lastDelayRequestAt=0L
-  private var delayRequestInFlight=false
-  private companion object {
-    const val MIN_INPUT_DELAY=2L
-    const val MAX_INPUT_DELAY=45L
-    const val DELAY_REQUEST_COOLDOWN_MS=2500L
-    const val DELAY_REQUEST_TIMEOUT_MS=4000L
-  }
   fun connect(){
     if(transport!=null)return
     transport=CloudflareNetplayWebSocket(config.serverUrl,config.roomId,config.memberId,config.memberToken,
@@ -36,7 +27,7 @@ class UniversalNetplayClient(
       onConnected={transport?.send("netplay:session-ready",JSONObject().put("isReady",true).put("system",config.system).put("fingerprint",config.fingerprint).put("coreVersion",config.coreVersion));onStatus(config.system.uppercase()+" channel connected - adaptive sync active")},
       onDisconnected={onStatus("Game channel paused; auto-reconnecting...")},
       onError={onStatus("Emulator realtime: "+it)},
-      onQuality={quality->onQuality(quality)},
+      onQuality={quality->onQuality(quality);onDelayUpdate?.invoke(quality.recommendedDelay)},
     )
     transport?.connect()
   }
@@ -47,7 +38,7 @@ class UniversalNetplayClient(
       "netplay:session-start-refused"->onStatus(p.optString("message","The emulator session was refused."))
       "netplay:session-start-pending"->onStatus("Waiting for both devices to finish state synchronization...")
       "netplay:universal-sync-ack"->{if(p.optLong("syncId",-1L)==0L)onStatus("Shared game state acknowledged.")}
-      "netplay:delay-update"->{val d=p.optLong("delay",-1L);if(d in MIN_INPUT_DELAY..MAX_INPUT_DELAY){delayRequestInFlight=false;onDelayUpdate?.invoke(d)}}
+      "netplay:delay-update"->{val d=p.optLong("delay",-1L);if(d in 2..45)onDelayUpdate?.invoke(d)}
       "netplay:universal-state-request"->onStateRequest()
       "netplay:universal-input"->{val id=p.optInt("memberId",0);val frame=p.optLong("frame",-1);val mask=p.optInt("mask",-1);if(id>0&&frame>=0&&mask in 0..0xffff)onRemoteInput(id,frame,mask,p.optInt("analogX",0).coerceIn(-127,127),p.optInt("analogY",0).coerceIn(-127,127))}
       "netplay:universal-state"->{val state=p.optString("snapshot","");val sync=p.optLong("syncId",-1);val enc=p.optString("encoding","");if(state.isNotBlank()&&sync>=0&&(enc=="gzip-base64"||enc=="base64"))onRemoteState(state,sync,enc)}
@@ -67,21 +58,7 @@ class UniversalNetplayClient(
     transport?.send("netplay:session-start-request",JSONObject().put("system",config.system))
   }
   fun sendChat(text:String){val safe=text.trim().take(400);if(safe.isNotEmpty())transport?.send("netplay:chat",JSONObject().put("text",safe))}
-  /**
-   * Requests an authoritative lockstep window change. The relay owns the value:
-   * the answer always arrives as netplay:delay-update and is applied through
-   * onDelayUpdate. Requests are rate limited locally so a 1 s quality cadence
-   * cannot flood the room, and only one request may be outstanding at a time.
-   */
-  fun requestDelayIncrease(delay:Long,reason:String){
-    if(delay !in MIN_INPUT_DELAY..MAX_INPUT_DELAY) return
-    val now=android.os.SystemClock.elapsedRealtime()
-    if(delayRequestInFlight && now-lastDelayRequestAt<DELAY_REQUEST_TIMEOUT_MS) return
-    if(now-lastDelayRequestAt<DELAY_REQUEST_COOLDOWN_MS) return
-    lastDelayRequestAt=now
-    delayRequestInFlight=true
-    transport?.send("netplay:delay-request",JSONObject().put("delay",delay).put("reason",reason))
-  }
+  fun requestDelayIncrease(delay:Long,reason:String){if(delay in 2..45)transport?.send("netplay:delay-request",JSONObject().put("delay",delay).put("reason",reason))}
   fun reportDesync(frame:Long,predictedFrames:Int){transport?.send("netplay:desync-report",JSONObject().put("frame",frame).put("predictedFrames",predictedFrames))}
   fun close(){transport?.close();transport=null}
 }

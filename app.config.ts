@@ -27,7 +27,7 @@ const env = {
 const config: ExpoConfig = {
   name: env.appName,
   slug: env.appSlug,
-  version: "1.0.1",
+  version: "1.0.0.1",
   orientation: "default",
   icon: "./assets/images/classic-era-new-icon.png",
   scheme: env.scheme,
@@ -39,7 +39,7 @@ const config: ExpoConfig = {
     infoPlist: { ITSAppUsesNonExemptEncryption: false },
   },
   android: {
-    versionCode: 2,
+    versionCode: 54,
     adaptiveIcon: {
       backgroundColor: "#101827",
       foregroundImage: "./assets/images/classic-era-new-icon.png",
@@ -79,25 +79,11 @@ const config: ExpoConfig = {
     ["expo-secure-store", { configureAndroidBackup: true }],
     "expo-document-picker",
     "@livekit/react-native-expo-plugin",
-    "./plugins/with-discord-social-sdk",
-    "./plugins/with-android-emulator-tuning",
     [
       "expo-build-properties",
-      {
-        android: {
-          buildArchs: ["armeabi-v7a", "arm64-v8a", "x86", "x86_64"],
-          // Android 8.0 (API 26) is the floor of the supported matrix: every
-          // release from Android 8 through the current version must install the
-          // same package. compileSdk/targetSdk stay on the newest supported
-          // platform so the package keeps working on new Android releases.
-          minSdkVersion: 26,
-          compileSdkVersion: 36,
-          targetSdkVersion: 36,
-        },
-      },
+      { android: { buildArchs: ["arm64-v8a"], minSdkVersion: 24 } },
     ],
   ],
-  extra: { discordApplicationId: process.env.DISCORD_APPLICATION_ID?.trim() ?? "" },
   experiments: { typedRoutes: true, reactCompiler: true },
 };
 
