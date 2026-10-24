@@ -35,6 +35,10 @@ export function getRealtimeRoomSnapshot(input: { roomId: number; memberId: numbe
   return request<RealtimeSnapshot>("rooms.snapshot", input, "GET");
 }
 
+export function leaveRealtimeRoom(input: { roomId: number; memberId: number; memberToken: string }) {
+  return request<{ success: boolean }>("rooms.leave", input, "POST");
+}
+
 export function listPublicRealtimeRooms(limit = 30) {
   return request<RealtimePublicRoom[]>("rooms.publicList", { limit }, "GET");
 }

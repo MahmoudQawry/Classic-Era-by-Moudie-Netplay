@@ -7,7 +7,7 @@ import { ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, Tex
 import { NeonCircuitBackground } from "@/components/neon-circuit-background";
 import { ScreenContainer } from "@/components/screen-container";
 import { haptic } from "@/lib/haptics";
-import { getProfileName, saveProfileName, saveRoomCredential } from "@/lib/room-storage";
+import { clearRoomCredential, getProfileName, saveProfileName, saveRoomCredential } from "@/lib/room-storage";
 import { joinRealtimeRoom } from "@/lib/realtime-room-service";
 
 type JoinAs = "player" | "spectator";
@@ -36,6 +36,7 @@ export default function JoinRoomScreen() {
       setJoining(true);
       const result = await joinRealtimeRoom({ joinCode: joinCode.trim().toUpperCase(), displayName: displayName.trim(), joinAs });
       await saveProfileName(displayName.trim());
+      await clearRoomCredential(result.roomId);
       await saveRoomCredential({ roomId: result.roomId, memberId: result.memberId, memberToken: result.memberToken });
       haptic.success();
       router.replace({ pathname: "/room/[roomId]", params: { roomId: String(result.roomId) } });

@@ -136,6 +136,15 @@ export const appRouter = router({
         if (!room || room.visibility !== "public") throw new Error("هذه الغرفة غير متاحة في الردهة العامة.");
         return seatMemberInRoom(room, input.displayName, input.joinAs);
       }),
+    leave: publicProcedure
+      .input(z.object({ roomId: z.number().int().positive(), memberId: z.number().int().positive(), memberToken: z.string().min(20) }))
+      .mutation(async ({ input }) => {
+        const member = await db.getMemberByAccessToken(input.memberId, hashAccessToken(input.memberToken));
+        if (member && member.roomId === input.roomId && member.role !== "host") {
+          await db.removeRoomMember(input.memberId);
+        }
+        return { success: true };
+      }),
     snapshot: publicProcedure
       .input(z.object({ roomId: z.number().int().positive(), memberId: z.number().int().positive(), memberToken: z.string().min(20) }))
       .query(async ({ input }) => {

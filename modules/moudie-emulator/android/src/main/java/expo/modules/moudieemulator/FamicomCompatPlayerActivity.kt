@@ -1,6 +1,12 @@
 package expo.modules.moudieemulator
 
+import android.app.AlertDialog
+import android.content.Context
 import android.content.pm.ActivityInfo
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
+import android.os.Build
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
@@ -18,6 +24,7 @@ import androidx.activity.ComponentActivity
 import com.swordfish.libretrodroid.GLRetroView
 import com.swordfish.libretrodroid.GLRetroViewData
 import com.swordfish.libretrodroid.ShaderConfig
+import com.swordfish.libretrodroid.Variable
 import java.io.File
 import java.io.FileOutputStream
 import java.security.MessageDigest
@@ -58,8 +65,100 @@ class FamicomCompatPlayerActivity : ComponentActivity() {
   private val gameplayHud = mutableListOf<View>()
   @Volatile private var stateActionInProgress = false
 
+  private var audioManager: AudioManager? = null
+  private var audioFocusRequest: AudioFocusRequest? = null
+  private var fpsLimit: String = "60"
+  private var frameSkip: String = "auto"
+
+  private fun setupGameAudioFocus() {
+    try {
+      val am = getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return
+      audioManager = am
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        val playbackAttributes = AudioAttributes.Builder()
+          .setUsage(AudioAttributes.USAGE_GAME)
+          .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+          .build()
+        val focusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+          .setAudioAttributes(playbackAttributes)
+          .setAcceptsDelayedFocusGain(true)
+          .setWillPauseWhenDucked(false)
+          .setOnAudioFocusChangeListener { /* maintain concurrent playback with voice chat */ }
+          .build()
+        audioFocusRequest = focusRequest
+        am.requestAudioFocus(focusRequest)
+      } else {
+        @Suppress("DEPRECATION")
+        am.requestAudioFocus(null, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN)
+      }
+    } catch (_: Throwable) {
+    }
+  }
+
+  private fun releaseGameAudioFocus() {
+    try {
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        audioFocusRequest?.let { audioManager?.abandonAudioFocusRequest(it) }
+      } else {
+        @Suppress("DEPRECATION")
+        audioManager?.abandonAudioFocus(null)
+      }
+    } catch (_: Throwable) {
+    }
+  }
+
+  private fun loadPerformancePreferences() {
+    fpsLimit = controlPreferences.getString("fps-limit", "60") ?: "60"
+    frameSkip = controlPreferences.getString("frame-skip", "auto") ?: "auto"
+    applyPerformanceSettings()
+  }
+
+  private fun applyPerformanceSettings() {
+    runCatching {
+      val vars = retroView.getVariables()
+      val frameskipVar = vars.firstOrNull { it.key.contains("frameskip", ignoreCase = true) }
+      if (frameskipVar != null) {
+        val targetVal = if (frameSkip == "auto") "auto" else "disabled"
+        retroView.updateVariables(Variable(frameskipVar.key, targetVal, frameskipVar.description))
+      }
+    }
+  }
+
+  private fun toggleFpsLimit() {
+    val options = arrayOf("30 FPS", "60 FPS", "UNCAPPED")
+    val currentIdx = when (fpsLimit) { "30" -> 0; "uncapped" -> 2; else -> 1 }
+    AlertDialog.Builder(this)
+      .setTitle("FPS LIMIT")
+      .setSingleChoiceItems(options, currentIdx) { dialog, which ->
+        fpsLimit = when (which) { 0 -> "30"; 2 -> "uncapped"; else -> "60" }
+        controlPreferences.edit().putString("fps-limit", fpsLimit).apply()
+        showToast("FPS limit set to: ${options[which]}")
+        applyPerformanceSettings()
+        dialog.dismiss()
+      }
+      .setNegativeButton("CANCEL", null)
+      .show()
+  }
+
+  private fun toggleFrameSkip() {
+    val options = arrayOf("AUTO (RECOMMENDED)", "OFF")
+    val currentIdx = if (frameSkip == "auto") 0 else 1
+    AlertDialog.Builder(this)
+      .setTitle("AUTO FRAME-SKIP")
+      .setSingleChoiceItems(options, currentIdx) { dialog, which ->
+        frameSkip = if (which == 0) "auto" else "off"
+        controlPreferences.edit().putString("frame-skip", frameSkip).apply()
+        showToast("Frame-skip set to: ${options[which]}")
+        applyPerformanceSettings()
+        dialog.dismiss()
+      }
+      .setNegativeButton("CANCEL", null)
+      .show()
+  }
+
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
+    setupGameAudioFocus()
     focusMode = intent.getBooleanExtra(EXTRA_FOCUS_MODE, false)
     requestedOrientation = when (intent.getStringExtra(EXTRA_PLAYER_ORIENTATION)) {
       "portrait" -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
@@ -108,7 +207,7 @@ class FamicomCompatPlayerActivity : ComponentActivity() {
     root.addView(controlsContainer, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM))
     renderControls()
     setContentView(root)
-    root.post { applyAspectRatio(); restoreScreenLayout(); enableScreenEditor() }
+    root.post { applyAspectRatio(); restoreScreenLayout(); enableScreenEditor(); loadPerformancePreferences() }
   }
 
   override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
@@ -121,9 +220,20 @@ class FamicomCompatPlayerActivity : ComponentActivity() {
     return super.onKeyUp(keyCode, event)
   }
 
+  override fun onResume() {
+    super.onResume()
+    setupGameAudioFocus()
+  }
+
   override fun onPause() {
+    releaseGameAudioFocus()
     if (::retroView.isInitialized && !isChangingConfigurations) saveState(silent = true)
     super.onPause()
+  }
+
+  override fun onDestroy() {
+    releaseGameAudioFocus()
+    super.onDestroy()
   }
 
   private fun createHeader(gameFile: File): LinearLayout = LinearLayout(this).apply {
@@ -168,9 +278,24 @@ class FamicomCompatPlayerActivity : ComponentActivity() {
   }
 
   private fun showGameplayOptions() {
+    val items = arrayOf(
+      "EDIT CONTROLS & SCREEN",
+      "SAVE GAME",
+      "LOAD GAME",
+      "FPS LIMIT (${fpsLimit.uppercase()})",
+      "FRAME-SKIP (${frameSkip.uppercase()})",
+      "EXIT GAME"
+    )
     android.app.AlertDialog.Builder(this)
-      .setItems(arrayOf("EDIT CONTROLS & SCREEN", "SAVE GAME", "LOAD GAME", "EXIT GAME")) { _, index ->
-        when (index) { 0 -> toggleControlEditing(); 1 -> saveState(); 2 -> loadState(); else -> finish() }
+      .setItems(items) { _, index ->
+        when (index) {
+          0 -> toggleControlEditing()
+          1 -> saveState()
+          2 -> loadState()
+          3 -> toggleFpsLimit()
+          4 -> toggleFrameSkip()
+          else -> finish()
+        }
       }
       .show()
   }

@@ -184,6 +184,24 @@ function LiveKitVoiceControls({ members, localMemberId, socket }: { members?: Vo
     return () => { sock.off?.("netplay:voice-status", onVoiceStatus); };
   }, [socket, voiceChannel]);
 
+  // Continuous keep-alive heartbeat so LiveKit & voice WebSocket connections never time out.
+  useEffect(() => {
+    const pingHeartbeat = () => {
+      socketRef.current?.emit?.("netplay:voice-status", {
+        microphoneEnabled: isMicrophoneEnabled,
+        speakerEnabled: speaker,
+        voiceChannel,
+        isSpeaking: isMicrophoneEnabled,
+      });
+      if (connectionState === ConnectionState.Connected) {
+        localParticipant.publishData(new Uint8Array([0]), { reliable: false }).catch(() => {});
+      }
+    };
+    pingHeartbeat();
+    const interval = setInterval(pingHeartbeat, 10_000);
+    return () => clearInterval(interval);
+  }, [isMicrophoneEnabled, speaker, voiceChannel, connectionState, localParticipant]);
+
   // Speaking heartbeat (the relay may strip isSpeaking, mic-on is the signal).
   useEffect(() => {
     if (!isMicrophoneEnabled) return;

@@ -221,7 +221,18 @@ export async function addRoomMemberWithCapacity(input: {
       .for("update");
     if (!room || room.status !== "waiting") throw new Error("الغرفة غير متاحة للانضمام.");
 
-    const members = await tx.select({ role: roomMembers.role }).from(roomMembers).where(eq(roomMembers.roomId, input.roomId));
+    const members = await tx.select({ id: roomMembers.id, displayName: roomMembers.displayName, role: roomMembers.role }).from(roomMembers).where(eq(roomMembers.roomId, input.roomId));
+    const existing = members.find((m) => m.displayName.trim().toLowerCase() === input.displayName.trim().toLowerCase() && m.role !== "host");
+    if (existing) {
+      await tx.update(roomMembers)
+        .set({
+          accessTokenHash: input.accessTokenHash,
+          role: input.role,
+          isReady: false,
+        })
+        .where(eq(roomMembers.id, existing.id));
+      return existing.id;
+    }
     const decision = decideSeat(members, input.role, roomCapacityFor(room.system as RoomSystem));
     if (!decision.allowed) {
       if (decision.reason === "players-full") throw new Error(`مقاعد اللعب (${input.maxPlayers}) مكتملة. يمكنك الدخول كمشاهد.`);
@@ -237,6 +248,12 @@ export async function addRoomMemberWithCapacity(input: {
     });
     return Number(result[0].insertId);
   });
+}
+
+export async function removeRoomMember(memberId: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.delete(roomMembers).where(eq(roomMembers.id, memberId));
 }
 
 export async function getRoomMemberCount(roomId: number, role?: "host" | "player" | "spectator") {

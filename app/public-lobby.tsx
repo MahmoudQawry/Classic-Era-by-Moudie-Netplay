@@ -6,7 +6,7 @@ import { ActivityIndicator, Alert, FlatList, Image, Pressable, StyleSheet, Text,
 import { NeonCircuitBackground } from "@/components/neon-circuit-background";
 import { ScreenContainer } from "@/components/screen-container";
 import { haptic } from "@/lib/haptics";
-import { getProfileName, saveProfileName, saveRoomCredential } from "@/lib/room-storage";
+import { clearRoomCredential, getProfileName, saveProfileName, saveRoomCredential } from "@/lib/room-storage";
 import { useLanguage } from "@/lib/language";
 import { joinPublicRealtimeRoom, listPublicRealtimeRooms, type RealtimePublicRoom } from "@/lib/realtime-room-service";
 
@@ -48,6 +48,7 @@ export default function PublicLobbyScreen() {
       setJoiningRoomId(room.id);
       const membership = await joinPublicRealtimeRoom({ roomId: room.id, displayName: displayName.trim(), joinAs });
       await saveProfileName(displayName.trim());
+      await clearRoomCredential(membership.roomId);
       await saveRoomCredential({ roomId: membership.roomId, memberId: membership.memberId, memberToken: membership.memberToken });
       haptic.success();
       router.replace({ pathname: "/room/[roomId]", params: { roomId: String(membership.roomId) } });

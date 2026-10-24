@@ -7,7 +7,8 @@ import { RoomChat } from "@/components/room-chat";
 import { RoomVoiceChat } from "@/components/room-voice-chat";
 import { haptic } from "@/lib/haptics";
 import { createNetplaySocket } from "@/lib/netplay-socket";
-import { getRoomCredential, type RoomCredential } from "@/lib/room-storage";
+import { clearRoomCredential, getRoomCredential, type RoomCredential } from "@/lib/room-storage";
+import { leaveRealtimeRoom } from "@/lib/realtime-room-service";
 import { trpc } from "@/lib/trpc";
 import { useLanguage } from "@/lib/language";
 import { useRealtimeRoomSnapshot } from "@/lib/use-realtime-room-snapshot";
@@ -70,6 +71,22 @@ export default function RoomScreen() {
   const snapshot = snapshotQuery.data;
   const roomMember = snapshot?.members.find((member) => member.id === credential?.memberId);
 
+  const exitRoom = async () => {
+    if (Number.isFinite(roomId)) {
+      if (credential?.memberId && credential?.memberToken) {
+        leaveRealtimeRoom({ roomId, memberId: credential.memberId, memberToken: credential.memberToken }).catch(() => {});
+      }
+      await clearRoomCredential(roomId).catch(() => {});
+    }
+    router.replace("/");
+  };
+
+  useEffect(() => {
+    if (snapshotQuery.error && Number.isFinite(roomId)) {
+      clearRoomCredential(roomId).catch(() => {});
+    }
+  }, [snapshotQuery.error, roomId]);
+
   const share = async () => {
     if (!snapshot) return;
     haptic.light();
@@ -84,7 +101,7 @@ export default function RoomScreen() {
       <ScreenContainer className="items-center justify-center px-7">
         <Text style={styles.errorTitle}>{t("rmOpenError")}</Text>
         <Text style={styles.errorText}>{t("rmOpenErrorText")}</Text>
-        <Pressable onPress={() => router.replace("/")} style={({ pressed }) => [styles.outlineButton, pressed && styles.pressed]}><Text style={styles.outlineText}>{t("rmReturnLobby")}</Text></Pressable>
+        <Pressable onPress={exitRoom} style={({ pressed }) => [styles.outlineButton, pressed && styles.pressed]}><Text style={styles.outlineText}>{t("rmReturnLobby")}</Text></Pressable>
       </ScreenContainer>
     );
   }
@@ -98,7 +115,7 @@ export default function RoomScreen() {
     <ScreenContainer className="px-5" edges={["top", "bottom", "left", "right"]}>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.topRow}>
-          <Pressable onPress={() => router.replace("/")} style={({ pressed }) => [styles.back, pressed && styles.pressed]}><Text style={styles.backText}>‹ {t("lobby")}</Text></Pressable>
+          <Pressable onPress={exitRoom} style={({ pressed }) => [styles.back, pressed && styles.pressed]}><Text style={styles.backText}>‹ {t("lobby")}</Text></Pressable>
           <View style={styles.live}><View style={styles.liveDot} /><Text style={styles.liveText}>{snapshot.room.status === "waiting" ? t("rmWaiting") : t("rmActive")}</Text></View>
         </View>
         <Text style={styles.system}>{SYSTEM_LABEL[snapshot.room.system]}</Text>

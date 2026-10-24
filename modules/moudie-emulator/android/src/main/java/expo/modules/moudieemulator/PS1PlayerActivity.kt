@@ -1,6 +1,10 @@
 package expo.modules.moudieemulator
 
 import android.content.Context
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
+import android.os.Build
 import android.app.AlertDialog
 import android.content.pm.ActivityInfo
 import android.graphics.Color
@@ -143,8 +147,100 @@ class PS1PlayerActivity : ComponentActivity() {
   @Volatile
   private var stateActionInProgress = false
 
+  private var audioManager: AudioManager? = null
+  private var audioFocusRequest: AudioFocusRequest? = null
+  private var fpsLimit: String = "60"
+  private var frameSkip: String = "auto"
+
+  private fun setupGameAudioFocus() {
+    try {
+      val am = getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return
+      audioManager = am
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        val playbackAttributes = AudioAttributes.Builder()
+          .setUsage(AudioAttributes.USAGE_GAME)
+          .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+          .build()
+        val focusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+          .setAudioAttributes(playbackAttributes)
+          .setAcceptsDelayedFocusGain(true)
+          .setWillPauseWhenDucked(false)
+          .setOnAudioFocusChangeListener { /* maintain concurrent audio with voice chat */ }
+          .build()
+        audioFocusRequest = focusRequest
+        am.requestAudioFocus(focusRequest)
+      } else {
+        @Suppress("DEPRECATION")
+        am.requestAudioFocus(null, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN)
+      }
+    } catch (_: Throwable) {
+    }
+  }
+
+  private fun releaseGameAudioFocus() {
+    try {
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        audioFocusRequest?.let { audioManager?.abandonAudioFocusRequest(it) }
+      } else {
+        @Suppress("DEPRECATION")
+        audioManager?.abandonAudioFocus(null)
+      }
+    } catch (_: Throwable) {
+    }
+  }
+
+  private fun loadPerformancePreferences() {
+    fpsLimit = preferences.getString("fps-limit", "60") ?: "60"
+    frameSkip = preferences.getString("frame-skip", "auto") ?: "auto"
+    applyPerformanceSettings()
+  }
+
+  private fun applyPerformanceSettings() {
+    runCatching {
+      val vars = retroView.getVariables()
+      val frameskipVar = vars.firstOrNull { it.key.contains("frameskip", ignoreCase = true) }
+      if (frameskipVar != null) {
+        val targetVal = if (frameSkip == "auto") "auto" else "disabled"
+        retroView.updateVariables(Variable(frameskipVar.key, targetVal, frameskipVar.description))
+      }
+    }
+  }
+
+  private fun toggleFpsLimit() {
+    val options = arrayOf("30 FPS", "60 FPS", "UNCAPPED")
+    val currentIdx = when (fpsLimit) { "30" -> 0; "uncapped" -> 2; else -> 1 }
+    AlertDialog.Builder(this)
+      .setTitle("FPS LIMIT")
+      .setSingleChoiceItems(options, currentIdx) { dialog, which ->
+        fpsLimit = when (which) { 0 -> "30"; 2 -> "uncapped"; else -> "60" }
+        preferences.edit().putString("fps-limit", fpsLimit).apply()
+        showToast("FPS limit set to: ${options[which]}")
+        applyPerformanceSettings()
+        dialog.dismiss()
+      }
+      .setNegativeButton("CANCEL", null)
+      .show()
+  }
+
+  private fun toggleFrameSkip() {
+    val options = arrayOf("AUTO (RECOMMENDED)", "OFF")
+    val currentIdx = if (frameSkip == "auto") 0 else 1
+    AlertDialog.Builder(this)
+      .setTitle("AUTO FRAME-SKIP")
+      .setSingleChoiceItems(options, currentIdx) { dialog, which ->
+        frameSkip = if (which == 0) "auto" else "off"
+        preferences.edit().putString("frame-skip", frameSkip).apply()
+        showToast("Frame-skip set to: ${options[which]}")
+        applyPerformanceSettings()
+        dialog.dismiss()
+      }
+      .setNegativeButton("CANCEL", null)
+      .show()
+  }
+
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
+    setupGameAudioFocus()
     requestedOrientation = when (intent.getStringExtra(EXTRA_PLAYER_ORIENTATION)) {
       "portrait" -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
       "landscape" -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
@@ -235,6 +331,7 @@ class PS1PlayerActivity : ComponentActivity() {
     setContentView(root)
     root.post { applyAspectRatio(); restoreScreenLayout(); enableScreenEditor() }
     connectNetplayIfConfigured()
+    loadPerformancePreferences()
   }
 
   override fun onGenericMotionEvent(event: MotionEvent?): Boolean {
@@ -259,12 +356,14 @@ class PS1PlayerActivity : ComponentActivity() {
   override fun onPause() {
     Choreographer.getInstance().removeFrameCallback(frameMeter)
     releaseAnalogAxis()
+    releaseGameAudioFocus()
     if (::retroView.isInitialized && !isChangingConfigurations) saveState(silent = true, slot = 1)
     super.onPause()
   }
 
   override fun onResume() {
     super.onResume()
+    setupGameAudioFocus()
     Choreographer.getInstance().postFrameCallback(frameMeter)
   }
 
@@ -272,6 +371,7 @@ class PS1PlayerActivity : ComponentActivity() {
     stopLockstep()
     stopBootstrapRetry()
     netplayClient?.close()
+    releaseGameAudioFocus()
     onOverlayAction = null
     super.onDestroy()
   }
@@ -875,9 +975,27 @@ class PS1PlayerActivity : ComponentActivity() {
   }
 
   private fun showGameplayOptions() {
+    val items = arrayOf(
+      "EDIT CONTROLS & SCREEN",
+      "SAVE STATE",
+      "LOAD STATE",
+      "MEMORY CARD",
+      "FPS LIMIT (${fpsLimit.uppercase()})",
+      "FRAME-SKIP (${frameSkip.uppercase()})",
+      "EXIT GAME"
+    )
+
     android.app.AlertDialog.Builder(this)
-      .setItems(arrayOf("EDIT CONTROLS & SCREEN", "SAVE STATE", "LOAD STATE", "MEMORY CARD", "EXIT GAME")) { _, index ->
-        when (index) { 0 -> beginGameplayEditor(); 1 -> chooseStateSlot(true); 2 -> chooseStateSlot(false); 3 -> showMemoryCardInfo(); else -> finish() }
+      .setItems(items) { _, index ->
+        when (index) {
+          0 -> beginGameplayEditor()
+          1 -> chooseStateSlot(true)
+          2 -> chooseStateSlot(false)
+          3 -> showMemoryCardInfo()
+          4 -> toggleFpsLimit()
+          5 -> toggleFrameSkip()
+          else -> finish()
+        }
       }
       .show()
   }

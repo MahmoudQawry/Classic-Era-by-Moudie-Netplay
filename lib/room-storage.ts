@@ -26,6 +26,14 @@ async function getValue(key: string) {
   return SecureStore.getItemAsync(key);
 }
 
+async function deleteValue(key: string) {
+  if (Platform.OS === "web") {
+    sessionStorage.removeItem(key);
+    return;
+  }
+  await SecureStore.deleteItemAsync(key);
+}
+
 export async function saveProfileName(name: string) {
   await setValue(profileKey, name.trim());
 }
@@ -62,4 +70,8 @@ export async function getRoomCredential(roomId: number): Promise<RoomCredential 
   } catch {
     return null;
   }
+}
+
+export async function clearRoomCredential(roomId: number): Promise<void> {
+  await deleteValue(roomKey(roomId));
 }

@@ -29,7 +29,7 @@ export async function createRoomMediaToken(input: {
   const token = new AccessToken(runtime.apiKey, runtime.apiSecret, {
     identity,
     name: input.displayName,
-    ttl: "2h",
+    ttl: "24h",
     metadata: JSON.stringify({ roomId: input.roomId, memberId: input.memberId, role: input.role }),
     attributes: { role: input.role, roomId: String(input.roomId) },
   });

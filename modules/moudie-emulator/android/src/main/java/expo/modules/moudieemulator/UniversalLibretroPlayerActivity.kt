@@ -2,6 +2,10 @@ package expo.modules.moudieemulator
 
 import android.app.AlertDialog
 import android.content.Context
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
+import android.os.Build
 import android.content.pm.ActivityInfo
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
@@ -25,6 +29,7 @@ import androidx.lifecycle.lifecycleScope
 import com.swordfish.libretrodroid.GLRetroView
 import com.swordfish.libretrodroid.GLRetroViewData
 import com.swordfish.libretrodroid.ShaderConfig
+import com.swordfish.libretrodroid.Variable
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -123,8 +128,100 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
     }
   }
 
+  private var audioManager: AudioManager? = null
+  private var audioFocusRequest: AudioFocusRequest? = null
+  private var fpsLimit: String = "60"
+  private var frameSkip: String = "auto"
+
+  private fun setupGameAudioFocus() {
+    try {
+      val am = getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return
+      audioManager = am
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        val playbackAttributes = AudioAttributes.Builder()
+          .setUsage(AudioAttributes.USAGE_GAME)
+          .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+          .build()
+        val focusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+          .setAudioAttributes(playbackAttributes)
+          .setAcceptsDelayedFocusGain(true)
+          .setWillPauseWhenDucked(false)
+          .setOnAudioFocusChangeListener { /* maintain concurrent audio with voice chat */ }
+          .build()
+        audioFocusRequest = focusRequest
+        am.requestAudioFocus(focusRequest)
+      } else {
+        @Suppress("DEPRECATION")
+        am.requestAudioFocus(null, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN)
+      }
+    } catch (_: Throwable) {
+    }
+  }
+
+  private fun releaseGameAudioFocus() {
+    try {
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        audioFocusRequest?.let { audioManager?.abandonAudioFocusRequest(it) }
+      } else {
+        @Suppress("DEPRECATION")
+        audioManager?.abandonAudioFocus(null)
+      }
+    } catch (_: Throwable) {
+    }
+  }
+
+  private fun loadPerformancePreferences() {
+    fpsLimit = preferences.getString("fps-limit", "60") ?: "60"
+    frameSkip = preferences.getString("frame-skip", "auto") ?: "auto"
+    applyPerformanceSettings()
+  }
+
+  private fun applyPerformanceSettings() {
+    runCatching {
+      val vars = retroView.getVariables()
+      val frameskipVar = vars.firstOrNull { it.key.contains("frameskip", ignoreCase = true) }
+      if (frameskipVar != null) {
+        val targetVal = if (frameSkip == "auto") "auto" else "disabled"
+        retroView.updateVariables(Variable(frameskipVar.key, targetVal, frameskipVar.description))
+      }
+    }
+  }
+
+  private fun toggleFpsLimit() {
+    val options = arrayOf("30 FPS", "60 FPS", "UNCAPPED")
+    val currentIdx = when (fpsLimit) { "30" -> 0; "uncapped" -> 2; else -> 1 }
+    AlertDialog.Builder(this)
+      .setTitle("FPS LIMIT")
+      .setSingleChoiceItems(options, currentIdx) { dialog, which ->
+        fpsLimit = when (which) { 0 -> "30"; 2 -> "uncapped"; else -> "60" }
+        preferences.edit().putString("fps-limit", fpsLimit).apply()
+        showToast("FPS limit set to: ${options[which]}")
+        applyPerformanceSettings()
+        dialog.dismiss()
+      }
+      .setNegativeButton("CANCEL", null)
+      .show()
+  }
+
+  private fun toggleFrameSkip() {
+    val options = arrayOf("AUTO (RECOMMENDED)", "OFF")
+    val currentIdx = if (frameSkip == "auto") 0 else 1
+    AlertDialog.Builder(this)
+      .setTitle("AUTO FRAME-SKIP")
+      .setSingleChoiceItems(options, currentIdx) { dialog, which ->
+        frameSkip = if (which == 0) "auto" else "off"
+        preferences.edit().putString("frame-skip", frameSkip).apply()
+        showToast("Frame-skip set to: ${options[which]}")
+        applyPerformanceSettings()
+        dialog.dismiss()
+      }
+      .setNegativeButton("CANCEL", null)
+      .show()
+  }
+
   override fun onCreate(state: Bundle?) {
     super.onCreate(state)
+    setupGameAudioFocus()
     requestedOrientation = when (intent.getStringExtra(EXTRA_PLAYER_ORIENTATION)) {
       "portrait" -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
       "landscape" -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
@@ -164,11 +261,12 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
     setContentView(root)
     root.post { applyAspectRatio(); restoreScreen(); enableScreenEditor(); if (editMode) showEditorBar() }
     connectNetplayIfConfigured()
+    loadPerformancePreferences()
   }
 
-  override fun onResume() { super.onResume(); Choreographer.getInstance().postFrameCallback(frameMeter) }
-  override fun onPause() { Choreographer.getInstance().removeFrameCallback(frameMeter); releaseAll(); analogStick?.releaseAxis(); super.onPause() }
-  override fun onDestroy() { stopLockstep(); netplayClient?.close(); onOverlayAction = null; super.onDestroy() }
+  override fun onResume() { super.onResume(); setupGameAudioFocus(); Choreographer.getInstance().postFrameCallback(frameMeter) }
+  override fun onPause() { Choreographer.getInstance().removeFrameCallback(frameMeter); releaseAll(); analogStick?.releaseAxis(); releaseGameAudioFocus(); super.onPause() }
+  override fun onDestroy() { stopLockstep(); netplayClient?.close(); releaseGameAudioFocus(); onOverlayAction = null; super.onDestroy() }
   override fun onKeyDown(k: Int, e: KeyEvent): Boolean { sendLocalKey(KeyEvent.ACTION_DOWN, k); return super.onKeyDown(k, e) }
   override fun onKeyUp(k: Int, e: KeyEvent): Boolean { sendLocalKey(KeyEvent.ACTION_UP, k); return super.onKeyUp(k, e) }
   override fun onGenericMotionEvent(e: MotionEvent?): Boolean { if (e != null) { retroView.sendMotionEvent(GLRetroView.MOTION_SOURCE_DPAD, e.getAxisValue(MotionEvent.AXIS_HAT_X), e.getAxisValue(MotionEvent.AXIS_HAT_Y), localPlayerIndex); retroView.sendMotionEvent(GLRetroView.MOTION_SOURCE_ANALOG_LEFT, e.getAxisValue(MotionEvent.AXIS_X), e.getAxisValue(MotionEvent.AXIS_Y), localPlayerIndex); retroView.sendMotionEvent(GLRetroView.MOTION_SOURCE_ANALOG_RIGHT, e.getAxisValue(MotionEvent.AXIS_Z), e.getAxisValue(MotionEvent.AXIS_RZ), localPlayerIndex) }; return super.onGenericMotionEvent(e) }
@@ -516,7 +614,28 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
       if (message.isNotEmpty()) netplayClient?.sendChat(message)
     }.show()
   }
-  private fun menu() { AlertDialog.Builder(this).setItems(arrayOf(if (editMode) "FINISH EDITING" else "EDIT CONTROLS & SCREEN", "SAVE STATE", "LOAD STATE", "RESET CONTROLS", "EXIT GAME")) { _, i -> when (i) { 0 -> toggleEdit(); 1 -> chooseStateSlot(true); 2 -> chooseStateSlot(false); 3 -> reset(); else -> finish() } }.show() }
+  private fun menu() {
+    val items = arrayOf(
+      if (editMode) "FINISH EDITING" else "EDIT CONTROLS & SCREEN",
+      "SAVE STATE",
+      "LOAD STATE",
+      "RESET CONTROLS",
+      "FPS LIMIT (${fpsLimit.uppercase()})",
+      "FRAME-SKIP (${frameSkip.uppercase()})",
+      "EXIT GAME"
+    )
+    AlertDialog.Builder(this).setItems(items) { _, i ->
+      when (i) {
+        0 -> toggleEdit()
+        1 -> chooseStateSlot(true)
+        2 -> chooseStateSlot(false)
+        3 -> reset()
+        4 -> toggleFpsLimit()
+        5 -> toggleFrameSkip()
+        else -> finish()
+      }
+    }.show()
+  }
 
   private fun chooseStateSlot(save: Boolean) {
     val labels = Array(5) { index ->
