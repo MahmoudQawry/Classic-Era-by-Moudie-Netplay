@@ -179,7 +179,7 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
   private fun applyPerformanceSettings() {
     runCatching {
       val vars = retroView.getVariables()
-      val frameskipVar = vars.firstOrNull { it.key.contains("frameskip", ignoreCase = true) }
+      val frameskipVar = vars.firstOrNull { it.key?.contains("frameskip", ignoreCase = true) == true }
       if (frameskipVar != null) {
         val targetVal = if (frameSkip == "auto") "auto" else "disabled"
         retroView.updateVariables(Variable(frameskipVar.key, targetVal, frameskipVar.description))
@@ -192,7 +192,7 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
     val currentIdx = when (fpsLimit) { "30" -> 0; "uncapped" -> 2; else -> 1 }
     AlertDialog.Builder(this)
       .setTitle("FPS LIMIT")
-      .setSingleChoiceItems(options, currentIdx) { dialog, which ->
+      .setSingleChoiceItems(options, currentIdx) { dialog: android.content.DialogInterface, which: Int ->
         fpsLimit = when (which) { 0 -> "30"; 2 -> "uncapped"; else -> "60" }
         preferences.edit().putString("fps-limit", fpsLimit).apply()
         showToast("FPS limit set to: ${options[which]}")
@@ -208,7 +208,7 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
     val currentIdx = if (frameSkip == "auto") 0 else 1
     AlertDialog.Builder(this)
       .setTitle("AUTO FRAME-SKIP")
-      .setSingleChoiceItems(options, currentIdx) { dialog, which ->
+      .setSingleChoiceItems(options, currentIdx) { dialog: android.content.DialogInterface, which: Int ->
         frameSkip = if (which == 0) "auto" else "off"
         preferences.edit().putString("frame-skip", frameSkip).apply()
         showToast("Frame-skip set to: ${options[which]}")

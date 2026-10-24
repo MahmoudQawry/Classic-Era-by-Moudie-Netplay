@@ -190,15 +190,15 @@ class PS1PlayerActivity : ComponentActivity() {
   }
 
   private fun loadPerformancePreferences() {
-    fpsLimit = preferences.getString("fps-limit", "60") ?: "60"
-    frameSkip = preferences.getString("frame-skip", "auto") ?: "auto"
+    fpsLimit = controlPreferences.getString("fps-limit", "60") ?: "60"
+    frameSkip = controlPreferences.getString("frame-skip", "auto") ?: "auto"
     applyPerformanceSettings()
   }
 
   private fun applyPerformanceSettings() {
     runCatching {
       val vars = retroView.getVariables()
-      val frameskipVar = vars.firstOrNull { it.key.contains("frameskip", ignoreCase = true) }
+      val frameskipVar = vars.firstOrNull { it.key?.contains("frameskip", ignoreCase = true) == true }
       if (frameskipVar != null) {
         val targetVal = if (frameSkip == "auto") "auto" else "disabled"
         retroView.updateVariables(Variable(frameskipVar.key, targetVal, frameskipVar.description))
@@ -211,9 +211,9 @@ class PS1PlayerActivity : ComponentActivity() {
     val currentIdx = when (fpsLimit) { "30" -> 0; "uncapped" -> 2; else -> 1 }
     AlertDialog.Builder(this)
       .setTitle("FPS LIMIT")
-      .setSingleChoiceItems(options, currentIdx) { dialog, which ->
+      .setSingleChoiceItems(options, currentIdx) { dialog: android.content.DialogInterface, which: Int ->
         fpsLimit = when (which) { 0 -> "30"; 2 -> "uncapped"; else -> "60" }
-        preferences.edit().putString("fps-limit", fpsLimit).apply()
+        controlPreferences.edit().putString("fps-limit", fpsLimit).apply()
         showToast("FPS limit set to: ${options[which]}")
         applyPerformanceSettings()
         dialog.dismiss()
@@ -227,9 +227,9 @@ class PS1PlayerActivity : ComponentActivity() {
     val currentIdx = if (frameSkip == "auto") 0 else 1
     AlertDialog.Builder(this)
       .setTitle("AUTO FRAME-SKIP")
-      .setSingleChoiceItems(options, currentIdx) { dialog, which ->
+      .setSingleChoiceItems(options, currentIdx) { dialog: android.content.DialogInterface, which: Int ->
         frameSkip = if (which == 0) "auto" else "off"
-        preferences.edit().putString("frame-skip", frameSkip).apply()
+        controlPreferences.edit().putString("frame-skip", frameSkip).apply()
         showToast("Frame-skip set to: ${options[which]}")
         applyPerformanceSettings()
         dialog.dismiss()
