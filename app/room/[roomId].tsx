@@ -122,7 +122,7 @@ export default function RoomScreen() {
     {!romLoaded ? (
       <Pressable
         onPress={() => {
-          haptic.medium();
+          haptic.light();
           setRomLoaded(true);
           if (socketRef.current && credential) {
             socketRef.current.emit("netplay:rom-loaded-ok", {

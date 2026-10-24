@@ -5,6 +5,7 @@ import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, StyleSheet, 
 import { ScreenContainer } from "@/components/screen-container";
 import { useLanguage } from "@/lib/language";
 import { RoomChat } from "@/components/room-chat";
+import type { RoomVoiceChatHandle } from "@/components/room-voice-chat";
 import { SquadVoiceControls } from "@/components/squad-voice-controls";
 import { getRoomRelayUrl, createNetplaySocket } from "@/lib/netplay-socket";
 import { setRealtimeRoomReady } from "@/lib/realtime-room-service";
