@@ -21,7 +21,7 @@ class AudioBridge(private val context: Context) {
     return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
       val attributes = AudioAttributes.Builder()
         .setUsage(AudioAttributes.USAGE_GAME)
-        .setContentType(AudioAttributes.CONTENT_TYPE_GAME)
+        .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
         .build()
 
       val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
