@@ -3,7 +3,8 @@ import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Platform, Pressable, ScrollView, Share, StyleSheet, Text, View } from "react-native";
 import { ScreenContainer } from "@/components/screen-container";
 import { RoomChat } from "@/components/room-chat";
-import { RoomVoiceChat } from "@/components/room-voice-chat";
+import { SquadVoiceControls } from "@/components/squad-voice-controls";
+import { useVoiceChat } from "@/lib/voice-chat-context";
 import { haptic } from "@/lib/haptics";
 import { createNetplaySocket } from "@/lib/netplay-socket";
 import { getRoomCredential, type RoomCredential } from "@/lib/room-storage";
@@ -22,28 +23,69 @@ export default function RoomScreen() {
   const { roomId: rawRoomId } = useLocalSearchParams<{ roomId: string }>();
   const roomId = Number(rawRoomId);
   const [credential, setCredential] = useState<RoomCredential | null | undefined>(undefined);
-  const [mediaToken, setMediaToken] = useState<MediaToken | null>(null);
   const socketRef = useRef<ReturnType<typeof createNetplaySocket> | null>(null);
   const [roomConnected, setRoomConnected] = useState(false);
   const [showChat, setShowChat] = useState(false);
+  const [romLoaded, setRomLoaded] = useState(false);
+  const [loadedCount, setLoadedCount] = useState(0);
 
-  useEffect(() => { if (Number.isFinite(roomId)) getRoomCredential(roomId).then(setCredential); }, [roomId]);
-  const mediaTokenMutation = trpc.rooms.mediaToken.useMutation();
+  const { joinVoice, setMembersList } = useVoiceChat();
+
+  useEffect(() => {
+    if (Number.isFinite(roomId)) getRoomCredential(roomId).then(setCredential);
+  }, [roomId]);
+
   useEffect(() => {
     if (!credential || Platform.OS === "web") return;
-    let cancelled = false;
-    const refresh = async () => { try { const next = await mediaTokenMutation.mutateAsync({ roomId, memberId: credential.memberId, memberToken: credential.memberToken }); if (!cancelled) setMediaToken(next); } catch { if (!cancelled) setMediaToken({ configured: false, message: t("voiceSetupFailed") }); } };
-    void refresh(); const timer = setInterval(() => { void refresh(); }, 15 * 60 * 1000);
-    return () => { cancelled = true; clearInterval(timer); };
-  }, [credential, mediaTokenMutation, roomId, t]);
+    joinVoice({ roomId, memberId: credential.memberId, memberToken: credential.memberToken });
+  }, [credential, roomId, joinVoice]);
 
   useEffect(() => {
     if (!credential || Platform.OS === "web") return;
     const socket = createNetplaySocket({ roomId, memberId: credential.memberId, memberToken: credential.memberToken });
     socketRef.current = socket;
-    const connected = () => setRoomConnected(true); const disconnected = () => setRoomConnected(false);
-    socket.on("connect", connected); socket.on("disconnect", disconnected); socket.connect();
-    return () => { socket.off("connect", connected); socket.off("disconnect", disconnected); socket.disconnect(); if (socketRef.current === socket) socketRef.current = null; };
+    const connected = () => setRoomConnected(true);
+    const disconnected = () => setRoomConnected(false);
+    socket.on("connect", connected);
+    socket.on("disconnect", disconnected);
+
+    const onRomPresence = (payload: { memberId: number; loadedCount: number }) => {
+      setLoadedCount(payload.loadedCount);
+    };
+
+    const onGameStart = (payload: { system: string; startAt: number; initialFrame: number }) => {
+      haptic.success();
+      const targetPath =
+        payload.system === "nes" ? "/famicom/[roomId]" :
+        payload.system === "ps1" ? "/ps1/[roomId]" :
+        payload.system === "psp" ? "/psp/[roomId]" :
+        "/native/[system]/[roomId]";
+
+      router.push({
+        pathname: targetPath as never,
+        params: {
+          roomId: String(roomId),
+          system: payload.system,
+          startAt: String(payload.startAt),
+          initialFrame: String(payload.initialFrame),
+        },
+      });
+    };
+
+    socket.on("netplay:rom-loaded-presence", onRomPresence);
+    socket.on("GAME_START_FRAME_0", onGameStart);
+    socket.on("netplay:game-start-frame-0", onGameStart);
+
+    socket.connect();
+    return () => {
+      socket.off("connect", connected);
+      socket.off("disconnect", disconnected);
+      socket.off("netplay:rom-loaded-presence", onRomPresence);
+      socket.off("GAME_START_FRAME_0", onGameStart);
+      socket.off("netplay:game-start-frame-0", onGameStart);
+      socket.disconnect();
+      if (socketRef.current === socket) socketRef.current = null;
+    };
   }, [credential, roomId]);
 
   const snapshotQuery = useRealtimeRoomSnapshot(roomId, credential, 4_000);
@@ -69,12 +111,47 @@ export default function RoomScreen() {
     <View style={styles.codeCard}><Text style={styles.codeLabel}>{t("rmInviteCode")}</Text><Text style={styles.code}>{snapshot.room.joinCode}</Text><Pressable onPress={share} style={({ pressed }) => [styles.shareButton, pressed && styles.pressed]}><Text style={styles.shareText}>{t("rmShareCode")}</Text></Pressable></View>
     <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>{t("rmMembers")}</Text><Text style={styles.counter}>{playerCount}/{capacity.maxPlayers} {t("lbPlayersShort")} · {spectatorCount}/{capacity.maxSpectators} {t("lbSpectatorsShort")}</Text></View>
     <View style={styles.memberList}>{snapshot.members.map((member) => <View key={member.id} style={styles.member}><View style={[styles.avatar, member.role === "host" && styles.avatarHost]}><Text style={styles.avatarText}>{member.displayName.slice(0, 1).toUpperCase()}</Text></View><View style={styles.memberText}><Text style={styles.memberName}>{member.displayName}{member.role === "host" ? ` · ${t("rmHostBadge")}` : member.role === "spectator" ? ` · ${t("spectator")}` : ` · ${t("rmPlayerShort")} ${snapshot.members.filter((entry) => entry.role !== "spectator").sort((left, right) => (left.role === "host" ? -1 : right.role === "host" ? 1 : left.id - right.id)).findIndex((entry) => entry.id === member.id) + 1}`}</Text><Text style={styles.memberStatus}>{member.role === "spectator" ? t("rmSpectatorStatus") : member.isReady ? t("libReady") : t("rmChecking")}</Text></View><View style={[styles.readyDot, member.isReady ? styles.ready : styles.pending]} /></View>)}</View>
-    {Platform.OS !== "web" && <><RoomVoiceChat mediaToken={mediaToken} teamMediaToken={mediaToken?.teamMediaToken} socket={roomConnected ? socketRef.current : null} memberId={roomMember?.id ?? credential.memberId} members={snapshot.members.map((member) => ({ id: member.id, displayName: member.displayName, role: member.role }))} memberRole={roomMember?.role} onChatPress={() => setShowChat((visible) => !visible)} />{showChat && <RoomChat socket={roomConnected ? socketRef.current : null} title={`${SYSTEM_LABEL[snapshot.room.system] ?? snapshot.room.system} · ${t("roomChat")}`} />}</>}
-    {system === "nes" ? <Pressable onPress={() => router.push({ pathname: "/famicom/[roomId]", params: { roomId: String(roomId) } } as never)} style={({ pressed }) => [styles.playButton, pressed && styles.pressed]}><Text style={styles.playText}>{t("rmEnterFamicom")}</Text></Pressable>
-      : system === "ps1" ? <Pressable onPress={() => router.push({ pathname: "/ps1/[roomId]", params: { roomId: String(roomId) } } as never)} style={({ pressed }) => [styles.playButton, pressed && styles.pressed]}><Text style={styles.playText}>{t("rmEnterPs1")}</Text></Pressable>
-      : system === "psp" ? <Pressable onPress={() => router.push({ pathname: "/psp/[roomId]", params: { roomId: String(roomId) } } as never)} style={({ pressed }) => [styles.playButton, pressed && styles.pressed]}><Text style={styles.playText}>{t("rmEnterPsp")}</Text></Pressable>
-      : nativeRoom ? <Pressable onPress={() => router.push({ pathname: "/native/[system]/[roomId]", params: { system, roomId: String(roomId) } } as never)} style={({ pressed }) => [styles.playButton, pressed && styles.pressed]}><Text style={styles.playText}>{system === "n64" ? "ENTER NINTENDO 64 SETTINGS" : system === "ps2" ? "ENTER PLAYSTATION 2 SETTINGS" : t("rmEnterSega")}</Text></Pressable>
-      : <View style={styles.nextCard}><Text style={styles.nextTitle}>{t("rmPrepTitle")}</Text><Text style={styles.nextText}>{t("rmPrepText")} {SYSTEM_LABEL[snapshot.room.system]}</Text><Text style={styles.progress}>{readyCount} {t("rmReadyOutOf")} {playerCount}</Text></View>}
+    {Platform.OS !== "web" && (
+      <>
+        <SquadVoiceControls />
+        {showChat && <RoomChat socket={roomConnected ? socketRef.current : null} title={`${SYSTEM_LABEL[snapshot.room.system] ?? snapshot.room.system} · ${t("roomChat")}`} />}
+      </>
+    )}
+
+    {/* Pre-game session barrier: do not transition to game screen until both clients emit ROM_LOADED_OK */}
+    {!romLoaded ? (
+      <Pressable
+        onPress={() => {
+          haptic.medium();
+          setRomLoaded(true);
+          if (socketRef.current && credential) {
+            socketRef.current.emit("netplay:rom-loaded-ok", {
+              roomId,
+              memberId: credential.memberId,
+              system,
+            });
+            socketRef.current.emit("ROM_LOADED_OK", {
+              roomId,
+              memberId: credential.memberId,
+              system,
+            });
+          }
+        }}
+        style={({ pressed }) => [styles.playButton, pressed && styles.pressed]}
+      >
+        <Text style={styles.playText}>🎮 {t("fcChooseNes") || "LOAD ROM & CONFIRM READY"}</Text>
+      </Pressable>
+    ) : (
+      <View style={styles.nextCard}>
+        <Text style={styles.nextTitle}>⏳ {t("rmPrepTitle") || "PRE-GAME SESSION BARRIER"}</Text>
+        <Text style={styles.nextText}>
+          {t("rmPrepText") || "Waiting for both players to confirm ROM loading. Game will start synchronously at Frame 0 once all players are ready."}
+        </Text>
+        <Text style={styles.progress}>
+          {loadedCount} / {playerCount} {t("libReady") || "PLAYERS LOADED"}
+        </Text>
+      </View>
+    )}
   </ScrollView></ScreenContainer>;
 }
 

@@ -1,36 +1,24 @@
-# Moudie NetPlay — سجل تحقق الإصدار 1.4.20
+# دليل التحقق والبناء لنظام Android (Android Build & Validation Guide)
 
-**تاريخ التحقق:** 19 أغسطس 2026
+هذا المستند يوثق متطلبات وآلية التحقق من بناء تطبيق Classic Era by Moudie وإنتاج حزمة APK النهائية:
 
-**حزمة التسليم:** `MoudieNetPlay-v1.4.20-plain-android-startup-arm64-release.apk`
+## 1. المتطلبات الأساسية
+- Node.js 20+
+- pnpm 9+
+- Java 17 (Temurin JDK)
+- Android SDK (API 34 / NDK r26+)
 
-**معرّف التطبيق:** `com.app.moudienetplay` · **رقم البناء:** `43` · **المعمارية:** `arm64-v8a`
+## 2. خطوات الفحص والبناء
+```bash
+# فحص الأنواع البرمجية
+pnpm check
 
-## الحل الجذري لمسار الإقلاع
+# تشغيل الاختبارات
+pnpm test
 
-بعد استمرار شاشة الانتظار في الهاتف، أزيلت من `MainActivity` **كل** طبقات الإقلاع التي أضيفت للتشخيص: لا غطاء Moudie أصلي، ولا مراقبة `ReactRootView`، ولا بوابة رسم مسبق، ولا مهلة حجب. عاد النشاط إلى المسار القياسي الذي يولده Expo: `super.onCreate(null)` و`ReactActivityDelegateWrapper` فقط. بهذا لا توجد طبقة أصلية تستطيع أن تبقى فوق الردهة أو تمنع لمسها حتى لو كان React Native يعمل خلفها.
+# توليد ملفات Android
+npx expo prebuild --platform android
 
-يبقى تسجيل Android غير الملتقط في `MainApplication` فقط. هذا التسجيل لا يعرض واجهة ولا يغير تسلسل الإقلاع؛ يسجل الاستثناءات الأصلية تحت وسم `MoudieStartup` إن وقع عطل حقيقي قبل React Native. الافتتاح المتحرك موجود في الردهة بعد اكتمال تركيبها فقط، وليس في `MainActivity` أو في شاشة النظام.
-
-## نتائج التحقق
-
-| النطاق | النتيجة |
-|---|---|
-| اختبار مسار الإقلاع | 5 اختبارات ناجحة: لا طبقة overlay، ولا `ReactRootView` probe، ولا بوابة pre-draw. |
-| TypeScript | نجح بلا أخطاء. |
-| Kotlin | نجح تجميع تطبيق Android بعد استعادة النشاط القياسي. |
-| APK Release | نجح `:app:assembleRelease` مع حزمة Metro مضمنة و52 مورداً. |
-| فحص APK | موجود `assets/index.android.bundle` و`lib/arm64-v8a` والتوقيع صالح بموقّع واحد. |
-
-## فحص APK
-
-| البند | القيمة |
-|---|---|
-| إصدار Android | `1.4.20` / build `43` |
-| الحجم | `30,584,744` بايت |
-| SHA-256 | `4a5a698eed8d54d8cbb75df8a35ba290283b987a0f25c6922e4c8d3d25c29263` |
-| التوقيع | APK Signature Scheme v2 صحيح؛ موقّع تطوير واحد. |
-
-## اختبار قبول الهاتف المطلوب
-
-ثبّت v1.4.20. لا توجد فيها شاشة `WAITING FOR APP…` أو أي غطاء مخصص؛ المفترض الوصول مباشرة إلى تطبيق React Native والردهة. إذا استمر التعليق في هذه النسخة، فالعطل ليس شاشة الإقلاع — سيكون داخل محرك React Native أو تحميل مكتبة أصلية، ويستلزم السجل الأصلي `MoudieStartup` لتحديد المكتبة أو الاستثناء بدقة.
+# بناء APK Release
+cd android && ./gradlew assembleRelease
+```

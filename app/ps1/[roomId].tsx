@@ -6,7 +6,8 @@ import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, StyleSheet, 
 import { ScreenContainer } from "@/components/screen-container";
 import { useLanguage } from "@/lib/language";
 import { RoomChat } from "@/components/room-chat";
-import { RoomVoiceChat } from "@/components/room-voice-chat";
+import { SquadVoiceControls } from "@/components/squad-voice-controls";
+import { useVoiceChat } from "@/lib/voice-chat-context";
 import { getNetplayServiceUrl } from "@/constants/oauth";
 import { haptic } from "@/lib/haptics";
 import { createNetplaySocket } from "@/lib/netplay-socket";
@@ -72,14 +73,17 @@ export default function PS1Screen() {
     refreshBiosStatus();
   }, []);
 
+  const { toggleMic, toggleDeafen, setSpeakerEnabled } = useVoiceChat();
+
   useEffect(() => {
     if (Platform.OS === "web") return;
     const subscription = MoudieEmulatorModule.addListener("nativeOverlayAction", (payload) => {
-      if (payload.action === "toggle-microphone") voiceChatRef.current?.setMicrophoneEnabled(!payload.muted);
-      if (payload.action === "toggle-speaker") voiceChatRef.current?.setSpeakerEnabled?.(!payload.muted);
+      if (payload.action === "toggle-microphone") void toggleMic();
+      if (payload.action === "toggle-speaker") void setSpeakerEnabled(!payload.muted);
+      if (payload.action === "toggle-deafen") void toggleDeafen();
     });
     return () => subscription.remove();
-  }, []);
+  }, [toggleMic, toggleDeafen, setSpeakerEnabled]);
 
   useEffect(() => {
     if (Number.isFinite(numericRoomId)) getRoomCredential(numericRoomId).then(setCredential);
@@ -294,7 +298,7 @@ export default function PS1Screen() {
 
         {Platform.OS !== "web" && <>
           <RoomChat socket={roomConnected ? socketRef.current : null} title={`PS1 · ${t("roomChat")}`} />
-          <RoomVoiceChat mediaToken={mediaToken} teamMediaToken={mediaToken?.teamMediaToken} ref={voiceChatRef} socket={roomConnected ? socketRef.current : null} isHost={assignedPlayer === 1} remoteOnline={remoteOnline} memberId={credential?.memberId} members={snapshotQuery.data?.members ?? []} />
+          <SquadVoiceControls />
         </>}
 
         <View style={styles.statusCard}>

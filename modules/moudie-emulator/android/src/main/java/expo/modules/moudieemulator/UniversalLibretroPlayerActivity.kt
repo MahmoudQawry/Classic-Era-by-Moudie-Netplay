@@ -60,6 +60,7 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
     const val EXTRA_NETPLAY_PLAYER = "expo.modules.moudieemulator.NETPLAY_PLAYER"
     private const val NETPLAY_FRAME_INTERVAL_MS = 16L
     private const val NETPLAY_INPUT_DELAY_FRAMES = 3L
+    private const val INPUT_BUFFER_TOLERANCE_FRAMES = 3
     private const val MAX_PREDICTION_FRAMES = 30
     private const val JITTER_BUFFER_FRAMES = 4
     private const val RESYNC_TIMEOUT_MS = 5000L
@@ -121,6 +122,7 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
   private var lastFrameReceivedAt = 0L
   private var lastRemoteFrameWaitStartedAt = 0L
   private var consecutiveDesyncs = 0
+  private var inputBufferToleranceCount = 0
   private var frameDriftMs = 0L
   @Volatile private var lastNetplaySyncId = -1L
   private var pendingSessionStart: Pair<Long,List<Int>>? = null
@@ -136,9 +138,19 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
   }
   private var microphoneMuted = true
   private var speakerEnabled = true
+  private var audioBridge: AudioBridge? = null
   private var analogStick: AnalogStickView? = null
   private var analogHudButton: TextView? = null
   private var analogEnabled = false
+  private val localDevicePorts = mutableMapOf<Int, Int>()
+  private fun localPortForDevice(deviceId: Int): Int {
+    if (deviceId < 0) return 0
+    localDevicePorts[deviceId]?.let { return it }
+    val used = localDevicePorts.values.toSet()
+    val port = (0 until definition.maxControllerSlots).firstOrNull { it !in used } ?: 0
+    localDevicePorts[deviceId] = port
+    return port
+  }
 
   private val frameMeter = object : Choreographer.FrameCallback {
     override fun doFrame(t: Long) {
@@ -240,11 +252,18 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
     val sessionProfile = MoudieDeviceProfile.snapshot(this)
     MoudieSessionLog.startSession(this, definition.system, gameFile.name, "ram=${"%.1f".format(sessionProfile.totalRamGb)}GB free=${sessionProfile.availableRamBytes / (1024L * 1024L)}MB cores=${sessionProfile.cpuCores} gles=${sessionProfile.glesLabel}")
     connectNetplayIfConfigured()
+    audioBridge = AudioBridge(this).apply { requestGameAudioFocus() }
   }
 
-  override fun onResume() { super.onResume(); Choreographer.getInstance().postFrameCallback(frameMeter) }
+  override fun onResume() {
+    super.onResume()
+    audioBridge?.requestGameAudioFocus()
+    Choreographer.getInstance().postFrameCallback(frameMeter)
+  }
   override fun onPause() { Choreographer.getInstance().removeFrameCallback(frameMeter); releaseAll(); analogStick?.releaseAxis(); super.onPause() }
   override fun onDestroy() {
+    audioBridge?.abandonAudioFocus()
+    audioBridge = null
     stopLockstep()
     pendingSessionStart = null
     netplayHandler.removeCallbacks(retryPendingNetplayState)
@@ -519,26 +538,35 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
       val localAnalog = synchronized(localFrameAnalogs) { localFrameAnalogs.remove(nextLockstepFrame) ?: AnalogInput(0, 0) }
       val remoteMembers = sessionPlayerMemberIds.filter { it != localMemberId }
 
-      if (remoteMasks == null || remoteMembers.any { it !in remoteMasks }) {
-        // Deterministic lockstep must never advance a frame with guessed remote input.
-        // A missing packet stalls this exact frame; after a sustained stall we request
-        // the authoritative state and adapt the input delay instead of diverging.
-        if (now - lastRemoteFrameWaitStartedAt > RESYNC_TIMEOUT_MS) {
-          showToast("Connection slow - resynchronizing shared frame...")
-          netplayClient?.requestState(-1L)
-          netplayClient?.reportDesync(nextLockstepFrame, 1)
-          lastRemoteFrameWaitStartedAt = now
-          consecutiveDesyncs++
-          if (consecutiveDesyncs > 1) {
-            // Ask the relay for a wider window instead of changing the local
-            // value: a private change here would desynchronize this device from
-            // its peer until the next resync.
-            netplayClient?.requestDelayIncrease(netplayInputDelayFrames + 2, "lockstep-stall")
-            consecutiveDesyncs = 0
+      var effectiveRemoteMasks = remoteMasks
+      val missingRemote = effectiveRemoteMasks == null || remoteMembers.any { it !in effectiveRemoteMasks }
+
+      if (missingRemote) {
+        if (inputBufferToleranceCount < INPUT_BUFFER_TOLERANCE_FRAMES) {
+          // Input buffer tolerance (2-3 frames delay tolerance): reuse last verified inputs
+          inputBufferToleranceCount++
+          val bufferedMasks = mutableMapOf<Int, Int>()
+          remoteMembers.forEach { memberId ->
+            bufferedMasks[memberId] = lastRemoteMasks[memberId] ?: 0
           }
+          effectiveRemoteMasks = bufferedMasks
+        } else {
+          if (now - lastRemoteFrameWaitStartedAt > RESYNC_TIMEOUT_MS) {
+            showToast("Connection slow - resynchronizing shared frame...")
+            netplayClient?.requestState(-1L)
+            netplayClient?.reportDesync(nextLockstepFrame, 1)
+            lastRemoteFrameWaitStartedAt = now
+            consecutiveDesyncs++
+            if (consecutiveDesyncs > 1) {
+              netplayClient?.requestDelayIncrease(netplayInputDelayFrames + 2, "lockstep-stall")
+              consecutiveDesyncs = 0
+            }
+          }
+          lockstepChoreographer.postFrameCallbackDelayed(this, 4L)
+          return
         }
-        lockstepChoreographer.postFrameCallbackDelayed(this, 4L)
-        return
+      } else {
+        inputBufferToleranceCount = 0
       }
 
       if (predictedFrames > 10) showToast("Re-synced after ${predictedFrames} predicted frames")
@@ -546,13 +574,13 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
       lastRemoteFrameWaitStartedAt = now
       lastFrameReceivedAt = now
       consecutiveDesyncs = 0
-      remoteMasks.forEach { (memberId, mask) -> lastRemoteMasks[memberId] = mask }
+      effectiveRemoteMasks?.forEach { (memberId, mask) -> lastRemoteMasks[memberId] = mask }
 
       applyMask(localMask, localPlayerIndex, appliedMasksByPort[localPlayerIndex] ?: 0)
       appliedMasksByPort[localPlayerIndex] = localMask
       remoteMembers.forEach { memberId ->
         val port = sessionPlayerMemberIds.indexOf(memberId)
-        val mask = remoteMasks.getValue(memberId)
+        val mask = effectiveRemoteMasks?.get(memberId) ?: (lastRemoteMasks[memberId] ?: 0)
         val analog = remoteAnalogs?.get(memberId) ?: AnalogInput(0, 0)
         applyMask(mask, port, appliedMasksByPort[port] ?: 0)
         applyAnalog(analog, port)

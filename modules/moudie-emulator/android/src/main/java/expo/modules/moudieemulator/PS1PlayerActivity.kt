@@ -61,7 +61,7 @@ class PS1PlayerActivity : ComponentActivity() {
     private const val NETPLAY_CORE_VERSION = "pcsx-rearmed-0.13.2-lockstep-v2-adaptive"
     private const val NETPLAY_INPUT_DELAY_FRAMES = 3L
     private const val NETPLAY_FRAME_INTERVAL_MS = 16L
-    private const val MAX_PREDICTION_FRAMES = 30
+    private const val MAX_PREDICTION_FRAMES = 3
     private const val JITTER_BUFFER_FRAMES = 4
     private const val RESYNC_TIMEOUT_MS = 5000L
     private const val FRAME_HISTORY_CLEANUP_THRESHOLD = 60
@@ -141,6 +141,7 @@ class PS1PlayerActivity : ComponentActivity() {
   private var micOverlayButton: TextView? = null
   private var speakerOverlayEnabled = false
   private var speakerOverlayButton: TextView? = null
+  private var audioBridge: AudioBridge? = null
   private var analogStick: AnalogStickView? = null
   private var analogHudButton: DraggableHudButton? = null
   private var analogEnabled = false
@@ -239,6 +240,7 @@ class PS1PlayerActivity : ComponentActivity() {
     setContentView(root)
     root.post { applyAspectRatio(); restoreScreenLayout(); enableScreenEditor() }
     connectNetplayIfConfigured()
+    audioBridge = AudioBridge(this).apply { requestGameAudioFocus() }
   }
 
   override fun onGenericMotionEvent(event: MotionEvent?): Boolean {
@@ -269,10 +271,13 @@ class PS1PlayerActivity : ComponentActivity() {
 
   override fun onResume() {
     super.onResume()
+    audioBridge?.requestGameAudioFocus()
     Choreographer.getInstance().postFrameCallback(frameMeter)
   }
 
   override fun onDestroy() {
+    audioBridge?.abandonAudioFocus()
+    audioBridge = null
     stopLockstep()
     stopBootstrapRetry()
     netplayClient?.close()

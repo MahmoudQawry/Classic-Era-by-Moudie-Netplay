@@ -25,3 +25,23 @@ export function createSessionBarrier(peers: ReadySessionPeer[], now: number, lea
     startAt: now + leadTimeMs,
   };
 }
+
+export type RomLoadedSignal = {
+  memberId: number;
+  roomId: number;
+  fingerprint: string;
+  system: string;
+  coreVersion?: string;
+};
+
+export function canSynchronousGameStart(
+  loadedMembers: Set<number>,
+  requiredMemberIds: number[],
+  fingerprints: Map<number, string>
+): boolean {
+  if (requiredMemberIds.length < 2) return false;
+  if (!requiredMemberIds.every((id) => loadedMembers.has(id))) return false;
+  const firstFp = fingerprints.get(requiredMemberIds[0]);
+  if (!firstFp) return false;
+  return requiredMemberIds.every((id) => fingerprints.get(id) === firstFp);
+}

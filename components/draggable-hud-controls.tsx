@@ -2,7 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PanResponder, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 
-type HudId = "chat" | "microphone" | "speaker" | "options";
+type HudId = "chat" | "microphone" | "openmic" | "deafen" | "speaker" | "options";
 type Position = { x: number; y: number; scale: number };
 type Layout = Record<HudId, Position>;
 
@@ -11,24 +11,30 @@ type Props = {
   editable: boolean;
   microphoneMuted: boolean;
   speakerEnabled: boolean;
+  isDeafened?: boolean;
+  isMicOpen?: boolean;
   onToggleChat: () => void;
   onToggleMicrophone: () => void;
   onToggleSpeaker: () => void;
+  onToggleDeafen?: () => void;
+  onToggleOpenMic?: () => void;
   onSave: () => void;
   onLoad: () => void;
   onEditLayout: () => void;
   onExit: () => void;
 };
 
-const ids: HudId[] = ["chat", "microphone", "speaker", "options"];
+const ids: HudId[] = ["chat", "microphone", "openmic", "deafen", "speaker", "options"];
 const defaults: Layout = {
-  chat: { x: -142, y: 0, scale: 1 },
-  microphone: { x: -74, y: 0, scale: 1 },
+  chat: { x: -280, y: 0, scale: 1 },
+  openmic: { x: -210, y: 0, scale: 1 },
+  microphone: { x: -140, y: 0, scale: 1 },
+  deafen: { x: -70, y: 0, scale: 1 },
   speaker: { x: 0, y: 0, scale: 1 },
   options: { x: 0, y: 56, scale: 1 },
 };
 
-export function DraggableHudControls({ system, editable, microphoneMuted, speakerEnabled, onToggleChat, onToggleMicrophone, onToggleSpeaker, onSave, onLoad, onEditLayout, onExit }: Props) {
+export function DraggableHudControls({ system, editable, microphoneMuted, speakerEnabled, isDeafened, isMicOpen, onToggleChat, onToggleMicrophone, onToggleSpeaker, onToggleDeafen, onToggleOpenMic, onSave, onLoad, onEditLayout, onExit }: Props) {
   const { width, height } = useWindowDimensions();
   const orientation = width >= height ? "landscape" : "portrait";
   const storageKey = `moudie.hud-layout.v2.${system}.${orientation}`;
@@ -54,7 +60,14 @@ export function DraggableHudControls({ system, editable, microphoneMuted, speake
             ? { x: value.x, y: value.y, scale: Math.max(0.35, value.scale) }
             : defaults[id];
         };
-        setLayout({ chat: normalize("chat"), microphone: normalize("microphone"), speaker: normalize("speaker"), options: normalize("options") });
+        setLayout({
+          chat: normalize("chat"),
+          openmic: normalize("openmic"),
+          microphone: normalize("microphone"),
+          deafen: normalize("deafen"),
+          speaker: normalize("speaker"),
+          options: normalize("options"),
+        });
       } catch { /* Use defaults when the saved layout is invalid. */ }
     }).catch(() => undefined);
     return () => { active = false; };
@@ -90,8 +103,21 @@ export function DraggableHudControls({ system, editable, microphoneMuted, speake
     }),
   })), [editable, persist]);
 
-  const labelFor = (id: HudId) => id === "chat" ? "CHAT" : id === "microphone" ? microphoneMuted ? "MIC×" : "MIC" : id === "speaker" ? speakerEnabled ? "SPK" : "SPK×" : "OPTIONS";
-  const pressFor = (id: HudId) => id === "chat" ? onToggleChat : id === "microphone" ? onToggleMicrophone : id === "speaker" ? onToggleSpeaker : () => setOptionsOpen((open) => !open);
+  const labelFor = (id: HudId) =>
+    id === "chat" ? "CHAT" :
+    id === "microphone" ? (microphoneMuted ? "MIC×" : "MIC") :
+    id === "speaker" ? (speakerEnabled ? "SPK" : "SPK×") :
+    id === "deafen" ? (isDeafened ? "DEAF" : "HEAR") :
+    id === "openmic" ? (isMicOpen ? "OPEN" : "PTT") :
+    "OPTIONS";
+
+  const pressFor = (id: HudId) =>
+    id === "chat" ? onToggleChat :
+    id === "microphone" ? onToggleMicrophone :
+    id === "speaker" ? onToggleSpeaker :
+    id === "deafen" ? (onToggleDeafen || (() => {})) :
+    id === "openmic" ? (onToggleOpenMic || (() => {})) :
+    () => setOptionsOpen((open) => !open);
   const optionsPosition = layout.options;
 
   return <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>

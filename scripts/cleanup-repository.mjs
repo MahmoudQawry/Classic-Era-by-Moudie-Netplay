@@ -16,7 +16,7 @@ const safeGeneratedPaths = [
 ];
 
 const mediaRoots = ["assets/images", "assets/videos"];
-const sourceRoots = ["app","components","lib","modules","plugins","scripts","tests","server","shared","cloudflare-netplay","app.config.ts","package.json","README.md"];
+const sourceRoots = ["app","components","lib","modules","plugins","scripts","tests","server","shared","app.config.ts","package.json","README.md"];
 const textExtensions = new Set([".ts",".tsx",".js",".jsx",".json",".md",".xml",".kt",".java",".gradle",".properties",".yml",".yaml",".sh",".py",".css",".cpp",".h",".hpp"]);
 
 function walk(dir) {

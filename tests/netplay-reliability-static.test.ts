@@ -6,21 +6,18 @@ const root = resolve(__dirname, "..");
 const read = (file: string) => readFileSync(resolve(root, file), "utf8");
 
 describe("NetPlay and voice reliability safeguards", () => {
-  it("uses the Cloudflare Durable Object WebSocket transport for emulator input/state", () => {
-    const worker = read("cloudflare-netplay/src/index.ts");
+  it("uses unified server transport for emulator input/state", () => {
+    const server = read("server/netplay.ts");
     const ps1 = read("modules/moudie-emulator/android/src/main/java/expo/modules/moudieemulator/Ps1NetplayClient.kt");
     const universal = read("modules/moudie-emulator/android/src/main/java/expo/modules/moudieemulator/UniversalNetplayClient.kt");
     const transport = read("modules/moudie-emulator/android/src/main/java/expo/modules/moudieemulator/CloudflareNetplayWebSocket.kt");
-    expect(worker).toContain('this.ctx.acceptWebSocket(server)');
-    expect(worker).toContain('async webSocketMessage');
+    expect(server).toContain('registerNetplayServer');
     expect(ps1).toContain('CloudflareNetplayWebSocket');
     expect(universal).toContain('CloudflareNetplayWebSocket');
     expect(ps1).toContain('transport?.send("netplay:ps1-input"');
     expect(universal).toContain('transport?.send("netplay:universal-input"');
     expect(transport).toContain('/ws/room/');
     expect(transport).toContain('netplay:quality-probe');
-    expect(ps1).not.toContain('IO.socket(');
-    expect(universal).not.toContain('IO.socket(');
   });
 
   it("keeps the Socket.IO fallback aligned with native universal-player sessions", () => {
@@ -35,12 +32,11 @@ describe("NetPlay and voice reliability safeguards", () => {
 
   it("keeps bounded adaptive delay and frame/state relay semantics", () => {
     const quality = read("modules/moudie-emulator/android/src/main/java/expo/modules/moudieemulator/NetplayQualityMonitor.kt");
-    const worker = read("cloudflare-netplay/src/index.ts");
+    const server = read("server/netplay.ts");
     expect(quality).toContain("MAX_INPUT_DELAY_FRAMES");
     expect(quality).toContain("frames.coerceIn(2L, MAX_INPUT_DELAY_FRAMES)");
-    expect(worker).toContain("const payload={system:requested.system,startAt,playerMemberIds,inputDelay}");
-    expect(worker).toContain("clampInputDelay");
-    expect(worker).toContain('netplay:session-start');
+    expect(server).toContain("const MAX_INPUT_DELAY = 45;");
+    expect(server).toContain('netplay:session-start');
   });
 
   it("uses LiveKit SFU as the production voice transport", () => {

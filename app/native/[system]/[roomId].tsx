@@ -5,7 +5,7 @@ import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, StyleSheet, 
 import { ScreenContainer } from "@/components/screen-container";
 import { useLanguage } from "@/lib/language";
 import { RoomChat } from "@/components/room-chat";
-import { RoomVoiceChat, type RoomVoiceChatHandle } from "@/components/room-voice-chat";
+import { SquadVoiceControls } from "@/components/squad-voice-controls";
 import { getRoomRelayUrl, createNetplaySocket } from "@/lib/netplay-socket";
 import { setRealtimeRoomReady } from "@/lib/realtime-room-service";
 import { trpc } from "@/lib/trpc";
@@ -163,7 +163,7 @@ export default function NativeRoomScreen() {
     </View>}
     {game && connected && assignedPlayer && <Pressable onPress={markReady} disabled={ready} style={({ pressed }) => [styles.ready, (pressed || ready) && styles.disabled]}><Text style={styles.readyText}>{ready ? t("fcReadyConfirmed") : t("pspReady2")}</Text></Pressable>}
     {canStart && <Pressable onPress={requestStart} style={({ pressed }) => [styles.start, pressed && styles.disabled]}><Text style={styles.startText}>{t("segStartSession")}</Text></Pressable>}
-    {Platform.OS !== "web" && <><RoomChat socket={connected ? socketRef.current : null} title={`${meta.title} · ${t("roomChat")}`} /><RoomVoiceChat ref={voiceChatRef} mediaToken={mediaToken} teamMediaToken={mediaToken?.teamMediaToken} socket={connected ? socketRef.current : null} memberRole={snapshotQuery.data?.members.find((member) => member.id === credential?.memberId)?.role} memberId={credential?.memberId} members={snapshotQuery.data?.members ?? []} /></>}
+    {Platform.OS !== "web" && <><RoomChat socket={connected ? socketRef.current : null} title={`${meta.title} · ${t("roomChat")}`} /><SquadVoiceControls /></>}
   </ScrollView></ScreenContainer>;
 }
 

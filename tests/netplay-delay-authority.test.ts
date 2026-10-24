@@ -7,7 +7,7 @@ import { MAX_INPUT_DELAY_FRAMES, MIN_INPUT_DELAY_FRAMES, calculateRecommendedDel
 const root = resolve(__dirname, "..");
 const read = (file: string) => readFileSync(resolve(root, file), "utf8");
 
-const worker = read("cloudflare-netplay/src/index.ts");
+const universalRelay = read("server/universal-netplay.ts");
 const relay = read("server/netplay.ts");
 const quality = read("lib/netplay-quality.ts");
 const universalClient = read("modules/moudie-emulator/android/src/main/java/expo/modules/moudieemulator/UniversalNetplayClient.kt");
@@ -26,13 +26,13 @@ const ps1Activity = read("modules/moudie-emulator/android/src/main/java/expo/mod
  */
 describe("NetPlay input-delay authority", () => {
   it("uses one window across the relay, the clients and the JS monitor", () => {
-    expect(worker).toContain("const MIN_INPUT_DELAY = 2;");
-    expect(worker).toContain("const MAX_INPUT_DELAY = 45;");
+    expect(universalRelay).toContain("const MIN_INPUT_DELAY = 2;");
+    expect(universalRelay).toContain("const MAX_INPUT_DELAY = 45;");
     expect(relay).toContain("const MIN_INPUT_DELAY = 2;");
     expect(relay).toContain("const MAX_INPUT_DELAY = 45;");
     expect(MIN_INPUT_DELAY_FRAMES).toBe(2);
     expect(MAX_INPUT_DELAY_FRAMES).toBe(45);
-    for (const source of [worker, relay]) {
+    for (const source of [universalRelay, relay]) {
       expect(source).not.toMatch(/delay\s*>\s*8\b/);
       expect(source).not.toMatch(/delay\s*<=\s*8\b/);
     }
@@ -43,8 +43,7 @@ describe("NetPlay input-delay authority", () => {
 
   it("keeps the relay as the only writer of the accepted delay", () => {
     // The relay answers every request with the authoritative value.
-    expect(worker).toContain('event:"netplay:delay-update"');
-    expect(worker).toContain("accepted:false");
+    expect(relay).toContain('socket.emit("netplay:delay-update"');
     expect(relay).toContain("accepted: false");
     // A client must not apply its own recommendation to the running session.
     for (const client of [universalClient, ps1Client]) {

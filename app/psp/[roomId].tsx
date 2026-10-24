@@ -6,7 +6,7 @@ import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, StyleSheet, 
 import { ScreenContainer } from "@/components/screen-container";
 import { useLanguage } from "@/lib/language";
 import { RoomChat } from "@/components/room-chat";
-import { RoomVoiceChat, type RoomVoiceChatHandle } from "@/components/room-voice-chat";
+import { SquadVoiceControls } from "@/components/squad-voice-controls";
 import { getNetplayServiceUrl } from "@/constants/oauth";
 import { haptic } from "@/lib/haptics";
 import { createNetplaySocket } from "@/lib/netplay-socket";
@@ -159,7 +159,12 @@ export default function PSPRoomScreen() {
         {canStart && <Pressable onPress={requestSynchronizedStart} style={({ pressed }) => [styles.launch, pressed && styles.disabled]}><Text style={styles.launchText}>{t("pspStartSession")}</Text></Pressable>}
         {startRequested && <Text style={styles.wait}>{t("pspWaitingVerify")}</Text>}
         <View style={styles.note}><Text style={styles.noteTitle}>{t("pspRoomControls")}</Text><Text style={styles.noteText}>{t("pspRoomControlsText")}</Text></View>
-        {Platform.OS !== "web" && <><RoomChat socket={roomConnected ? socketRef.current : null} title={`PSP · ${t("roomChat")}`} /><RoomVoiceChat mediaToken={mediaToken} teamMediaToken={mediaToken?.teamMediaToken} ref={voiceChatRef} socket={roomConnected ? socketRef.current : null} isHost={Boolean(host)} remoteOnline={remoteOnline} memberId={credential?.memberId} members={snapshotQuery.data?.members ?? []} /></>}
+        {Platform.OS !== "web" && (
+          <>
+            <RoomChat socket={roomConnected ? socketRef.current : null} title={`PSP · ${t("roomChat")}`} />
+            <SquadVoiceControls />
+          </>
+        )}
       </ScrollView>
     </ScreenContainer>
   );

@@ -90,6 +90,7 @@ export function registerNetplayServer(server: HttpServer) {
   const universalSnapshots = new Map<string, UniversalSnapshot>();
   const universalInitialStateAcks = new Map<string, Set<number>>();
   const pendingSessions = new Map<number, PendingSession>();
+  const romLoadedPlayers = new Map<number, Map<number, { fingerprint: string; coreVersion?: string }>>();
   // adaptive anti-desync structures
   const roomFrameTrackers = new Map<number, RoomFrameTracker>();
   const ps1InputHistory = new Map<number, RoomFrameHistory>();
@@ -463,6 +464,51 @@ export function registerNetplayServer(server: HttpServer) {
       socket.to(channel).emit("netplay:session-presence", { memberId: session.memberId, ready: true, system });
       socket.emit("netplay:session-ready-accepted", { system });
     });
+
+    const handleRomLoaded = async (payload: { fingerprint?: unknown; coreVersion?: unknown; system?: unknown }) => {
+      if (session.role === "spectator") return;
+      const fingerprint = typeof payload?.fingerprint === "string" ? payload.fingerprint.toLowerCase().trim() : "";
+      const coreVersion = typeof payload?.coreVersion === "string" ? payload.coreVersion.trim() : "1.0";
+      const system = (payload?.system as NetplaySystem) || "nes";
+
+      const loadedMap = romLoadedPlayers.get(session.roomId) ?? new Map<number, { fingerprint: string; coreVersion?: string }>();
+      loadedMap.set(session.memberId, { fingerprint, coreVersion });
+      romLoadedPlayers.set(session.roomId, loadedMap);
+
+      io.to(channel).emit("netplay:rom-loaded-presence", {
+        memberId: session.memberId,
+        loadedCount: loadedMap.size,
+      });
+
+      const roomSnapshot = await db.getRoomSnapshot(session.roomId).catch(() => undefined);
+      if (!roomSnapshot) return;
+      const activePlayers = (roomSnapshot.members ?? []).filter((m) => m.role !== "spectator");
+
+      // When all active players (at least 2) emit ROM_LOADED_OK, emit GAME_START_FRAME_0 synchronously
+      if (activePlayers.length >= 2 && activePlayers.every((p) => loadedMap.has(p.id))) {
+        const startAt = Date.now() + 500;
+        const activePlayerIds = activePlayers.map((p) => p.id);
+        const resolvedSystem = (roomSnapshot.room.system as NetplaySystem) || system;
+
+        const startPayload = {
+          roomId: session.roomId,
+          system: resolvedSystem,
+          startAt,
+          initialFrame: 0,
+          inputDelay: roomInputDelays.get(session.roomId) ?? 3,
+          playerMemberIds: activePlayerIds,
+          serverTime: Date.now(),
+        };
+
+        io.to(channel).emit("GAME_START_FRAME_0", startPayload);
+        io.to(channel).emit("netplay:game-start-frame-0", startPayload);
+
+        romLoadedPlayers.delete(session.roomId);
+      }
+    };
+
+    socket.on("netplay:rom-loaded-ok", handleRomLoaded);
+    socket.on("ROM_LOADED_OK", handleRomLoaded);
 
     socket.on("netplay:session-start-request", async (payload: SessionStartPayload) => {
       if (session.clientKind !== "room-ui" || session.role !== "host") return;

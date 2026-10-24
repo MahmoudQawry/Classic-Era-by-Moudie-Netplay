@@ -20,6 +20,8 @@ const validFingerprint = (value: unknown): value is string => typeof value === "
 const validCoreVersion = (value: unknown): value is string => typeof value === "string" && value.trim().length > 0 && value.trim().length <= 64;
 const validFrame = (value: unknown): value is number => typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
 const validMask = (value: unknown): value is number => typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= 0xffff;
+const MIN_INPUT_DELAY = 2;
+const MAX_INPUT_DELAY = 45;
 
 /** Dedicated low-latency relay for PSP/SEGA with adaptive improvements */
 export function registerUniversalNetplayServer(server: HttpServer) {
@@ -203,7 +205,7 @@ export function registerUniversalNetplayServer(server: HttpServer) {
     socket.on("universal:delay-request", (p: { delay?: unknown; reason?: unknown }) => {
       if (session.role === "spectator") return;
       const delay = Number(p?.delay);
-      if (!Number.isInteger(delay) || delay < 2 || delay > 8) return;
+      if (!Number.isInteger(delay) || delay < MIN_INPUT_DELAY || delay > MAX_INPUT_DELAY) return;
       const current = roomInputDelays.get(session.roomId) ?? 3;
       if (delay > current || (delay < current && p?.reason === "stable")) {
         roomInputDelays.set(session.roomId, delay);

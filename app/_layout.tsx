@@ -10,6 +10,7 @@ import { initializeDiscordSocial, clearDiscordRichPresence } from "@/lib/discord
 import "@/lib/_core/nativewind-pressable";
 import { ThemeProvider } from "@/lib/theme-provider";
 import { LanguageProvider } from "@/lib/language";
+import { VoiceChatProvider } from "@/lib/voice-chat-context";
 import { SafeAreaFrameContext, SafeAreaInsetsContext, SafeAreaProvider, initialWindowMetrics } from "react-native-safe-area-context";
 import type { EdgeInsets, Rect } from "react-native-safe-area-context";
 import { trpc, createTRPCClient } from "@/lib/trpc";
@@ -45,11 +46,13 @@ export default function RootLayout() {
       <trpc.Provider client={trpcClient} queryClient={queryClient}>
         <QueryClientProvider client={queryClient}>
           <LanguageProvider>
-            <Stack screenOptions={{ headerShown: false }}>
-              <Stack.Screen name="(tabs)" />
-              <Stack.Screen name="oauth/callback" />
-            </Stack>
-            <StatusBar style="auto" />
+            <VoiceChatProvider>
+              <Stack screenOptions={{ headerShown: false }}>
+                <Stack.Screen name="(tabs)" />
+                <Stack.Screen name="oauth/callback" />
+              </Stack>
+              <StatusBar style="auto" />
+            </VoiceChatProvider>
           </LanguageProvider>
         </QueryClientProvider>
       </trpc.Provider>

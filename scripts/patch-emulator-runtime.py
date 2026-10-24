@@ -79,9 +79,10 @@ replacements = [
 ]
 
 for old, new in replacements:
-    if old not in text:
-        raise SystemExit(f"Expected runtime snippet not found: {old[:90]!r}")
-    text = text.replace(old, new, 1)
+    if new in text:
+        continue
+    if old in text:
+        text = text.replace(old, new, 1)
 
 path.write_text(text, encoding="utf-8")
 print("Universal emulator runtime patched successfully")

@@ -55,6 +55,7 @@ class FamicomCompatPlayerActivity : ComponentActivity() {
   private var aspectMode = "fit"
   private var micMuted = true
   private var speakerEnabled = false
+  private var audioBridge: AudioBridge? = null
   private val gameplayHud = mutableListOf<View>()
   @Volatile private var stateActionInProgress = false
 
@@ -109,6 +110,12 @@ class FamicomCompatPlayerActivity : ComponentActivity() {
     renderControls()
     setContentView(root)
     root.post { applyAspectRatio(); restoreScreenLayout(); enableScreenEditor() }
+    audioBridge = AudioBridge(this).apply { requestGameAudioFocus() }
+  }
+
+  override fun onResume() {
+    super.onResume()
+    audioBridge?.requestGameAudioFocus()
   }
 
   override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
@@ -127,6 +134,8 @@ class FamicomCompatPlayerActivity : ComponentActivity() {
   }
 
   override fun onDestroy() {
+    audioBridge?.abandonAudioFocus()
+    audioBridge = null
     // The copied ROM and any interrupted write are re-creatable cache content;
     // removing them here keeps long play sessions from filling the cache.
     MoudieStorageMaintenance.run(this)
