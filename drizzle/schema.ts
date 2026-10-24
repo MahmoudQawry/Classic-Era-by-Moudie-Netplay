@@ -31,7 +31,7 @@ export const gameRooms = mysqlTable(
     id: int("id").autoincrement().primaryKey(),
     joinCode: varchar("joinCode", { length: 8 }).notNull(),
     name: varchar("name", { length: 64 }).notNull(),
-    system: mysqlEnum("system", ["psp", "nes", "sega", "ps1", "arcade"]).notNull(),
+    system: mysqlEnum("system", ["psp", "nes", "sega", "ps1", "arcade", "n64", "ps2"]).notNull(),
     hostTokenHash: varchar("hostTokenHash", { length: 64 }).notNull(),
     maxPlayers: int("maxPlayers").notNull(),
     visibility: mysqlEnum("visibility", ["public", "private"]).default("private").notNull(),

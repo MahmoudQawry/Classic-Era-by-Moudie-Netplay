@@ -15,4 +15,6 @@ export const SAVE_STATE_CAPABILITIES: Record<EmulatorSystemId, SaveStateCapabili
   ps1: { available: true, slots: 5, label: "Five local save slots are available inside the player" },
   psp: { available: true, slots: 5, label: "Five local save slots are available inside the player" },
   sega: { available: true, slots: 5, label: "Five local save slots are available inside the player" },
+  n64: { available: true, slots: 5, label: "Five local save slots are available inside the player" },
+  ps2: { available: true, slots: 5, label: "Five local save slots are available inside the player" },
 };

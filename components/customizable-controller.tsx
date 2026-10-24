@@ -46,6 +46,18 @@ const profiles: Record<SystemId, { controls: ControlId[]; accent: string; labels
     labels: { UP: "▲", DOWN: "▼", LEFT: "◀", RIGHT: "▶", A: "A", B: "B", C: "C", START: "START" },
     defaults: { UP: { x: 13, y: 54, size: 54 }, DOWN: { x: 13, y: 73, size: 54 }, LEFT: { x: 3, y: 64, size: 54 }, RIGHT: { x: 23, y: 64, size: 54 }, A: { x: 64, y: 67, size: 56 }, B: { x: 76, y: 61, size: 56 }, C: { x: 88, y: 55, size: 56 }, START: { x: 46, y: 89, size: 44 } },
   },
+  n64: {
+    accent: "#FF5E7E",
+    controls: ["UP", "DOWN", "LEFT", "RIGHT", "A", "B", "L", "R", "START"],
+    labels: { UP: "▲", DOWN: "▼", LEFT: "◀", RIGHT: "▶", A: "A", B: "B", L: "L", R: "R", START: "START" },
+    defaults: { UP: { x: 13, y: 54, size: 54 }, DOWN: { x: 13, y: 73, size: 54 }, LEFT: { x: 3, y: 64, size: 54 }, RIGHT: { x: 23, y: 64, size: 54 }, A: { x: 78, y: 69, size: 58 }, B: { x: 64, y: 61, size: 58 }, L: { x: 5, y: 37, size: 44 }, R: { x: 82, y: 37, size: 44 }, START: { x: 46, y: 89, size: 44 } },
+  },
+  ps2: {
+    accent: "#00E5FF",
+    controls: ["UP", "DOWN", "LEFT", "RIGHT", "X", "O", "TRIANGLE", "SQUARE", "L1", "R1", "START", "SELECT"],
+    labels: { UP: "▲", DOWN: "▼", LEFT: "◀", RIGHT: "▶", X: "×", O: "○", TRIANGLE: "△", SQUARE: "□", L1: "L1", R1: "R1", START: "START", SELECT: "SELECT" },
+    defaults: { UP: { x: 13, y: 54, size: 54 }, DOWN: { x: 13, y: 73, size: 54 }, LEFT: { x: 3, y: 64, size: 54 }, RIGHT: { x: 23, y: 64, size: 54 }, TRIANGLE: { x: 78, y: 54, size: 52 }, X: { x: 78, y: 73, size: 52 }, SQUARE: { x: 68, y: 64, size: 52 }, O: { x: 88, y: 64, size: 52 }, L1: { x: 5, y: 37, size: 44 }, R1: { x: 82, y: 37, size: 44 }, START: { x: 52, y: 89, size: 41 }, SELECT: { x: 37, y: 89, size: 41 } },
+  },
 };
 
 function cloneLayout(layout: ControllerLayout): ControllerLayout {
