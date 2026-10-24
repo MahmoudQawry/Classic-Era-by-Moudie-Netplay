@@ -612,11 +612,7 @@ export default function FamicomScreen() {
               }}
               onSave={saveLocalState}
               onLoad={() => { void loadLocalState(); }}
-              onEditLayout={() => {
-                setFocusMode(true);
-                setFocusControlEditor(true);
-                setNetworkState(t("fcEditMode"));
-              }}
+              onEditLayout={() => { setFocusMode(true); setFocusControlEditor(true); setNetworkState(t("fcEditMode")); }}
               onExit={() => (focusMode ? setFocusMode(false) : router.replace({ pathname: "/room/[roomId]", params: { roomId: String(roomId) } }))}
             />
           )}

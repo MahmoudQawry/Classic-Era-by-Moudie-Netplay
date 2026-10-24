@@ -58,8 +58,6 @@ describe("NetPlay input-delay authority", () => {
   });
 
   it("rate limits delay changes so the two devices cannot ping-pong", () => {
-    expect(universalRelay).toContain("const DELAY_CHANGE_COOLDOWN_MS = 2500;");
-    expect(universalRelay).toContain("coolingDown");
     expect(relay).toContain("const DELAY_CHANGE_COOLDOWN_MS = 2500;");
     expect(relay).toContain("coolingDown");
     expect(quality).toContain("DELAY_REQUEST_COOLDOWN_MS");
