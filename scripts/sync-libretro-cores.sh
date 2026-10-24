@@ -52,6 +52,8 @@ fetch_core fceumm fceumm
 fetch_core pcsx_rearmed pcsx_rearmed
 fetch_core genesis_plus_gx genesis_plus_gx
 fetch_core ppsspp ppsspp
+fetch_core mupen64plus_next_gles3 mupen64plus_next_gles3
+fetch_core play play
 fetch_ppsspp_assets
 
 echo "Installed Libretro cores and PPSSPP system assets."

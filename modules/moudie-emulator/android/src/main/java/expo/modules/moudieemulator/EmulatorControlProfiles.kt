@@ -102,4 +102,46 @@ object EmulatorControlProfiles {
     ),
   )
 
+
+  val N64 = EmulatorControlProfile(
+    systemId = "n64",
+    directions = dpad(),
+    actionButtons = listOf(
+      EmulatorTouchButton("a", "A", KeyEvent.KEYCODE_BUTTON_A),
+      EmulatorTouchButton("b", "B", KeyEvent.KEYCODE_BUTTON_B),
+      EmulatorTouchButton("c_up", "C▲", KeyEvent.KEYCODE_DPAD_UP),
+      EmulatorTouchButton("c_down", "C▼", KeyEvent.KEYCODE_DPAD_DOWN),
+      EmulatorTouchButton("c_left", "C◄", KeyEvent.KEYCODE_DPAD_LEFT),
+      EmulatorTouchButton("c_right", "C►", KeyEvent.KEYCODE_DPAD_RIGHT),
+    ),
+    systemButtons = listOf(
+      EmulatorTouchButton("start", "START", KeyEvent.KEYCODE_BUTTON_START),
+    ),
+    shoulderButtons = listOf(
+      EmulatorTouchButton("l", "L", KeyEvent.KEYCODE_BUTTON_L1),
+      EmulatorTouchButton("r", "R", KeyEvent.KEYCODE_BUTTON_R1),
+      EmulatorTouchButton("z", "Z", KeyEvent.KEYCODE_BUTTON_L2),
+    ),
+  )
+
+  val PS2 = EmulatorControlProfile(
+    systemId = "ps2",
+    directions = dpad(),
+    actionButtons = listOf(
+      EmulatorTouchButton("triangle", "△", KeyEvent.KEYCODE_BUTTON_X),
+      EmulatorTouchButton("circle", "○", KeyEvent.KEYCODE_BUTTON_A),
+      EmulatorTouchButton("square", "□", KeyEvent.KEYCODE_BUTTON_Y),
+      EmulatorTouchButton("cross", "×", KeyEvent.KEYCODE_BUTTON_B),
+    ),
+    systemButtons = listOf(
+      EmulatorTouchButton("select", "SELECT", KeyEvent.KEYCODE_BUTTON_SELECT),
+      EmulatorTouchButton("start", "START", KeyEvent.KEYCODE_BUTTON_START),
+    ),
+    shoulderButtons = listOf(
+      EmulatorTouchButton("l1", "L1", KeyEvent.KEYCODE_BUTTON_L1),
+      EmulatorTouchButton("l2", "L2", KeyEvent.KEYCODE_BUTTON_L2),
+      EmulatorTouchButton("r1", "R1", KeyEvent.KEYCODE_BUTTON_R1),
+      EmulatorTouchButton("r2", "R2", KeyEvent.KEYCODE_BUTTON_R2),
+    ),
+  )
 }

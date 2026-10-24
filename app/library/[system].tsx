@@ -10,13 +10,15 @@ import MoudieEmulatorModule from "@/modules/moudie-emulator/src/MoudieEmulatorMo
 import type { EmulatorCoreCapability, EmulatorSystem } from "@/modules/moudie-emulator/src/MoudieEmulator.types";
 import { useLanguage } from "@/lib/language";
 
-const routeSystems: Record<string, EmulatorSystem> = { famicom: "nes", nes: "nes", ps1: "ps1", psp: "psp", sega: "sega" };
+const routeSystems: Record<string, EmulatorSystem> = { famicom: "nes", nes: "nes", ps1: "ps1", psp: "psp", sega: "sega", n64: "n64", ps2: "ps2" };
 
-const displayMeta: Record<EmulatorSystem, { title: string; subtitleKey: "lsNesSubtitle" | "lsPs1Subtitle" | "lsPspSubtitle" | "lsSegaSubtitle"; color: string; icon: keyof typeof MaterialCommunityIcons.glyphMap }> = {
+const displayMeta: Record<EmulatorSystem, { title: string; subtitleKey: string; color: string; icon: keyof typeof MaterialCommunityIcons.glyphMap }> = {
   nes: { title: "Famicom / NES", subtitleKey: "lsNesSubtitle", color: "#F6C453", icon: "controller-classic-outline" },
   ps1: { title: "PlayStation 1", subtitleKey: "lsPs1Subtitle", color: "#B978FF", icon: "sony-playstation" },
   psp: { title: "PlayStation Portable", subtitleKey: "lsPspSubtitle", color: "#33D8FF", icon: "gamepad-outline" },
   sega: { title: "Sega Genesis", subtitleKey: "lsSegaSubtitle", color: "#68E69A", icon: "gamepad-variant-outline" },
+  n64: { title: "Nintendo 64", subtitleKey: "lsN64Subtitle", color: "#FF5E7E", icon: "gamepad-circle-outline" },
+  ps2: { title: "PlayStation 2", subtitleKey: "lsPs2Subtitle", color: "#00E5FF", icon: "sony-playstation" },
 };
 
 export default function EmulatorLibraryScreen() {

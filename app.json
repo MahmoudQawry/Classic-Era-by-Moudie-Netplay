@@ -1,0 +1,11 @@
+{
+  "expo": {
+    "name": "Classic Era by Moudie",
+    "slug": "moudie-netplay",
+    "version": "1.0.0",
+    "android": {
+      "versionCode": 1,
+      "package": "com.app.moudienetplay"
+    }
+  }
+}

@@ -7,13 +7,15 @@ import { ScreenContainer } from "@/components/screen-container";
 import { haptic } from "@/lib/haptics";
 import { useLanguage } from "@/lib/language";
 
-type SystemId = "famicom" | "ps1" | "psp" | "sega";
+type SystemId = "famicom" | "ps1" | "psp" | "sega" | "n64" | "ps2";
 
 const SYSTEMS: { id: SystemId; title: string; detail: string; icon: keyof typeof MaterialCommunityIcons.glyphMap; accent: string }[] = [
   { id: "famicom", title: "Famicom / NES", detail: "FCEUmm · Classic 8-bit", icon: "controller-classic-outline", accent: "#F6C453" },
   { id: "ps1", title: "PlayStation 1", detail: "PCSX-ReARMed · BIN, CUE, ISO, CHD, PBP", icon: "sony-playstation", accent: "#B978FF" },
   { id: "psp", title: "PlayStation Portable", detail: "PPSSPP · ISO, CSO, CHD, PBP", icon: "gamepad-outline", accent: "#33D8FF" },
   { id: "sega", title: "Sega Genesis", detail: "Genesis Plus GX · 3 / 6 button layout", icon: "gamepad-variant-outline", accent: "#68E69A" },
+  { id: "n64", title: "Nintendo 64", detail: "Mupen64Plus-Next · N64, V64, Z64", icon: "gamepad-circle-outline", accent: "#FF5E7E" },
+  { id: "ps2", title: "PlayStation 2", detail: "Play! · ISO, BIN, CHD, CSO", icon: "sony-playstation", accent: "#00E5FF" },
 ];
 
 export default function LocalPlayPickerScreen() {

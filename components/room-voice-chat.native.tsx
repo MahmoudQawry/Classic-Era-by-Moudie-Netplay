@@ -198,7 +198,7 @@ function LiveKitVoiceControls({ members, localMemberId, socket }: { members?: Vo
       }
     };
     pingHeartbeat();
-    const interval = setInterval(pingHeartbeat, 10_000);
+    const interval = setInterval(pingHeartbeat, 3_000);
     return () => clearInterval(interval);
   }, [isMicrophoneEnabled, speaker, voiceChannel, connectionState, localParticipant]);
 

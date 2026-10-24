@@ -37,7 +37,7 @@ This document is the source of truth for controller behavior and layout. Any fut
 
 ## 5. Acceptance test before release
 
-For every one of the four emulators, test at minimum:
+For every one of the six emulators (PS1, PS2, PSP, Sega Genesis, Nintendo 64, NES), test at minimum:
 
 1. Hold UP + face button simultaneously.
 2. Hold LEFT, then add RIGHT/another face button and release them independently.

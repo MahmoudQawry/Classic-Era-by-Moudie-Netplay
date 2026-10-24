@@ -224,7 +224,7 @@ export function registerUniversalNetplayServer(server: HttpServer) {
       }
     });
 
-    socket.on("universal:ready", async (p: { system?: unknown; fingerprint?: unknown; coreVersion?: unknown }) => {
+    const handleReady = async (p: { system?: unknown; fingerprint?: unknown; coreVersion?: unknown }) => {
       if (session.role === "spectator" || !validSystem(p?.system) || !validFingerprint(p?.fingerprint) || !validCoreVersion(p?.coreVersion)) return;
       const ready = { memberId: session.memberId, system: p.system, fingerprint: p.fingerprint.toLowerCase(), coreVersion: p.coreVersion.trim() } satisfies Ready;
       const roomReady = readyByRoom.get(session.roomId) ?? new Map<number, Ready>(); roomReady.set(session.memberId, ready); readyByRoom.set(session.roomId, roomReady);
@@ -239,7 +239,9 @@ export function registerUniversalNetplayServer(server: HttpServer) {
       roomFrameTrackers.delete(session.roomId);
       roomInputDelays.set(session.roomId, 3);
       io.to(channel).emit("universal:bootstrap", { system: first.system, fingerprint: first.fingerprint, coreVersion: first.coreVersion, hostMemberId: first.memberId, playerMemberIds: ids, inputDelay: 3 });
-    });
+    };
+    socket.on("universal:ready", handleReady);
+    socket.on("READY_ROM_LOADED", handleReady);
 
     socket.on("universal:input", async (p: { frame?: unknown; mask?: unknown }) => {
       if (session.role === "spectator" || !validFrame(p?.frame) || !validMask(p?.mask)) return;

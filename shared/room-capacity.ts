@@ -1,4 +1,4 @@
-export type RoomSystem = "nes" | "ps1" | "psp" | "sega";
+export type RoomSystem = "nes" | "ps1" | "psp" | "sega" | "n64" | "ps2";
 
 export const MIN_ACTIVE_PLAYERS = 2;
 export const STANDARD_MAX_ACTIVE_PLAYERS = 4;
@@ -24,6 +24,8 @@ export const ROOM_CAPACITIES: Record<RoomSystem, RoomCapacity> = {
   ps1: { minPlayers: MIN_ACTIVE_PLAYERS, maxPlayers: STANDARD_MAX_ACTIVE_PLAYERS, maxSpectators: STANDARD_MAX_SPECTATORS },
   psp: { minPlayers: MIN_ACTIVE_PLAYERS, maxPlayers: STANDARD_MAX_ACTIVE_PLAYERS, maxSpectators: STANDARD_MAX_SPECTATORS },
   sega: { minPlayers: MIN_ACTIVE_PLAYERS, maxPlayers: STANDARD_MAX_ACTIVE_PLAYERS, maxSpectators: STANDARD_MAX_SPECTATORS },
+  n64: { minPlayers: MIN_ACTIVE_PLAYERS, maxPlayers: STANDARD_MAX_ACTIVE_PLAYERS, maxSpectators: STANDARD_MAX_SPECTATORS },
+  ps2: { minPlayers: MIN_ACTIVE_PLAYERS, maxPlayers: STANDARD_MAX_ACTIVE_PLAYERS, maxSpectators: STANDARD_MAX_SPECTATORS },
 };
 
 export function roomCapacityFor(system: RoomSystem): RoomCapacity {

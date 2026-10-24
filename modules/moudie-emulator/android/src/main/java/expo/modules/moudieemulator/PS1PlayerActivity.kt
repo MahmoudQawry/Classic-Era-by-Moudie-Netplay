@@ -238,6 +238,65 @@ class PS1PlayerActivity : ComponentActivity() {
       .show()
   }
 
+
+  private fun showAudioVolumesDialog() {
+    val layout = android.widget.LinearLayout(this).apply {
+      orientation = android.widget.LinearLayout.VERTICAL
+      setPadding(50, 40, 50, 20)
+    }
+
+    val gameLabel = android.widget.TextView(this).apply {
+      text = "GAME AUDIO"
+      setTextColor(android.graphics.Color.WHITE)
+      textSize = 14f
+    }
+    layout.addView(gameLabel)
+
+    val currentMusic = audioManager?.getStreamVolume(android.media.AudioManager.STREAM_MUSIC) ?: 10
+    val maxMusic = audioManager?.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC) ?: 15
+    val gameSeekBar = android.widget.SeekBar(this).apply {
+      max = maxMusic
+      progress = currentMusic
+      setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+        override fun onProgressChanged(sb: android.widget.SeekBar?, progress: Int, fromUser: Boolean) {
+          if (fromUser) audioManager?.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, progress, 0)
+        }
+        override fun onStartTrackingTouch(sb: android.widget.SeekBar?) {}
+        override fun onStopTrackingTouch(sb: android.widget.SeekBar?) {}
+      })
+    }
+    layout.addView(gameSeekBar)
+
+    val voiceLabel = android.widget.TextView(this).apply {
+      text = "VOICE CHAT"
+      setTextColor(android.graphics.Color.WHITE)
+      textSize = 14f
+      setPadding(0, 30, 0, 0)
+    }
+    layout.addView(voiceLabel)
+
+    val currentVoice = audioManager?.getStreamVolume(android.media.AudioManager.STREAM_VOICE_CALL) ?: 5
+    val maxVoice = audioManager?.getStreamMaxVolume(android.media.AudioManager.STREAM_VOICE_CALL) ?: 10
+    val voiceSeekBar = android.widget.SeekBar(this).apply {
+      max = maxVoice
+      progress = currentVoice
+      setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+        override fun onProgressChanged(sb: android.widget.SeekBar?, progress: Int, fromUser: Boolean) {
+          if (fromUser) audioManager?.setStreamVolume(android.media.AudioManager.STREAM_VOICE_CALL, progress, 0)
+        }
+        override fun onStartTrackingTouch(sb: android.widget.SeekBar?) {}
+        override fun onStopTrackingTouch(sb: android.widget.SeekBar?) {}
+      })
+    }
+    layout.addView(voiceSeekBar)
+
+    android.app.AlertDialog.Builder(this)
+      .setTitle("AUDIO VOLUMES")
+      .setView(layout)
+      .setPositiveButton("DONE", null)
+      .show()
+  }
+
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     setupGameAudioFocus()
@@ -982,6 +1041,7 @@ class PS1PlayerActivity : ComponentActivity() {
       "MEMORY CARD",
       "FPS LIMIT (${fpsLimit.uppercase()})",
       "FRAME-SKIP (${frameSkip.uppercase()})",
+      "AUDIO VOLUMES",
       "EXIT GAME"
     )
 
@@ -994,6 +1054,7 @@ class PS1PlayerActivity : ComponentActivity() {
           3 -> showMemoryCardInfo()
           4 -> toggleFpsLimit()
           5 -> toggleFrameSkip()
+          6 -> showAudioVolumesDialog()
           else -> finish()
         }
       }

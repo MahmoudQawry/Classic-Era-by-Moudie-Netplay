@@ -14,11 +14,11 @@ import { useLanguage } from "@/lib/language";
 import { useRealtimeRoomSnapshot } from "@/lib/use-realtime-room-snapshot";
 import { roomCapacityFor } from "@/shared/room-capacity";
 
-const SYSTEM_LABEL: Record<string, string> = { psp: "PSP", nes: "Famicom / NES", sega: "Sega Genesis", ps1: "PlayStation 1" };
+const SYSTEM_LABEL: Record<string, string> = { psp: "PSP", nes: "Famicom / NES", sega: "Sega Genesis", ps1: "PlayStation 1", n64: "Nintendo 64", ps2: "PlayStation 2" };
 
 type MediaToken = { configured: boolean; url?: string; roomName?: string; token?: string; canPublish?: boolean; message?: string };
 
-type RoomSystem = "nes" | "ps1" | "psp" | "sega";
+type RoomSystem = "nes" | "ps1" | "psp" | "sega" | "n64" | "ps2";
 
 export default function RoomScreen() {
   const { t } = useLanguage();
@@ -59,7 +59,11 @@ export default function RoomScreen() {
     socket.on("connect", connected);
     socket.on("disconnect", disconnected);
     socket.connect();
+    const pingTimer = setInterval(() => {
+      if (socket.connected) socket.emit("ping", { time: Date.now() });
+    }, 3_000);
     return () => {
+      clearInterval(pingTimer);
       socket.off("connect", connected);
       socket.off("disconnect", disconnected);
       socket.disconnect();
