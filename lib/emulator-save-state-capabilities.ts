@@ -1,4 +1,4 @@
-export type EmulatorSystemId = "nes" | "ps1" | "psp" | "sega";
+export type EmulatorSystemId = "nes" | "ps1" | "psp" | "sega" | "n64" | "ps2";
 
 export type SaveStateCapability = {
   available: boolean;

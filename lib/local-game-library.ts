@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-export type LocalSystem = "nes" | "sega" | "ps1" | "psp";
+export type LocalSystem = "nes" | "sega" | "ps1" | "psp" | "n64" | "ps2";
 
 export type LocalGame = {
   id: string;

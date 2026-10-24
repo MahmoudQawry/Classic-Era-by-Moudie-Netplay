@@ -11,13 +11,15 @@ import { getProfileName, saveProfileName, saveRoomCredential } from "@/lib/room-
 import { createRealtimeRoom } from "@/lib/realtime-room-service";
 import { roomCapacityFor } from "@/shared/room-capacity";
 
-type SystemId = "psp" | "nes" | "sega" | "ps1";
+type SystemId = "psp" | "nes" | "sega" | "ps1" | "n64" | "ps2";
 
 const SYSTEMS: { id: SystemId; label: string; detail: string; icon: keyof typeof MaterialCommunityIcons.glyphMap; accent: string }[] = [
   { id: "ps1", label: "PS1", detail: "PlayStation", icon: "gamepad-variant", accent: "#C05DFF" },
   { id: "psp", label: "PSP", detail: "Portable", icon: "gamepad-outline", accent: "#38D4FF" },
   { id: "nes", label: "NES", detail: "Famicom", icon: "controller-classic-outline", accent: "#FF727A" },
   { id: "sega", label: "SEGA", detail: "Genesis", icon: "gamepad-variant-outline", accent: "#70E59A" },
+  { id: "n64", label: "N64", detail: "Nintendo 64", icon: "gamepad-circle-outline", accent: "#FF5E7E" },
+  { id: "ps2", label: "PS2", detail: "PlayStation 2", icon: "sony-playstation", accent: "#00E5FF" },
 ];
 
 export default function CreateRoomScreen() {

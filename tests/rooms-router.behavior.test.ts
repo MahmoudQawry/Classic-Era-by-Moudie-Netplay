@@ -97,7 +97,7 @@ vi.mock("../server/db", () => ({
       const room = h.store.rooms.find((candidate) => candidate.id === input.roomId);
       if (!room || room.status !== "waiting") throw new Error("الغرفة غير متاحة للانضمام.");
       const roomMembers = h.store.members.filter((member) => member.roomId === input.roomId);
-      const decision = decideSeat(roomMembers, input.role, roomCapacityFor(room.system as "nes" | "ps1" | "psp" | "sega"));
+      const decision = decideSeat(roomMembers, input.role, roomCapacityFor(room.system as any));
       if (!decision.allowed) {
         if (decision.reason === "players-full") throw new Error(`مقاعد اللعب (${input.maxPlayers}) مكتملة. يمكنك الدخول كمشاهد.`);
         if (decision.reason === "spectators-full") throw new Error(`مقاعد المشاهدة (${input.maxSpectators}) مكتملة.`);

@@ -2,7 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useEffect, useRef, useState } from "react";
 import { PanResponder, Pressable, StyleSheet, Text, View, useWindowDimensions, type LayoutChangeEvent } from "react-native";
 
-type SystemId = "famicom" | "ps1" | "psp" | "sega";
+type SystemId = "famicom" | "ps1" | "psp" | "sega" | "n64" | "ps2";
 type Orientation = "portrait" | "landscape";
 type Frame = { x: number; y: number; width: number; height: number };
 

@@ -95,7 +95,7 @@ export async function getUserByOpenId(openId: string) {
 export async function createRoom(input: {
   joinCode: string;
   name: string;
-  system: "psp" | "nes" | "sega" | "ps1";
+  system: "psp" | "nes" | "sega" | "ps1" | "n64" | "ps2";
   hostName: string;
   maxPlayers: number;
   hostTokenHash: string;

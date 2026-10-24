@@ -12,7 +12,7 @@ import { joinPublicRealtimeRoom, listPublicRealtimeRooms, type RealtimePublicRoo
 
 type JoinAs = "player" | "spectator";
 
-const systemAccent: Record<RealtimePublicRoom["system"], string> = { ps1: "#C05DFF", psp: "#38D4FF", nes: "#FF727A", sega: "#70E59A" };
+const systemAccent: Record<RealtimePublicRoom["system"], string> = { ps1: "#C05DFF", psp: "#38D4FF", nes: "#FF727A", sega: "#70E59A", n64: "#FF5E7E", ps2: "#00E5FF" };
 
 export default function PublicLobbyScreen() {
   const { t } = useLanguage();

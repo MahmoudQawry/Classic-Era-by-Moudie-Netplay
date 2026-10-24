@@ -9,7 +9,7 @@ import { createRoomMediaToken } from "./livekit";
 import { createAccessToken, createJoinCode, hashAccessToken } from "./rooms";
 import { z } from "zod";
 
-const roomSystemSchema = z.enum(["psp", "nes", "sega", "ps1"]);
+const roomSystemSchema = z.enum(["psp", "nes", "sega", "ps1", "n64", "ps2"]);
 
 /** Simple in-memory sliding-window limiter: blocks room-creation and join spam
  * from a single IP. Sufficient for the single-instance room service deployment. */

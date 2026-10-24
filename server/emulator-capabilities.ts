@@ -34,6 +34,16 @@ export const EMULATOR_ROOM_CAPABILITIES: Record<RoomSystem, EmulatorRoomCapabili
     netplay: "retroarch", maxPlayers: ROOM_CAPACITIES.sega.maxPlayers, maxSpectators: ROOM_CAPACITIES.sega.maxSpectators,
     note: "Up to 4 active players and 4 spectators when the game supports four controllers; otherwise use fewer player seats.",
   },
+  n64: {
+    system: "n64", coreName: "Mupen64Plus-Next", maxRoomMembers: roomMemberLimit("n64"), defaultControllerSeats: 2, maxControllerSeats: 4,
+    netplay: "retroarch", maxPlayers: ROOM_CAPACITIES.n64.maxPlayers, maxSpectators: ROOM_CAPACITIES.n64.maxSpectators,
+    note: "Nintendo 64: Up to 4 active players and 4 spectators.",
+  },
+  ps2: {
+    system: "ps2", coreName: "Play!", maxRoomMembers: roomMemberLimit("ps2"), defaultControllerSeats: 2, maxControllerSeats: 2,
+    netplay: "retroarch", maxPlayers: ROOM_CAPACITIES.ps2.maxPlayers, maxSpectators: ROOM_CAPACITIES.ps2.maxSpectators,
+    note: "PlayStation 2: Up to 2 active players and 6 spectators.",
+  },
 };
 
 export function capabilityFor(system: RoomSystem): EmulatorRoomCapability {
