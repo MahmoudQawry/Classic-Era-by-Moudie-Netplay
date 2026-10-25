@@ -6,7 +6,7 @@ import { AppState, PermissionsAndroid, Platform, Pressable, ScrollView, StyleShe
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { getApiBaseUrl } from "@/constants/oauth";
 import { useLanguage } from "@/lib/language";
-import MoudieEmulator from "@/modules/moudie-emulator";
+import MoudieEmulator from "@/modules/moudie-emulator/src/MoudieEmulatorModule";
 
 registerGlobals();
 
