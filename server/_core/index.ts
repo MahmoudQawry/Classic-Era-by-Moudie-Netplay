@@ -66,6 +66,10 @@ async function startServer() {
     res.json({ ok: true, timestamp: Date.now() });
   });
 
+  app.get("/api/netplay/ping", (_req, res) => {
+    res.json({ ok: true, serverTime: Date.now() });
+  });
+
   app.use(
     "/api/trpc",
     createExpressMiddleware({

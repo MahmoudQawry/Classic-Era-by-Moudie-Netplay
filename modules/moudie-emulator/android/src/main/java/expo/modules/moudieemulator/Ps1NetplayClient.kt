@@ -1,4 +1,4 @@
-﻿package expo.modules.moudieemulator
+package expo.modules.moudieemulator
 
 import io.socket.client.IO
 import io.socket.client.Socket
@@ -14,7 +14,7 @@ data class Ps1NetplayConfig(
   val playerIndex: Int,
 )
 
-/** Authenticated PS1 relay for control inputs/state with adaptive improvements */
+/** Authenticated PS1 relay with low-latency UDP DataChannel & Master-Slave Clock Sync */
 class Ps1NetplayClient(
   private val config: Ps1NetplayConfig,
   private val onBootstrap: () -> Unit,
@@ -26,17 +26,25 @@ class Ps1NetplayClient(
   private val onStatus: (String) -> Unit,
   private val onQuality: (NetplayQuality) -> Unit,
   private val onDelayUpdate: ((delay: Long) -> Unit)? = null,
+  private val onClockSync: ((masterFrame: Long, timestamp: Long) -> Unit)? = null,
 ) {
   private var socket: Socket? = null
   private var qualityMonitor: NetplayQualityMonitor? = null
+  private var udpTransport: NetplayUdpDataTransport? = null
 
   fun connect() {
+    udpTransport = NetplayUdpDataTransport(
+      localMemberId = config.memberId,
+      onRemoteInput = onRemoteInput,
+      onClockSync = onClockSync
+    )
+
     val options = IO.Options().apply {
       path = "/api/netplay"
       transports = arrayOf("websocket")
       reconnection = true
       timeout = 5_000
-      reconnectionAttempts = 20 // Increased for adaptive persistence
+      reconnectionAttempts = 20
       reconnectionDelay = 1000
       reconnectionDelayMax = 8_000
       randomizationFactor = 0.3
@@ -51,13 +59,42 @@ class Ps1NetplayClient(
     qualityMonitor = NetplayQualityMonitor(connectedSocket, onQuality, "netplay:quality-probe", "netplay:quality-pong")
     socket = connectedSocket.apply {
       on(Socket.EVENT_CONNECT) {
-        emit("netplay:ps1-ready", JSONObject().put("fingerprint", config.fingerprint).put("coreVersion", config.coreVersion))
+        val readyPayload = JSONObject()
+          .put("fingerprint", config.fingerprint)
+          .put("coreVersion", config.coreVersion)
+
+        emit("netplay:ps1-ready", readyPayload)
+        // Pre-Flight Handshake Barrier: report READY_CRC_MATCHED
+        emit("READY_CRC_MATCHED", readyPayload)
+
+        val port = udpTransport?.localPort ?: 0
+        if (port > 0) {
+          emit("netplay:udp-endpoint", JSONObject().put("port", port))
+        }
+
         qualityMonitor?.resume()
-        onStatus("PS1 channel connected. adaptive sync active.")
+        onStatus("PS1 channel connected - UDP DataChannel active")
+      }
+      on("netplay:udp-endpoint") { args ->
+        val payload = args.firstOrNull() as? JSONObject ?: return@on
+        val remoteMemberId = payload.optInt("memberId", 0)
+        val address = payload.optString("address", "")
+        val port = payload.optInt("port", 0)
+        if (remoteMemberId > 0 && address.isNotBlank() && port > 0) {
+          udpTransport?.registerRemotePeer(remoteMemberId, address, port)
+        }
+      }
+      on("netplay:clock-sync") { args ->
+        val payload = args.firstOrNull() as? JSONObject ?: return@on
+        val masterFrame = payload.optLong("masterFrame", -1L)
+        val timestamp = payload.optLong("timestamp", -1L)
+        if (masterFrame >= 0L && timestamp > 0L) {
+          onClockSync?.invoke(masterFrame, timestamp)
+        }
       }
       on("netplay:ps1-session-bootstrap") { args ->
         val payload = args.firstOrNull() as? JSONObject
-        val inputDelay = payload?.optLong("inputDelay", 3L) ?: 3L
+        val inputDelay = payload?.optLong("inputDelay", 2L) ?: 2L
         onDelayUpdate?.invoke(inputDelay)
         onBootstrap()
       }
@@ -80,7 +117,7 @@ class Ps1NetplayClient(
       on("netplay:ps1-session-go") { args ->
         val payload = args.firstOrNull() as? JSONObject ?: return@on
         val startAt = payload.optLong("startAt", -1L)
-        val inputDelay = payload.optLong("inputDelay", 3L)
+        val inputDelay = payload.optLong("inputDelay", 2L)
         onDelayUpdate?.invoke(inputDelay)
         val members = payload.optJSONArray("playerMemberIds")
         val playerMemberIds = buildList {
@@ -142,9 +179,18 @@ class Ps1NetplayClient(
   }
 
   fun sendInputFrame(frame: Long, mask: Int) {
-    if (frame >= 0L && mask in 0..0xffff && socket?.connected() == true) {
-      // Inputs are ephemeral. The connected check prevents stale reconnect queues.
+    if (frame < 0L || mask !in 0..0xffff) return
+    udpTransport?.sendInput(frame, mask)
+    if (socket?.connected() == true) {
       socket?.emit("netplay:ps1-input", JSONObject().put("frame", frame).put("mask", mask))
+    }
+  }
+
+  fun sendClockSync(masterFrame: Long, timestamp: Long) {
+    if (masterFrame < 0L) return
+    udpTransport?.sendClockSync(masterFrame, timestamp)
+    if (socket?.connected() == true) {
+      socket?.emit("netplay:clock-sync", JSONObject().put("masterFrame", masterFrame).put("timestamp", timestamp))
     }
   }
 
@@ -176,6 +222,8 @@ class Ps1NetplayClient(
   }
 
   fun close() {
+    udpTransport?.close()
+    udpTransport = null
     qualityMonitor?.close()
     qualityMonitor = null
     socket?.off()

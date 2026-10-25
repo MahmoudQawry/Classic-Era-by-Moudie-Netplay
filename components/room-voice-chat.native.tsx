@@ -6,6 +6,7 @@ import { AppState, PermissionsAndroid, Platform, Pressable, ScrollView, StyleShe
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { getApiBaseUrl } from "@/constants/oauth";
 import { useLanguage } from "@/lib/language";
+import MoudieEmulator from "@/modules/moudie-emulator";
 
 registerGlobals();
 
@@ -48,6 +49,15 @@ const VOICE_ICE_SERVERS: RTCIceServerLike[] = [
   ...(ENV_TURN_URL ? [] : DEFAULT_TURN),
 ];
 type RTCIceServerLike = { urls: string; username?: string; credential?: string };
+
+function enforceOpusFec(sdpObj: any): any {
+  if (!sdpObj || typeof sdpObj.sdp !== "string") return sdpObj;
+  const modifiedSdp = sdpObj.sdp.replace(
+    /(a=fmtp:\d+ .*)/g,
+    (m: string) => (m.includes("useinbandfec=1") ? m : `${m};useinbandfec=1;usedtx=0`)
+  );
+  return { ...sdpObj, sdp: modifiedSdp };
+}
 
 const MESH_HEALTH_INTERVAL_MS = 15_000;
 
@@ -451,8 +461,9 @@ function BuiltInVoiceControls({ socket, memberId, members, memberRole, expose }:
         if (peer.signalingState !== "stable") return;
         if (restart) peer.restartIce?.();
         const offer = await peer.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: false, iceRestart: restart });
-        await peer.setLocalDescription(offer);
-        currentSocket.emit?.("netplay:signal", { targetMemberId: remoteId, signal: { kind: "voice-offer", description: offer } });
+        const fecOffer = enforceOpusFec(offer);
+        await peer.setLocalDescription(fecOffer);
+        currentSocket.emit?.("netplay:signal", { targetMemberId: remoteId, signal: { kind: "voice-offer", description: fecOffer } });
       } catch {
         // The retry timer re-attempts.
       } finally {
@@ -492,8 +503,9 @@ function BuiltInVoiceControls({ socket, memberId, members, memberRole, expose }:
         pendingCandidates.delete(remoteId);
         for (const candidate of queued) await peer.addIceCandidate(new RTCIceCandidate(candidate));
         const answer = await peer.createAnswer();
-        await peer.setLocalDescription(answer);
-        currentSocket.emit?.("netplay:signal", { targetMemberId: remoteId, signal: { kind: "voice-answer", description: answer } });
+        const fecAnswer = enforceOpusFec(answer);
+        await peer.setLocalDescription(fecAnswer);
+        currentSocket.emit?.("netplay:signal", { targetMemberId: remoteId, signal: { kind: "voice-answer", description: fecAnswer } });
         return;
       }
       if (kind === "voice-answer" && signal.description) {
@@ -574,6 +586,27 @@ function BuiltInVoiceControls({ socket, memberId, members, memberRole, expose }:
 
 export const RoomVoiceChat = forwardRef<RoomVoiceChatHandle, Props>(function RoomVoiceChat({ mediaToken: suppliedToken, socket, memberId, members, memberRole }: Props, ref) {
   const [mediaToken, setMediaToken] = useState<MediaToken | null | undefined>(suppliedToken);
+
+  // Dedicated Native Android Foreground Service: keeps voice audio & heartbeats alive during emulation
+  useEffect(() => {
+    const auth = readSocketAuth(socket);
+    const roomId = Number(auth?.roomId);
+    const authMemberId = Number(auth?.memberId ?? memberId);
+    const memberToken = typeof auth?.memberToken === "string" ? auth.memberToken : "";
+    if (Platform.OS === "android" && roomId > 0 && authMemberId > 0) {
+      MoudieEmulator.startVoiceService({
+        roomId,
+        memberId: authMemberId,
+        serverUrl: getApiBaseUrl(),
+        token: memberToken,
+      });
+    }
+    return () => {
+      if (Platform.OS === "android") {
+        MoudieEmulator.stopVoiceService();
+      }
+    };
+  }, [socket, memberId]);
   const builtInHandle = useRef<RoomVoiceChatHandle>({ setMicrophoneEnabled: async () => undefined });
   useImperativeHandle(ref, () => ({
     setMicrophoneEnabled: (enabled) => builtInHandle.current.setMicrophoneEnabled(enabled),
@@ -626,7 +659,7 @@ export const RoomVoiceChat = forwardRef<RoomVoiceChatHandle, Props>(function Roo
           adaptiveStream: true,
           publishDefaults: {
             audioPreset: { maxBitrate: 64_000, priority: "high" } as never,
-            dtx: true,
+            dtx: false, // Continuous Opus: DTX disabled to eliminate packet drops
             red: true,
             forceStereo: false,
             autoGainControl: true,

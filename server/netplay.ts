@@ -348,6 +348,32 @@ export function registerNetplayServer(server: HttpServer) {
     });
     socket.to(channel).emit("netplay:presence", { memberId: session.memberId, displayName: session.displayName, online: true });
 
+    // Master Frame Clock synchronization relay
+    socket.on("netplay:clock-sync", (payload: { masterFrame?: unknown; timestamp?: unknown }) => {
+      if (session.role !== "host") return;
+      const masterFrame = Number(payload?.masterFrame);
+      const timestamp = Number(payload?.timestamp);
+      if (Number.isSafeInteger(masterFrame) && Number.isSafeInteger(timestamp)) {
+        socket.to(channel).volatile.emit("netplay:clock-sync", {
+          masterFrame,
+          timestamp,
+          serverTime: Date.now(),
+        });
+      }
+    });
+
+    // UDP endpoint signaling for low-latency peer DataChannel
+    socket.on("netplay:udp-endpoint", (payload: { port?: unknown }) => {
+      const port = Number(payload?.port);
+      if (!Number.isInteger(port) || port <= 0 || port > 65535) return;
+      const clientIp = socket.handshake.address?.replace(/^.*:/, "") || "127.0.0.1";
+      socket.to(channel).emit("netplay:udp-endpoint", {
+        memberId: session.memberId,
+        address: clientIp,
+        port,
+      });
+    });
+
     // adaptive quality probe handler - THIS WAS MISSING causing CONNECTING forever
     socket.on("netplay:quality-probe", (payload: QualityProbePayload) => {
       const sequence = typeof payload?.sequence === "number" && Number.isSafeInteger(payload.sequence) ? payload.sequence : -1;
@@ -543,7 +569,9 @@ export function registerNetplayServer(server: HttpServer) {
       }
     });
 
-    socket.on("netplay:ps1-ready", (payload: Ps1ReadyPayload) => {
+    const onPs1ReadyHandler = (payload: Ps1ReadyPayload) => {
+    socket.on("READY_CRC_MATCHED", (p: any) => { if (session.clientKind === "ps1-player") onPs1ReadyHandler(p); });
+    socket.on("netplay:ps1-ready", onPs1ReadyHandler);
       const fingerprint = typeof payload?.fingerprint === "string" ? payload.fingerprint.toLowerCase() : "";
       const coreVersion = typeof payload?.coreVersion === "string" ? payload.coreVersion.trim() : "";
       const pending = pendingSessions.get(session.roomId);
@@ -657,7 +685,9 @@ export function registerNetplayServer(server: HttpServer) {
       }
     });
 
-    socket.on("netplay:universal-ready", (payload: SessionReadyPayload) => {
+    const onUniversalReadyHandler = (payload: SessionReadyPayload) => {
+    socket.on("READY_CRC_MATCHED", (p: any) => { if (session.clientKind === "universal-player") onUniversalReadyHandler(p); });
+    socket.on("netplay:universal-ready", onUniversalReadyHandler);
       const system = payload?.system === "psp" || payload?.system === "sega" ? payload.system : null;
       const fingerprint = typeof payload?.fingerprint === "string" ? payload.fingerprint.toLowerCase() : "";
       const coreVersion = typeof payload?.coreVersion === "string" ? payload.coreVersion.trim() : "";

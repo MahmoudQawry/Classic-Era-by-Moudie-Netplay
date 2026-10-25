@@ -45,6 +45,10 @@ declare class MoudieEmulatorModule extends NativeModule<MoudieEmulatorModuleEven
   launchFamicomFocusGame(uri: string, fileName: string, options?: PlayerLaunchOptions): Promise<void>;
   setFamicomFocusLandscape(active: boolean): Promise<void>;
   installPS1Bios(uri: string, fileName: string): Promise<Record<string, { required: boolean; available: boolean; files?: string[]; message: string }>>;
+  startVoiceService(options: { roomId: number; memberId: number; serverUrl?: string; token?: string }): boolean;
+  stopVoiceService(): boolean;
+  setVoiceSpeaker(enabled: boolean): boolean;
+  isVoiceServiceRunning(): boolean;
 }
 
 /**
@@ -73,6 +77,10 @@ function unavailableModule(): MoudieEmulatorModule {
     launchFamicomFocusGame: reject,
     setFamicomFocusLandscape: reject,
     installPS1Bios: reject,
+    startVoiceService: () => false,
+    stopVoiceService: () => false,
+    setVoiceSpeaker: () => false,
+    isVoiceServiceRunning: () => false,
   } as unknown as MoudieEmulatorModule;
 }
 

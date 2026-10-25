@@ -63,7 +63,7 @@ class PS1PlayerActivity : ComponentActivity() {
     const val EXTRA_PLAYER_ASPECT_RATIO = "expo.modules.moudieemulator.PLAYER_ASPECT_RATIO"
     const val EXTRA_PLAYER_SETTINGS_MODE = "expo.modules.moudieemulator.PLAYER_SETTINGS_MODE"
     private const val NETPLAY_CORE_VERSION = "pcsx-rearmed-0.13.2-lockstep-v2-adaptive"
-    private const val NETPLAY_INPUT_DELAY_FRAMES = 3L
+    private const val NETPLAY_INPUT_DELAY_FRAMES = 2L
     private const val NETPLAY_FRAME_INTERVAL_MS = 16L
     private const val MAX_PREDICTION_FRAMES = 30
     private const val JITTER_BUFFER_FRAMES = 4
@@ -121,6 +121,7 @@ class PS1PlayerActivity : ComponentActivity() {
   private var lastFrameReceivedAt = 0L
   private var consecutiveDesyncs = 0
   private var frameDriftMs = 0L
+  @Volatile private var clockDriftFrames = 0L
   private lateinit var metricPill: TextView
   private var frameWindowStartedAt = 0L
   private var framesInWindow = 0
@@ -468,6 +469,14 @@ class PS1PlayerActivity : ComponentActivity() {
         if (!lockstepActive.get()) netplayInputDelayFrames = quality.recommendedInputDelayFrames()
         updateMetricPill(null)
       } },
+      onClockSync = { masterFrame, masterTimestamp ->
+        if (localPlayerIndex != 0) {
+          val now = android.os.SystemClock.elapsedRealtime()
+          val elapsed = (now - masterTimestamp).coerceAtLeast(0L)
+          val expectedMaster = masterFrame + (elapsed / NETPLAY_FRAME_INTERVAL_MS)
+          clockDriftFrames = nextLockstepFrame - expectedMaster
+        }
+      },
     ).also { it.connect() }
   }
 
@@ -609,6 +618,11 @@ class PS1PlayerActivity : ComponentActivity() {
       synchronized(localFrameMasks) { localFrameMasks[targetFrame] = localMask }
       netplayClient?.sendInputFrame(targetFrame, localMask)
 
+      // Master Frame Clock: Host broadcasts (MasterFrameCounter, Timestamp) every 30 frames
+      if (localPlayerIndex == 0 && (nextLockstepFrame % 30L == 0L)) {
+        netplayClient?.sendClockSync(nextLockstepFrame, now)
+      }
+
       // Cleanup old history to prevent memory leak (adaptive)
       synchronized(localFrameMasks) {
         val toRemove = localFrameMasks.keys.filter { it < nextLockstepFrame - FRAME_HISTORY_CLEANUP_THRESHOLD }
@@ -629,6 +643,21 @@ class PS1PlayerActivity : ComponentActivity() {
         // Update last known for prediction
         if (remoteMasks != null) {
           remoteMasks.forEach { (memberId, mask) -> lastRemoteMasks[memberId] = mask }
+        }
+        // Extrapolate last known state for up to 3 frames without stalling emulation
+        if (predictedFrames <= 3) {
+          appliedMasksByPort[localPlayerIndex] = applyMask(scheduledLocalMask, localPlayerIndex, appliedMasksByPort[localPlayerIndex] ?: 0)
+          expectedRemoteMembers.forEach { remoteMemberId ->
+            val port = sessionPlayerMemberIds.indexOf(remoteMemberId)
+            val predictedMask = remoteMasks?.get(remoteMemberId) ?: lastRemoteMasks[remoteMemberId] ?: 0
+            appliedMasksByPort[port] = applyMask(predictedMask, port, appliedMasksByPort[port] ?: 0)
+          }
+          retroView.requestRender()
+          nextLockstepFrame += 1L
+          val nextExpectedTime = sessionStartTimeMs + (nextLockstepFrame * NETPLAY_FRAME_INTERVAL_MS)
+          val delay = (nextExpectedTime - now).coerceIn(1L, 32L)
+          lockstepHandler.postDelayed(this, delay)
+          return
         }
 
         if (predictedFrames > MAX_PREDICTION_FRAMES) {
@@ -706,9 +735,11 @@ class PS1PlayerActivity : ComponentActivity() {
       frameDriftMs = (frameDriftMs * 0.9 + drift * 0.1).toLong()
       // If we're behind (drift positive), run slightly faster; if ahead, slightly slower
       val adjustedInterval = when {
-        frameDriftMs > 32 -> 8L // We're behind, catch up
+        localPlayerIndex != 0 && clockDriftFrames > 0 -> NETPLAY_FRAME_INTERVAL_MS + 1L // ahead of host: delay by 1ms (17ms)
+        localPlayerIndex != 0 && clockDriftFrames < 0 -> (NETPLAY_FRAME_INTERVAL_MS - 1L).coerceAtLeast(1L) // behind host: catch up without sleeping
+        frameDriftMs > 32 -> 8L
         frameDriftMs > 16 -> 12L
-        frameDriftMs < -32 -> 24L // We're ahead, slow down
+        frameDriftMs < -32 -> 24L
         frameDriftMs < -16 -> 20L
         else -> NETPLAY_FRAME_INTERVAL_MS
       }

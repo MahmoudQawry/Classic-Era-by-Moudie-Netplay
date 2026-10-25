@@ -62,7 +62,7 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
     const val EXTRA_NETPLAY_CORE_VERSION = "expo.modules.moudieemulator.NETPLAY_CORE_VERSION"
     const val EXTRA_NETPLAY_PLAYER = "expo.modules.moudieemulator.NETPLAY_PLAYER"
     private const val NETPLAY_FRAME_INTERVAL_MS = 16L
-    private const val NETPLAY_INPUT_DELAY_FRAMES = 3L
+    private const val NETPLAY_INPUT_DELAY_FRAMES = 2L
     private const val MAX_PREDICTION_FRAMES = 30
     private const val JITTER_BUFFER_FRAMES = 4
     private const val RESYNC_TIMEOUT_MS = 5000L
@@ -108,6 +108,7 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
   private var lastFrameReceivedAt = 0L
   private var consecutiveDesyncs = 0
   private var frameDriftMs = 0L
+  @Volatile private var clockDriftFrames = 0L
   @Volatile private var lastNetplaySyncId = -1L
   private var microphoneMuted = true
   private var speakerEnabled = true
@@ -357,6 +358,14 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
       onChat = { displayName, text -> runOnUiThread { showToast("$displayName: $text") } },
       onStatus = { message -> runOnUiThread { showToast(message) } },
       onQuality = { quality -> runOnUiThread { netplayQuality = quality; if (!lockstepActive.get()) netplayInputDelayFrames = quality.recommendedInputDelayFrames(); updateMetric(null) } },
+      onClockSync = { masterFrame, masterTimestamp ->
+        if (localPlayerIndex != 0) {
+          val now = android.os.SystemClock.elapsedRealtime()
+          val elapsed = (now - masterTimestamp).coerceAtLeast(0L)
+          val expectedMaster = masterFrame + (elapsed / NETPLAY_FRAME_INTERVAL_MS)
+          clockDriftFrames = nextLockstepFrame - expectedMaster
+        }
+      },
     ).also { it.connect() }
     addRoomOverlayButtons()
   }
@@ -444,6 +453,11 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
       synchronized(localFrameMasks) { localFrameMasks[targetFrame] = currentMask }
       netplayClient?.sendInputFrame(targetFrame, currentMask)
 
+      // Master Frame Clock: Host broadcasts (MasterFrameCounter, Timestamp) every 30 frames
+      if (localPlayerIndex == 0 && (nextLockstepFrame % 30L == 0L)) {
+        netplayClient?.sendClockSync(nextLockstepFrame, now)
+      }
+
       // Cleanup old history
       synchronized(localFrameMasks) {
         val toRemove = localFrameMasks.keys.filter { it < nextLockstepFrame - FRAME_HISTORY_CLEANUP_THRESHOLD }
@@ -461,6 +475,23 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
         predictedFrames++
         if (remoteMasks != null) {
           remoteMasks.forEach { (memberId, mask) -> lastRemoteMasks[memberId] = mask }
+        }
+        // Extrapolate last known state for up to 3 frames without stalling emulation
+        if (predictedFrames <= 3) {
+          applyMask(localMask, localPlayerIndex, appliedMasksByPort[localPlayerIndex] ?: 0)
+          appliedMasksByPort[localPlayerIndex] = localMask
+          remoteMembers.forEach { memberId ->
+            val port = sessionPlayerMemberIds.indexOf(memberId)
+            val mask = remoteMasks?.get(memberId) ?: lastRemoteMasks[memberId] ?: 0
+            applyMask(mask, port, appliedMasksByPort[port] ?: 0)
+            appliedMasksByPort[port] = mask
+          }
+          retroView.requestRender()
+          nextLockstepFrame += 1L
+          val nextExpectedTime = sessionStartTimeMs + (nextLockstepFrame * NETPLAY_FRAME_INTERVAL_MS)
+          val delay = (nextExpectedTime - now).coerceIn(1L, 32L)
+          lockstepHandler.postDelayed(this, delay)
+          return
         }
         if (predictedFrames > MAX_PREDICTION_FRAMES) {
           if (predictedFrames == MAX_PREDICTION_FRAMES + 1) {
@@ -522,6 +553,8 @@ class UniversalLibretroPlayerActivity : ComponentActivity() {
       val drift = now - nextExpectedTime
       frameDriftMs = (frameDriftMs * 0.9 + drift * 0.1).toLong()
       val adjustedInterval = when {
+        localPlayerIndex != 0 && clockDriftFrames > 0 -> NETPLAY_FRAME_INTERVAL_MS + 1L // ahead of host: delay by 1ms (17ms)
+        localPlayerIndex != 0 && clockDriftFrames < 0 -> (NETPLAY_FRAME_INTERVAL_MS - 1L).coerceAtLeast(1L) // behind host: catch up without sleeping
         frameDriftMs > 32 -> 8L
         frameDriftMs > 16 -> 12L
         frameDriftMs < -32 -> 24L

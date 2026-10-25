@@ -240,8 +240,29 @@ export function registerUniversalNetplayServer(server: HttpServer) {
       roomInputDelays.set(session.roomId, 3);
       io.to(channel).emit("universal:bootstrap", { system: first.system, fingerprint: first.fingerprint, coreVersion: first.coreVersion, hostMemberId: first.memberId, playerMemberIds: ids, inputDelay: 3 });
     };
+    socket.on("netplay:clock-sync", (p: { masterFrame?: unknown; timestamp?: unknown }) => {
+      if (session.role !== "host") return;
+      const masterFrame = Number(p?.masterFrame);
+      const timestamp = Number(p?.timestamp);
+      if (Number.isSafeInteger(masterFrame) && Number.isSafeInteger(timestamp)) {
+        socket.to(channel).volatile.emit("netplay:clock-sync", { masterFrame, timestamp, serverTime: Date.now() });
+      }
+    });
+
+    socket.on("netplay:udp-endpoint", (payload: { port?: unknown }) => {
+      const port = Number(payload?.port);
+      if (!Number.isInteger(port) || port <= 0 || port > 65535) return;
+      const clientIp = socket.handshake.address?.replace(/^.*:/, "") || "127.0.0.1";
+      socket.to(channel).emit("netplay:udp-endpoint", {
+        memberId: session.memberId,
+        address: clientIp,
+        port,
+      });
+    });
+
     socket.on("universal:ready", handleReady);
     socket.on("READY_ROM_LOADED", handleReady);
+    socket.on("READY_CRC_MATCHED", handleReady);
 
     socket.on("universal:input", async (p: { frame?: unknown; mask?: unknown }) => {
       if (session.role === "spectator" || !validFrame(p?.frame) || !validMask(p?.mask)) return;

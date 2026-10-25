@@ -243,6 +243,32 @@ class MoudieEmulatorModule : Module() {
       require(destination.length() > 0) { "The BIOS file is empty or unreadable." }
       getBiosStatus()
     }
+
+    Function("startVoiceService") { options: Map<String, Any> ->
+      val context = appContext.reactContext ?: return@Function false
+      val roomId = (options["roomId"] as? Number)?.toInt() ?: 0
+      val memberId = (options["memberId"] as? Number)?.toInt() ?: 0
+      val serverUrl = options["serverUrl"] as? String
+      val token = options["token"] as? String
+      MoudieVoiceService.start(context, roomId, memberId, serverUrl, token)
+      true
+    }
+
+    Function("stopVoiceService") {
+      val context = appContext.reactContext ?: return@Function false
+      MoudieVoiceService.stop(context)
+      true
+    }
+
+    Function("setVoiceSpeaker") { enabled: Boolean ->
+      val context = appContext.reactContext ?: return@Function false
+      MoudieVoiceService.setSpeaker(context, enabled)
+      true
+    }
+
+    Function("isVoiceServiceRunning") {
+      MoudieVoiceService.isServiceRunning.get()
+    }
   }
 
   private fun fingerprintGameUri(uri: String): String {

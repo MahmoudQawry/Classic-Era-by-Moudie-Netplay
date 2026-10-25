@@ -1,4 +1,4 @@
-﻿package expo.modules.moudieemulator
+package expo.modules.moudieemulator
 
 import io.socket.client.IO
 import io.socket.client.Socket
@@ -15,7 +15,7 @@ data class UniversalNetplayConfig(
   val playerIndex: Int,
 )
 
-/** Dedicated low-latency emulator transport for PSP and Sega with adaptive improvements */
+/** Dedicated low-latency emulator transport for PSP and Sega with adaptive UDP DataChannel & Clock Sync */
 class UniversalNetplayClient(
   private val config: UniversalNetplayConfig,
   private val onBootstrap: (playerMemberIds: List<Int>) -> Unit,
@@ -27,6 +27,7 @@ class UniversalNetplayClient(
   private val onStatus: (String) -> Unit,
   private val onQuality: (NetplayQuality) -> Unit,
   private val onDelayUpdate: ((delay: Long) -> Unit)? = null,
+  private val onClockSync: ((masterFrame: Long, timestamp: Long) -> Unit)? = null,
 ) {
   companion object {
     private const val MIN_ACTIVE_PLAYERS = 2
@@ -35,8 +36,15 @@ class UniversalNetplayClient(
 
   private var socket: Socket? = null
   private var qualityMonitor: NetplayQualityMonitor? = null
+  private var udpTransport: NetplayUdpDataTransport? = null
 
   fun connect() {
+    udpTransport = NetplayUdpDataTransport(
+      localMemberId = config.memberId,
+      onRemoteInput = onRemoteInput,
+      onClockSync = onClockSync
+    )
+
     val options = IO.Options().apply {
       path = "/api/netplay"
       transports = arrayOf("websocket")
@@ -57,16 +65,43 @@ class UniversalNetplayClient(
     qualityMonitor = NetplayQualityMonitor(connectedSocket, onQuality, "netplay:quality-probe", "netplay:quality-pong")
     socket = connectedSocket.apply {
       on(Socket.EVENT_CONNECT) {
-        emit("netplay:universal-ready", JSONObject()
+        val readyPayload = JSONObject()
           .put("system", config.system)
           .put("fingerprint", config.fingerprint)
-          .put("coreVersion", config.coreVersion))
+          .put("coreVersion", config.coreVersion)
+
+        emit("netplay:universal-ready", readyPayload)
+        // Pre-Flight Handshake Barrier: report READY_CRC_MATCHED
+        emit("READY_CRC_MATCHED", readyPayload)
+
+        val port = udpTransport?.localPort ?: 0
+        if (port > 0) {
+          emit("netplay:udp-endpoint", JSONObject().put("port", port))
+        }
+
         qualityMonitor?.resume()
-        onStatus("${config.system.uppercase()} channel connected - adaptive sync active")
+        onStatus("${config.system.uppercase()} channel connected - UDP DataChannel active")
+      }
+      on("netplay:udp-endpoint") { args ->
+        val payload = args.firstOrNull() as? JSONObject ?: return@on
+        val remoteMemberId = payload.optInt("memberId", 0)
+        val address = payload.optString("address", "")
+        val port = payload.optInt("port", 0)
+        if (remoteMemberId > 0 && address.isNotBlank() && port > 0) {
+          udpTransport?.registerRemotePeer(remoteMemberId, address, port)
+        }
+      }
+      on("netplay:clock-sync") { args ->
+        val payload = args.firstOrNull() as? JSONObject ?: return@on
+        val masterFrame = payload.optLong("masterFrame", -1L)
+        val timestamp = payload.optLong("timestamp", -1L)
+        if (masterFrame >= 0L && timestamp > 0L) {
+          onClockSync?.invoke(masterFrame, timestamp)
+        }
       }
       on("netplay:universal-session-bootstrap") { args ->
         val payload = args.firstOrNull() as? JSONObject ?: return@on
-        val inputDelay = payload.optLong("inputDelay", 3L)
+        val inputDelay = payload.optLong("inputDelay", 2L)
         onDelayUpdate?.invoke(inputDelay)
         val ids = payload.playerMemberIds()
         if (ids.size in MIN_ACTIVE_PLAYERS..8) onBootstrap(ids)
@@ -87,7 +122,7 @@ class UniversalNetplayClient(
       on("netplay:universal-session-go") { args ->
         val payload = args.firstOrNull() as? JSONObject ?: return@on
         val startAt = payload.optLong("startAt", -1L)
-        val inputDelay = payload.optLong("inputDelay", 3L)
+        val inputDelay = payload.optLong("inputDelay", 2L)
         onDelayUpdate?.invoke(inputDelay)
         val ids = payload.playerMemberIds()
         if (startAt > 0L && ids.size in MIN_ACTIVE_PLAYERS..8) onSessionGo(startAt, ids)
@@ -138,9 +173,19 @@ class UniversalNetplayClient(
   }
 
   fun sendInputFrame(frame: Long, mask: Int) {
-    if (frame < 0L || mask !in 0..0xffff || socket?.connected() != true) return
+    if (frame < 0L || mask !in 0..0xffff) return
+    udpTransport?.sendInput(frame, mask)
+    if (socket?.connected() != true) return
     // Inputs are ephemeral. The connected check prevents stale reconnect queues.
     socket?.emit("netplay:universal-input", JSONObject().put("frame", frame).put("mask", mask))
+  }
+
+  fun sendClockSync(masterFrame: Long, timestamp: Long) {
+    if (masterFrame < 0L) return
+    udpTransport?.sendClockSync(masterFrame, timestamp)
+    if (socket?.connected() == true) {
+      socket?.emit("netplay:clock-sync", JSONObject().put("masterFrame", masterFrame).put("timestamp", timestamp))
+    }
   }
 
   fun sendState(encodedState: String, syncId: Long, encoding: String) {
@@ -172,6 +217,8 @@ class UniversalNetplayClient(
   }
 
   fun close() {
+    udpTransport?.close()
+    udpTransport = null
     qualityMonitor?.close()
     qualityMonitor = null
     socket?.off()
