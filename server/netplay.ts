@@ -570,8 +570,6 @@ export function registerNetplayServer(server: HttpServer) {
     });
 
     const onPs1ReadyHandler = (payload: Ps1ReadyPayload) => {
-    socket.on("READY_CRC_MATCHED", (p: any) => { if (session.clientKind === "ps1-player") onPs1ReadyHandler(p); });
-    socket.on("netplay:ps1-ready", onPs1ReadyHandler);
       const fingerprint = typeof payload?.fingerprint === "string" ? payload.fingerprint.toLowerCase() : "";
       const coreVersion = typeof payload?.coreVersion === "string" ? payload.coreVersion.trim() : "";
       const pending = pendingSessions.get(session.roomId);
@@ -591,7 +589,9 @@ export function registerNetplayServer(server: HttpServer) {
         return;
       }
       io.to(channel).emit("netplay:ps1-session-bootstrap", { fingerprint, hostMemberId: pending.barrier.hostMemberId, playerMemberIds: requiredMemberIds, inputDelay: roomInputDelays.get(session.roomId) ?? 3 });
-    });
+    };
+    socket.on("netplay:ps1-ready", onPs1ReadyHandler);
+    socket.on("READY_CRC_MATCHED", (p: any) => { if (session.clientKind === "ps1-player") onPs1ReadyHandler(p); });
 
     socket.on("netplay:ps1-input", (payload: Ps1InputPayload) => {
       const frame = Number(payload?.frame);
@@ -686,8 +686,6 @@ export function registerNetplayServer(server: HttpServer) {
     });
 
     const onUniversalReadyHandler = (payload: SessionReadyPayload) => {
-    socket.on("READY_CRC_MATCHED", (p: any) => { if (session.clientKind === "universal-player") onUniversalReadyHandler(p); });
-    socket.on("netplay:universal-ready", onUniversalReadyHandler);
       const system = payload?.system === "psp" || payload?.system === "sega" ? payload.system : null;
       const fingerprint = typeof payload?.fingerprint === "string" ? payload.fingerprint.toLowerCase() : "";
       const coreVersion = typeof payload?.coreVersion === "string" ? payload.coreVersion.trim() : "";
@@ -711,7 +709,9 @@ export function registerNetplayServer(server: HttpServer) {
         return;
       }
       io.to(channel).emit("netplay:universal-session-bootstrap", { system, fingerprint, hostMemberId: (host.data.session as NetplaySession).memberId, playerMemberIds: requiredPlayerIds, inputDelay: roomInputDelays.get(session.roomId) ?? 3 });
-    });
+    };
+    socket.on("netplay:universal-ready", onUniversalReadyHandler);
+    socket.on("READY_CRC_MATCHED", (p: any) => { if (session.clientKind === "universal-player") onUniversalReadyHandler(p); });
 
     socket.on("netplay:universal-input", (payload: Ps1InputPayload) => {
       const frame = Number(payload?.frame);
