@@ -4,7 +4,6 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
-import { NeonCircuitBackground } from "@/components/neon-circuit-background";
 import { ScreenContainer } from "@/components/screen-container";
 import MoudieEmulatorModule from "@/modules/moudie-emulator/src/MoudieEmulatorModule";
 import type { EmulatorCoreCapability, EmulatorSystem } from "@/modules/moudie-emulator/src/MoudieEmulator.types";
@@ -55,8 +54,7 @@ export default function EmulatorLibraryScreen() {
 
   return (
     <ScreenContainer className="px-5" edges={["top", "bottom", "left", "right"]} containerClassName="bg-background">
-      <NeonCircuitBackground />
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+            <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.header}><Pressable onPress={() => router.back()} style={styles.back} accessibilityLabel={t("commonBack")}><MaterialCommunityIcons name="arrow-left" color="#FFFFFF" size={22} /></Pressable><Text style={styles.headerText}>{t("lsHeader")}</Text></View>
         <View style={[styles.hero, { borderColor: `${meta.color}88` }]}>
           <View style={[styles.heroGlow, { backgroundColor: meta.color }]} /><View style={[styles.iconShell, { borderColor: meta.color }]}><MaterialCommunityIcons name={meta.icon} size={45} color={meta.color} /></View>

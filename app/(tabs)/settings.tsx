@@ -1,6 +1,7 @@
 import * as DocumentPicker from "expo-document-picker";
 import { useEffect, useState } from "react";
 import { Alert, Image, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from "react-native";
+import { NeonCircuitBackground } from "@/components/neon-circuit-background";
 import { ScreenContainer } from "@/components/screen-container";
 import { haptic } from "@/lib/haptics";
 import { useLanguage } from "@/lib/language";
@@ -18,7 +19,9 @@ export default function SettingsScreen() {
   const chooseAvatar = async () => { const result = await DocumentPicker.getDocumentAsync({ type: "image/*", copyToCacheDirectory: true }); if (!result.canceled && result.assets[0]?.uri) { setAvatar(result.assets[0].uri); await saveProfileAvatar(result.assets[0].uri); } };
   const shareId = () => Share.share({ message: `${t("shareText")} ${userId}.` });
   const selectLanguage = async (id: "ar" | "en" | "fr") => { await setLanguage(id); };
-  return <ScreenContainer className="px-5"><ScrollView contentContainerStyle={styles.content}>
+  return <ScreenContainer className="px-5">
+    <NeonCircuitBackground />
+    <ScrollView contentContainerStyle={styles.content}>
     <Text style={styles.eyebrow}>{t("settings")}</Text><Text style={styles.title}>{t("profile")}</Text>
     <View style={styles.profileCard}><Pressable onPress={chooseAvatar} style={styles.avatarButton}>{avatar ? <Image source={{ uri: avatar }} style={styles.avatar} /> : <Text style={styles.avatarLetter}>{name.slice(0, 1).toUpperCase() || "M"}</Text>}<Text style={styles.avatarHint}>{t("changePhoto")}</Text></Pressable><View style={styles.profileCopy}><Text style={styles.profileTitle}>{name || t("newPlayer")}</Text><Text style={styles.profileId}>{userId}</Text><Pressable onPress={shareId}><Text style={styles.share}>{t("share")}</Text></Pressable></View></View>
     <Text style={styles.label}>{t("username")}</Text><TextInput value={name} onChangeText={setName} placeholder={t("publicName")} placeholderTextColor="#74869C" style={styles.input} maxLength={32} />

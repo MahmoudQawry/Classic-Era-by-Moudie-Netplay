@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Platform, Pressable, ScrollView, Share, StyleSheet, Text, View } from "react-native";
 
 import { ScreenContainer } from "@/components/screen-container";
+import { NeonCircuitBackground } from "@/components/neon-circuit-background";
 import { RoomChat } from "@/components/room-chat";
 import { RoomVoiceChat } from "@/components/room-voice-chat";
 import { haptic } from "@/lib/haptics";
@@ -117,6 +118,7 @@ export default function RoomScreen() {
   const spectatorCount = snapshot.members.filter((member) => member.role === "spectator").length;
   return (
     <ScreenContainer className="px-5" edges={["top", "bottom", "left", "right"]}>
+      <NeonCircuitBackground />
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.topRow}>
           <Pressable onPress={exitRoom} style={({ pressed }) => [styles.back, pressed && styles.pressed]}><Text style={styles.backText}>‹ {t("lobby")}</Text></Pressable>
